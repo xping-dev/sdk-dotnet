@@ -1,5 +1,5 @@
 Xping | MyApp.Tests | 20 runs | 2026-08-01 09:00 -> 09:19 | main@eab9867
-15 tests | 13 healthy | 2 flagged | 1 awaiting more runs
+15 tests | 12 healthy | 2 flagged | 1 failed in latest run | 1 awaiting more runs
 * nothing to measure: concurrency 15 | time sensitive 15
 
 ```

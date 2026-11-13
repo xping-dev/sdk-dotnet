@@ -27,10 +27,11 @@ namespace Xping.Cli.Report;
 /// value. Nothing here reads a disk, a clock or a setting.
 /// </para>
 /// <para>
-/// <b>No row without a contrast.</b> A row's worth is entirely the history beside it, so the
-/// section is suppressed on a window of one session, and a test with no verdict in the newest
-/// session — skipped, or rescued by a retry — is not a row: the first has no outcome to contrast,
-/// the second has the outcome the session actually ended on.
+/// <b>Every red test is accounted for.</b> A test with no verdict in the newest session — skipped,
+/// or rescued by a retry — is not a row: the first has no outcome to contrast, the second has the
+/// outcome the session actually ended on. A window of one session still lists its failures, as
+/// new tests: the report's summary counts them, and a section that went silent beside that count
+/// would leave the report saying a test failed without saying which.
 /// </para>
 /// </remarks>
 internal static class LatestRunAnalyzer
@@ -89,17 +90,11 @@ internal static class LatestRunAnalyzer
             failing.Add((fingerprint, runs));
         }
 
-        // One session is no history. Every row would say "first seen this run, failed", which the
-        // test runner said thirty seconds ago; the counts are still published so a consumer can
-        // tell suppressed from clean.
-        if (context.SessionViews.Count == 1)
-            return new LatestRunAnalysis(newest, true, executed, failed, 0, 0, [], [], 0);
-
         // The environmental heuristic exists to stop one broken dependency from poisoning every
         // test's history. A section that itemised the 187 tests it took down would defeat it, so
         // the run is described and not listed.
         if (newest.IsLikelyEnvironmental)
-            return new LatestRunAnalysis(newest, false, executed, failed, 0, 0, [], [], 0);
+            return new LatestRunAnalysis(newest, executed, failed, 0, 0, [], [], 0);
 
         var explaining = new List<Finding>();
         var explainingIds = new HashSet<string>(StringComparer.Ordinal);
@@ -163,7 +158,6 @@ internal static class LatestRunAnalyzer
 
         return new LatestRunAnalysis(
             newest,
-            false,
             executed,
             failed,
             newFailures,

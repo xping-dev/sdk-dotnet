@@ -134,6 +134,11 @@ internal static class EnvelopeBuilder
             }
         }
 
+        // The latest run's rows are exactly its red tests that no finding names, so they are
+        // disjoint from the flagged set and the three counts add up to the suite. An environmental
+        // run has no rows, and is discounted here as every finding discounts it.
+        int failedLatestRun = latestRun?.FailuresTotal ?? 0;
+
         return new ReportEnvelope(
             ReportEnvelope.CurrentSchemaVersion,
             ReportScopes.Assembly,
@@ -144,7 +149,8 @@ internal static class EnvelopeBuilder
                 result.Findings.Count,
                 new SeverityCountsDto(high, medium, low),
                 flagged.Count,
-                Math.Max(0, tests - flagged.Count),
+                failedLatestRun,
+                Math.Max(0, tests - flagged.Count - failedLatestRun),
                 result.ExcludedLowEvidence,
                 result.ExcludedNotSignificant,
                 NotMeasured(result),
@@ -192,7 +198,6 @@ internal static class EnvelopeBuilder
             session.StartedAt,
             RevisionContext.ReadSha(session),
             analysis.Session.IsLikelyEnvironmental,
-            analysis.Suppressed,
             analysis.TestsExecuted,
             analysis.TestsFailed,
             analysis.NewFailures,

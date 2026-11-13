@@ -66,11 +66,19 @@ internal sealed class OverviewTextRenderer(OutputCapabilities capabilities)
             };
 
             output.WriteLine(Line(name, verdict, text => capabilities.Colorize(severity, text)));
-            output.WriteLine(capabilities.Dim(indent + string.Join(separator,
+            var counts = new List<string>
+            {
                 TextReportRenderer.Tests(summary.Tests),
-                $"{summary.Flagged.ToString(CultureInfo.InvariantCulture)} flagged",
-                TextReportRenderer.Runs(window.SessionCount),
-                "last " + window.To.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture))));
+                $"{summary.Flagged.ToString(CultureInfo.InvariantCulture)} flagged"
+            };
+
+            if (summary.FailedLatestRun > 0)
+                counts.Add(TextReportRenderer.FailedLatestRun(summary));
+
+            counts.Add(TextReportRenderer.Runs(window.SessionCount));
+            counts.Add("last " + window.To.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture));
+
+            output.WriteLine(capabilities.Dim(indent + string.Join(separator, counts)));
         }
 
         // The first row's command, because the first row is the one most worth opening. A line of its

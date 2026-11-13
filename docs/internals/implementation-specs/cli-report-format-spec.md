@@ -133,6 +133,15 @@ references.
 | G | The envelope has no scope | Schema `1.29`. `ReportEnvelope` gains `scope: "assembly"` after `schemaVersion`. The overview writes its own envelope: `schemaVersion`, `scope: "overview"`, `assemblies[]`, each `{assembly, window, summary, unavailable, command}`. `window` and `summary` are the same DTOs the assembly's report writes, so B holds by construction. `unavailable` is the reason text when the window cannot be opened, and then `window` and `summary` are null | this amendment, D9 |
 | H | A printed `xping report --all` names the assembly only when the caller did | Every printed command names the assembly. `ReportScope.AssemblyGiven` is removed | this amendment |
 
+### Amendment 7 — from #353: the latest run's failures are not healthy
+
+`cli-latest-run-spec.md` Amendment 8B adds `SummaryDto.FailedLatestRun`: tests the newest run
+failed that no finding names.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | D4: line 2 is `N tests · N healthy · N flagged`, and tests is healthy plus flagged | Line 2 appends `N failed in latest run` after `flagged` when the count is non-zero. Tests is healthy plus flagged plus that count. The overview's second line (Amendment 6C) appends it in the same position. Schema `1.30` | D4, Amendment 6C |
+
 ---
 
 ## 1. Ground truth
@@ -355,7 +364,8 @@ subject carries both.
 
 Line 1 answers *what was analysed*: `Xping · assembly · N runs · period · branch@sha`. Unchanged.
 
-Line 2 answers *what state the suite is in*: `N tests · N healthy · N flagged`.
+Line 2 answers *what state the suite is in*: `N tests · N healthy · N flagged`, then
+`N failed in latest run` when that count is non-zero (Amendment 7A).
 
 `SummaryDto` gains `Flagged`. `EnvelopeBuilder` already computes it as `flagged.Count` and currently
 discards it into the `Healthy` subtraction. Publishing it makes the line reconcile without the

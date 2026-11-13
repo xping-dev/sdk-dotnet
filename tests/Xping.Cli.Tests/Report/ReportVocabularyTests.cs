@@ -131,6 +131,7 @@ public sealed class ReportVocabularyTests
             high + medium + low,
             new SeverityCountsDto(high, medium, low),
             0,
+            0,
             412,
             0,
             0,

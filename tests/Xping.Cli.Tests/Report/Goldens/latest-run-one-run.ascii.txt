@@ -1,0 +1,11 @@
+Xping | MyApp.Tests | 1 run | 2026-08-19 16:40 -> 16:40 | main@a3f9c2e
+412 tests | 411 healthy | 0 flagged | 1 failed in latest run
+
+```
+LATEST RUN  16:40 | eab9867                                1 new failure
+------------------------------------------------------------------------
+
+    new test     CartTests.Checkout_RejectsExpiredCoupon
+                 first seen this run, failed
+                 EqualException | CartTests.cs:140
+```

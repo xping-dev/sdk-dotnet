@@ -62,7 +62,7 @@ internal static partial class ReportFixtures
         "docs-retry-exhausted",
         "latest-run",
         "latest-run-known-only",
-        "latest-run-suppressed",
+        "latest-run-one-run",
         "latest-run-environmental",
         "latest-run-overflow",
         "latest-run-store",
@@ -270,12 +270,9 @@ internal static partial class ReportFixtures
             LatestRun = SpecLatestRun([], ["f_c7b87f12", "f_3ea537e4", "f_7c905f05"], explained: 5)
         },
 
-        // A window of one session: the section is absent, and this golden is byte-identical to
-        // spec-section-3's. Pinned so that absence stays a rule and not an accident.
-        "latest-run-suppressed" => SpecSection3() with
-        {
-            LatestRun = SpecLatestRun([Regression()]) with { Suppressed = true }
-        },
+        // A window of one session (#353): its failure is listed as a new test and counted on the
+        // summary line, so the header can never call every test healthy beside it.
+        "latest-run-one-run" => LatestRunOneRun(),
         "latest-run-environmental" => SpecSection3() with
         {
             LatestRun = SpecLatestRun([]) with
@@ -1371,6 +1368,21 @@ internal static partial class ReportFixtures
         };
 
     /// <summary>
+    /// A store of one run, one test of which failed: too little history for any finding.
+    /// </summary>
+    private static ReportEnvelope LatestRunOneRun()
+    {
+        ReportEnvelope envelope = Envelope();
+
+        return envelope with
+        {
+            Window = envelope.Window with { From = envelope.Window.To, SessionCount = 1 },
+            Summary = envelope.Summary with { FailedLatestRun = 1, Healthy = envelope.Summary.Healthy - 1 },
+            LatestRun = LatestRun([FreshFailure()]) with { StartedAt = envelope.Window.To }
+        };
+    }
+
+    /// <summary>
     /// The section as the whole pipeline produces it from sessions, not as a hand-built envelope.
     /// </summary>
     /// <remarks>
@@ -2028,7 +2040,6 @@ internal static partial class ReportFixtures
             new DateTime(2026, 8, 19, 16, 21, 0, DateTimeKind.Utc),
             sha,
             IsLikelyEnvironmental: false,
-            Suppressed: false,
             TestsExecuted: 16,
             TestsFailed: failures.Length + (explained ?? explainedBy?.Length ?? 0),
             NewFailures: failures.Count(f => f.Status != "seenBefore"),
@@ -2154,6 +2165,7 @@ internal static partial class ReportFixtures
                 produced,
                 new SeverityCountsDto(high, medium, low),
                 flagged,
+                0,
                 412 - flagged,
                 lowEvidence,
                 notSignificant,

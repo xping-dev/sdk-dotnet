@@ -62,6 +62,17 @@ public sealed class OverviewTextRendererTests
         Assert.Equal("  120 tests | 3 flagged | 20 runs | last 2026-08-03 14:05", lines[3]);
     }
 
+    [Fact]
+    public void ARowCountsTheLatestRunsFailuresAfterTheFlaggedAsItsReportsHeaderDoes()
+    {
+        AssemblyOverviewDto row = Row("Alpha.Tests", 120, 3, 20);
+        row = row with { Summary = row.Summary! with { FailedLatestRun = 2 } };
+
+        string[] lines = Render(row);
+
+        Assert.Equal("  120 tests | 3 flagged | 2 failed in latest run | 20 runs | last 2026-08-03 14:05", lines[3]);
+    }
+
     [Theory]
     [InlineData(0, 2, 1, "3 findings (2 medium, 1 low)")]
     [InlineData(0, 0, 1, "1 finding (1 low)")]

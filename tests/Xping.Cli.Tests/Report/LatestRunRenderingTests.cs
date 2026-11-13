@@ -73,14 +73,20 @@ public sealed class LatestRunRenderingTests
     }
 
     [Fact]
-    public void ASuppressedSectionIsAbsentEntirely()
+    public void ASummaryCountsTheLatestRunsFailuresApartFromTheHealthy()
     {
-        LatestRunDto suppressed = LatestRun([Regression]) with { Suppressed = true };
+        ReportEnvelope envelope = With(LatestRun([Regression]), ThreeFindings());
+        envelope = envelope with
+        {
+            Summary = envelope.Summary with { FailedLatestRun = 1, Healthy = envelope.Summary.Healthy - 1 }
+        };
 
-        string report = Render(With(suppressed, ThreeFindings()));
+        string report = Render(envelope);
 
-        Assert.DoesNotContain("LATEST RUN", report, StringComparison.Ordinal);
-        Assert.DoesNotContain("Checkout_AppliesDiscount", report, StringComparison.Ordinal);
+        Assert.Contains(
+            $"{envelope.Summary.Healthy} healthy | {envelope.Summary.Flagged} flagged | 1 failed in latest run",
+            report,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -609,7 +615,6 @@ public sealed class LatestRunRenderingTests
     {
         string quiet = Summary(With(LatestRun([]), ThreeFindings()));
         string known = Summary(With(LatestRun([Known], explainedBy: ["f_alpha"]), ThreeFindings()));
-        string suppressed = Summary(With(LatestRun([Regression]) with { Suppressed = true }, ThreeFindings()));
         string environmental = Summary(With(LatestRun([Regression]) with { IsLikelyEnvironmental = true }, ThreeFindings()));
         string none = Summary(With(null, ThreeFindings()));
 
@@ -617,7 +622,6 @@ public sealed class LatestRunRenderingTests
 
         Assert.Equal(expected, quiet);
         Assert.Equal(expected, known);
-        Assert.Equal(expected, suppressed);
         Assert.Equal(expected, environmental);
         Assert.Equal(expected, none);
     }

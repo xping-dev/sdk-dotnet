@@ -44,7 +44,7 @@ internal sealed class SummaryReportRenderer(TerminalCharset charset) : IReportRe
             ? $" of {assembly}"
             : string.Empty;
 
-        string newFailures = envelope.LatestRun is { Suppressed: false, IsLikelyEnvironmental: false, NewFailures: > 0 } latest
+        string newFailures = envelope.LatestRun is { IsLikelyEnvironmental: false, NewFailures: > 0 } latest
             ? latest.NewFailures == 1
                 ? ", 1 new failure"
                 : $", {latest.NewFailures.ToString(CultureInfo.InvariantCulture)} new failures"

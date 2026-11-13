@@ -319,7 +319,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         JsonElement root = RunJson();
 
-        Assert.Equal("1.29", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.30", root.GetProperty("schemaVersion").GetString());
         Assert.Equal("assembly", root.GetProperty("scope").GetString());
 
         JsonElement window = root.GetProperty("window");
@@ -332,7 +332,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         JsonElement summary = root.GetProperty("summary");
         foreach (string key in (string[])
         [
-            "tests", "findings", "flagged", "healthy", "excludedLowEvidence", "excludedNotSignificant",
+            "tests", "findings", "flagged", "failedLatestRun", "healthy", "excludedLowEvidence", "excludedNotSignificant",
             "notMeasured", "environmentalSessions", "incompleteSessions", "unreadableSessions",
             "skewedSessions", "failedProviders"
         ])
@@ -360,7 +360,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         JsonElement latestRun = root.GetProperty("latestRun");
         foreach (string key in (string[])
         [
-            "sessionId", "startedAt", "sha", "isLikelyEnvironmental", "suppressed", "testsExecuted",
+            "sessionId", "startedAt", "sha", "isLikelyEnvironmental", "testsExecuted",
             "testsFailed", "newFailures", "explainedByFindings", "explainedByFindingIds", "failures",
             "failuresShown", "failuresTotal"
         ])
@@ -433,7 +433,6 @@ public sealed class ReportEnvelopeTests : IDisposable
             TestSessionFactory.SessionIdFor(3).ToString("D"),
             latestRun.GetProperty("sessionId").GetString());
         Assert.Equal("eab98671234567890", latestRun.GetProperty("sha").GetString());
-        Assert.False(latestRun.GetProperty("suppressed").GetBoolean());
         Assert.False(latestRun.GetProperty("isLikelyEnvironmental").GetBoolean());
         Assert.Equal(2, latestRun.GetProperty("testsExecuted").GetInt32());
         Assert.Equal(1, latestRun.GetProperty("testsFailed").GetInt32());
@@ -462,18 +461,25 @@ public sealed class ReportEnvelopeTests : IDisposable
     }
 
     [Fact]
-    public void ASingleSessionIsSuppressedButStillPublished()
+    public void ASingleSessionListsItsFailureAndTheSummaryDoesNotCallItHealthy()
     {
+        // #353: a store of one run listed nothing and counted its failing test as healthy.
         SeedRegression(passing: 0);
 
-        JsonElement latestRun = RunJson().GetProperty("latestRun");
+        JsonElement root = RunJson();
+        JsonElement latestRun = root.GetProperty("latestRun");
+        JsonElement summary = root.GetProperty("summary");
 
-        // Distinguishable from a clean run: the counts say a test failed, and suppressed says why
-        // no row lists it.
-        Assert.True(latestRun.GetProperty("suppressed").GetBoolean());
+        Assert.False(latestRun.TryGetProperty("suppressed", out _));
         Assert.Equal(1, latestRun.GetProperty("testsFailed").GetInt32());
-        Assert.Empty(latestRun.GetProperty("failures").EnumerateArray());
-        Assert.Equal(0, latestRun.GetProperty("failuresTotal").GetInt32());
+        Assert.Equal("newTest", Assert.Single(latestRun.GetProperty("failures").EnumerateArray())
+            .GetProperty("status").GetString());
+
+        int tests = summary.GetProperty("tests").GetInt32();
+        Assert.Equal(1, summary.GetProperty("failedLatestRun").GetInt32());
+        Assert.Equal(
+            tests - summary.GetProperty("flagged").GetInt32() - 1,
+            summary.GetProperty("healthy").GetInt32());
     }
 
     [Fact]
@@ -907,7 +913,7 @@ public sealed class ReportEnvelopeTests : IDisposable
 
         // Would throw if a warning had been interleaved into stdout.
         using JsonDocument document = JsonDocument.Parse(output);
-        Assert.Equal("1.29", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.30", document.RootElement.GetProperty("schemaVersion").GetString());
     }
 
     [Fact]

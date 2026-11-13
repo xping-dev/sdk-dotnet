@@ -131,7 +131,7 @@ https://docs.xping.io/cli/command-reference.html#the-population-marker
 Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests
 ````
 
-The lines above the fence answer separate questions. The first says **what was analysed** — the assembly, how many runs, over what period, at which revision. The second says **what state the suite is in**, in one unit: `tests` is `healthy` plus `flagged`, and they add up because `flagged` counts tests rather than findings. One test can attract findings of several kinds, and one finding about a broken fixture covers every test that fixture took down. Candidates the report saw and withheld are counted on the end of that line: `awaiting more runs` is waiting on data, `not significant` did not clear its kind's bar. A third line appears when some kind could not be measured on part of the suite at all, which is a different statement again — those tests are inside `healthy`, and [`--format json`](#--format-json) below says why.
+The lines above the fence answer separate questions. The first says **what was analysed** — the assembly, how many runs, over what period, at which revision. The second says **what state the suite is in**, in one unit: `tests` is `healthy` plus `flagged`, and they add up because `flagged` counts tests rather than findings. When the newest run failed tests that no finding names, `N failed in latest run` follows `flagged`. Those tests are not inside `healthy`, so the three still add up to `tests`. One test can attract findings of several kinds, and one finding about a broken fixture covers every test that fixture took down. Candidates the report saw and withheld are counted on the end of that line: `awaiting more runs` is waiting on data, `not significant` did not clear its kind's bar. A third line appears when some kind could not be measured on part of the suite at all, which is a different statement again — those tests are inside `healthy`, and [`--format json`](#--format-json) below says why.
 
 Inside the fence, `NEEDS ATTENTION` heads the list and carries the severity breakdown for every finding the report **produced**, which is not always the number of rows beneath it — a report narrowed by `--top` still says how much it found. The note on the right says how the list is ordered.
 
@@ -163,7 +163,7 @@ Rows are ordered most severe first, so the top of the block is the part worth re
 
 ### The latest run
 
-The findings answer *what is chronically unreliable*, and they need five runs of history before they will say anything. *What just broke* is a different question — one run's outcome beside the runs before it — and it needs two. When the newest run has failures, a `LATEST RUN` section opens the fence, above the findings:
+The findings answer *what is chronically unreliable*, and they need five runs of history before they will say anything. *What just broke* is a different question — one run's outcome beside the runs before it — and it needs two to say what changed. When the newest run has failures, a `LATEST RUN` section opens the fence, above the findings:
 
 <!-- xping:sample latest-run latest-run -->
 ```
@@ -187,7 +187,7 @@ These rows are not findings. They carry no severity, are not ranked against the 
 
 `--kind` narrows what the section defers to rather than what it reports: a test whose only finding was filtered out is listed as a row instead of counted on the closing line, and states its history without claiming why no finding explains it.
 
-The section is absent when the newest run was clean, and on a store holding a single run, where every row would only repeat the test runner. When the newest run failed widely enough to look like an outage rather than a set of broken tests, it is described in one line — `Looks environmental: 187 of 210 tests failed. Not itemised.` — rather than listed. At most ten rows are shown; `Showing 10 of 23` closes a longer list, and the report's one truncation line below the fence names the command — `--all` lifts this cap along with the findings'. `--top` does not apply here.
+The section is absent when the newest run was clean. On a store holding a single run it is still shown, and every row is a `new test`: there is no local history to contrast, but the failure is counted in the header and Cloud's line, when it answered, says what Cloud knows about the test. When the newest run failed widely enough to look like an outage rather than a set of broken tests, it is described in one line — `Looks environmental: 187 of 210 tests failed. Not itemised.` — rather than listed. At most ten rows are shown; `Showing 10 of 23` closes a longer list, and the report's one truncation line below the fence names the command — `--all` lifts this cap along with the findings'. `--top` does not apply here.
 
 ### The population marker
 
@@ -988,8 +988,8 @@ finding pointing at a row that is not there.
 `latestRun` is [the latest run](#the-latest-run) as data: the newest session, its counts, and one
 entry per row with the same `contrast` sentence the rendered block prints and the same single-test
 `subject` a finding carries. It is present whenever the window holds a session, so a consumer can
-tell a clean run (`testsFailed` is zero) from one the report declined to itemise (`suppressed` on a
-store of one run, `isLikelyEnvironmental` on an outage) and from one it cut (`failuresShown` against
+tell a clean run (`testsFailed` is zero) from one the report declined to itemise
+(`isLikelyEnvironmental` on an outage) and from one it cut (`failuresShown` against
 `failuresTotal`; `truncated.command` shows the rest, as it does for the findings).
 `explainedByFindingIds` lists, in the order `findings` ranks them, the findings that account for the
 failures not listed as rows.
@@ -1058,15 +1058,16 @@ split into the ones waiting for more runs and the ones whose recorded data canno
 however long you wait. It is deliberately not a total: adding the entries counts a test once per
 question it could not answer, and a kind absent from the object keeps no such tally. Read one entry to
 ask "how much of my suite could this metric read". Tests counted here are inside `healthy`, which
-means "no finding was raised" rather than "checked and fine" — a test first seen in a run that
-covered only part of the suite is inside it too, on one run of history. `flagged` is its complement,
-and counts tests where `findings` counts findings: one test can attract findings of several kinds,
+means "no finding was raised and the latest run did not fail it" rather than "checked and fine" — a
+test first seen in a run that covered only part of the suite is inside it too, on one run of
+history. `flagged` counts tests where `findings` counts findings: one test can attract findings of several kinds,
 and one finding about a broken fixture covers every test that fixture took down, so the two numbers
-are not each other and `tests` is what they add up to:
+are not each other. `failedLatestRun` counts the latest run's rows, the tests it failed that no finding
+names, and `tests` is `healthy` plus `flagged` plus `failedLatestRun`:
 
 ```json
 {
-  "schemaVersion": "1.29",
+  "schemaVersion": "1.30",
   "scope": "assembly",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": {
@@ -1089,7 +1090,8 @@ are not each other and `tests` is what they add up to:
     "findings": 3,
     "counts": { "high": 1, "medium": 1, "low": 1 },
     "flagged": 3,
-    "healthy": 409,
+    "failedLatestRun": 1,
+    "healthy": 408,
     "excludedLowEvidence": 41,
     "excludedNotSignificant": 6,
     "notMeasured": {
@@ -1103,7 +1105,6 @@ are not each other and `tests` is what they add up to:
     "startedAt": "2026-08-19T16:21:00Z",
     "sha": "a3f9c2e",
     "isLikelyEnvironmental": false,
-    "suppressed": false,
     "testsExecuted": 412,
     "testsFailed": 3,
     "newFailures": 1,
