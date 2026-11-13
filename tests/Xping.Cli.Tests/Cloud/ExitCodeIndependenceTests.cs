@@ -95,11 +95,11 @@ public sealed class ExitCodeIndependenceTests : IAsyncDisposable
                 return [];
             case "unavailable":
                 _host.SignIn();
-                FailDigest(HttpStatusCode.ServiceUnavailable);
+                FailEveryTestRead(HttpStatusCode.ServiceUnavailable);
                 return [];
             case "rate-limited":
                 _host.SignIn();
-                FailDigest(HttpStatusCode.TooManyRequests);
+                FailEveryTestRead(HttpStatusCode.TooManyRequests);
                 return [];
             case "login-required":
                 CredentialRecord record = _host.SignIn();
@@ -116,8 +116,11 @@ public sealed class ExitCodeIndependenceTests : IAsyncDisposable
         }
     }
 
-    private void FailDigest(HttpStatusCode status) =>
+    private void FailEveryTestRead(HttpStatusCode status)
+    {
         _host.Cloud.FailGateway($"{FakeCloud.GatewayPrefix}v1/projects/{Project}/tests/digest", 50, status, "Injected");
+        _host.Cloud.FailGateway($"{FakeCloud.GatewayPrefix}v1/projects/{Project}/tests/health", 50, status, "Injected");
+    }
 
     private CliResult Run(params string[] args) => _host.Run(args);
 

@@ -23,6 +23,7 @@ public sealed class CloudApiClientTests : IAsyncDisposable
     private const string Project = "shop-tests";
     private const string Fingerprint = "fp-checkout-0001";
     private const string DigestPath = "/gw/v1/projects/shop-tests/tests/digest";
+    private const string HealthPath = "/gw/v1/projects/shop-tests/tests/health";
     private const string Hash = "ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12";
     private const string SessionKey = "4f1c0c9e-0000-4000-8000-000000000001";
 
@@ -174,6 +175,54 @@ public sealed class CloudApiClientTests : IAsyncDisposable
                 ]),
             history,
             strict: true);
+    }
+
+    [Fact]
+    public async Task TheSuiteHealthIsAGetOfAPageWithTheCursorAndEachSessionKey()
+    {
+        _host.Cloud.AddTest(Project, "fp-flaky");
+        _host.Cloud.AddTest(Project, "fp-passing", digest => digest["verdict"] = "passing");
+        _host.Cloud.AddSession(SessionKey);
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        HealthResponse? first = await client.GetHealthAsync(Project, [SessionKey, "second key"], null, CancellationToken.None);
+        HealthResponse? next = await client.GetHealthAsync(Project, [], "0", CancellationToken.None);
+
+        RecordedRequest[] requests = [.. _host.Cloud.GatewayRequests];
+        Assert.Equal(
+            [
+                ("GET", HealthPath, $"?pageSize={CloudEnricher.MaxHealthPageSize}&sessionKeys={SessionKey}&sessionKeys=second%20key"),
+                ("GET", HealthPath, $"?pageSize={CloudEnricher.MaxHealthPageSize}&cursor=0")
+            ],
+            requests.Select(r => (r.Method, r.Path, r.Query)));
+
+        // Contract §6.5: the unhealthy tests only, by fingerprint, each the digest of §6.2.
+        Assert.Equal((3, null), (first!.TotalTests, first.Next));
+        Assert.Equal([Fingerprint, "fp-flaky"], first.Tests.Select(t => t.Fingerprint));
+        TestDigest digest = first.Tests[1];
+        Assert.Equal(("ok", "known-flaky", "major"), (digest.State, digest.Verdict, digest.Flaky!.Severity));
+        Assert.Equal(["complete", "unknown"], first.Sessions!.Select(s => s.State));
+        Assert.Equal(2, next!.Tests.Count);
+    }
+
+    [Fact]
+    public async Task TheSuiteHealthOfAProjectTheWorkspaceLacksIsNull()
+    {
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        Assert.Null(await client.GetHealthAsync("unknown-project", [], null, CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("{}")]
+    [InlineData("{\"tests\":null}")]
+    public async Task ASuiteHealthThatCannotBeReadIsAnInvalidResponse(string body)
+    {
+        _host.Cloud.SetGatewayBody(HealthPath, body);
+        using ICloudApiClient client = await ApiKeyClientAsync();
+
+        await Assert.ThrowsAsync<CloudResponseException>(() => client.GetHealthAsync(Project, [], null, CancellationToken.None));
     }
 
     [Theory]

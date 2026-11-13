@@ -240,6 +240,10 @@ public sealed class ProjectResolverTests : IDisposable
         public Task<RunsResponse?> GetRunsAsync(string projectKey, string fingerprint, int limit, CancellationToken cancellationToken) =>
             Task.FromResult<RunsResponse?>(null);
 
+        public Task<HealthResponse?> GetHealthAsync(
+            string projectKey, IReadOnlyList<string> sessionKeys, string? cursor, CancellationToken cancellationToken) =>
+            Task.FromResult<HealthResponse?>(null);
+
         public void Dispose()
         {
         }

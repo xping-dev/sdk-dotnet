@@ -59,8 +59,10 @@ public sealed class CloudEnricherTests : IDisposable
 
         // Contract R5: the object is always there, so an agent never has to guess.
         Assert.Equal(
-            new CloudContextDto("not-attempted", "none", 0, CredentialTestData.CloudUrl, null, null, null, null, null, null, 0, 0, [], []),
-            result.Envelope.Context!.Cloud! with { Projects = [], Sessions = [] });
+            new CloudContextDto(
+                "not-attempted", "none", 0, CredentialTestData.CloudUrl, null, null, null, null, null, null, 0, 0, [], [], CloudHealthDto.NotAttempted),
+            result.Envelope.Context!.Cloud! with { Projects = [], Sessions = [], Health = CloudHealthDto.NotAttempted });
+        Assert.Equal("not-attempted", result.Envelope.Context.Cloud.Health.State);
         Assert.Equal(envelope.Findings, result.Envelope.Findings);
         Assert.Empty(result.Hints);
         Assert.Empty(_factory.Created);
@@ -879,6 +881,184 @@ public sealed class CloudEnricherTests : IDisposable
         Assert.Equal(("unavailable", "none"), (result.Envelope.Context!.Cloud!.Status, result.Envelope.Context.Cloud.Reason));
     }
 
+    [Fact]
+    public async Task AReportWithNoTargetsStillAsksTheSuiteHealth()
+    {
+        // A clean run has nothing to ask the digest about; its health is the one thing Cloud adds.
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Health = (_, _) => Page(["fp-a", "fp-cloud-only"], totalTests: 7);
+
+        EnrichmentResult result = await EnrichAsync(Clean(), sessions: [Session(HealthAssembly)], subjectFor: Window("fp-a", "fp-b"));
+
+        CloudContextDto cloud = result.Envelope.Context!.Cloud!;
+        Assert.Equal(("ok", "none"), (cloud.Status, cloud.Reason));
+        Assert.Equal([new CloudProjectDto(HealthAssembly, Project, "env", "ok", "none")], cloud.Projects);
+        Assert.Empty(_factory.Client.Requests);
+        Assert.Empty(result.Hints);
+
+        // Contract §9.7: a test Cloud knows and this window does not is never shown.
+        CloudHealthTestDto row = Assert.Single(cloud.Health.Tests);
+        Assert.Equal(("fp-a", "known-flaky"), (row.Subject.Fingerprint, row.Digest.Verdict));
+        Assert.Equal(("ok", "none", 7, 1, 0, 1, 1), Counts(cloud.Health));
+        Assert.Single(cloud.Sessions);
+    }
+
+    [Fact]
+    public async Task HealthRowsAreWorstFirstAndATargetIsCountedNotListed()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        ReportEnvelope envelope = Many(1) with { Findings = [Many(1).Findings[0] with { Subject = Many(1).Findings[0].Subject with { Assembly = HealthAssembly } }] };
+        _factory.Client.Health = (_, _) => Page(
+        [
+            ScriptedClient.Unhealthy("fp-0"),
+            ScriptedClient.Unhealthy("fp-unstable", "unstable", null),
+            ScriptedClient.Unhealthy("fp-minor", severity: "minor"),
+            ScriptedClient.Unhealthy("fp-critical", severity: "critical"),
+            ScriptedClient.Unhealthy("fp-broken", "broken", null)
+        ]);
+
+        EnrichmentResult result = await EnrichAsync(
+            envelope,
+            sessions: [Session(HealthAssembly)],
+            subjectFor: Window("fp-0", "fp-unstable", "fp-minor", "fp-critical", "fp-broken"));
+
+        CloudHealthDto health = result.Envelope.Context!.Cloud!.Health;
+        Assert.Equal(["fp-broken", "fp-critical", "fp-minor", "fp-unstable"], health.Tests.Select(t => t.Subject.Fingerprint));
+        Assert.Equal(("ok", "none", 5, 5, 1, 4, 4), Counts(health));
+        Assert.NotNull(result.Envelope.Findings[0].Cloud);
+    }
+
+    [Theory]
+    [InlineData(false, CloudEnricher.MaxHealthRows)]
+    [InlineData(true, CloudEnricher.MaxHealthRows + 2)]
+    public async Task HealthRowsAreCappedUnlessAll(bool showAll, int shown)
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        string[] fingerprints = [.. Enumerable.Range(0, CloudEnricher.MaxHealthRows + 2).Select(i => $"fp-{i:D2}")];
+        _factory.Client.Health = (_, _) => Page(fingerprints);
+
+        EnrichmentResult result = await EnrichAsync(
+            Clean(), sessions: [Session(HealthAssembly)], subjectFor: Window(fingerprints), showAll: showAll);
+
+        CloudHealthDto health = result.Envelope.Context!.Cloud!.Health;
+        Assert.Equal((shown, fingerprints.Length), (health.TestsShown, health.TestsTotal));
+        Assert.Equal(fingerprints.Take(shown), health.Tests.Select(t => t.Subject.Fingerprint));
+    }
+
+    [Fact]
+    public async Task SessionKeysRideOnTheHealthAndNotOnTheDigest()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        ReportEnvelope envelope = Many(1);
+        string assembly = envelope.Findings[0].Subject.Assembly!;
+
+        await EnrichAsync(envelope, sessions: [Session(assembly)], subjectFor: Window());
+
+        Assert.Empty(Assert.Single(_factory.Client.Requests).SessionKeys);
+        Assert.Single(Assert.Single(_factory.Client.HealthRead).SessionKeys);
+    }
+
+    [Fact]
+    public async Task HealthPagesAreReadUntilNextIsNull()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Health = (_, cursor) => cursor is null ? Page(["fp-a"], next: "page-2") : Page(["fp-b"]);
+
+        EnrichmentResult result = await EnrichAsync(Clean(), sessions: [Session(HealthAssembly)], subjectFor: Window("fp-a", "fp-b"));
+
+        Assert.Equal([null, "page-2"], _factory.Client.HealthRead.Select(r => r.Cursor));
+        Assert.Equal([1, 0], _factory.Client.HealthRead.Select(r => r.SessionKeys.Count));
+        Assert.Equal(["fp-a", "fp-b"], result.Envelope.Context!.Cloud!.Health.Tests.Select(t => t.Subject.Fingerprint));
+    }
+
+    [Fact]
+    public async Task AHealthLongerThanAReportReadsIsPartial()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Health = (_, _) => Page(["fp-a"], next: "more");
+
+        EnrichmentResult result = await EnrichAsync(Clean(), sessions: [Session(HealthAssembly)], subjectFor: Window("fp-a"));
+
+        CloudContextDto cloud = result.Envelope.Context!.Cloud!;
+        Assert.Equal(CloudEnricher.MaxHealthPages, _factory.Client.HealthRead.Count);
+        Assert.Equal(("partial", "budget"), (cloud.Status, cloud.Reason));
+        Assert.Equal(("partial", "budget"), (cloud.Health.State, cloud.Health.Reason));
+        Assert.Single(cloud.Health.Tests);
+        Assert.Equal("Cloud data partial: suite health not complete (budget).", Assert.Single(result.Hints).Text);
+    }
+
+    [Fact]
+    public async Task AFailedHealthKeepsTheDigestAndSaysWhatIsMissing()
+    {
+        // Amendment 7F: the row is ok only when the health read every page.
+        _environment["XPING_APIKEY"] = ApiKey;
+        ReportEnvelope envelope = Many(1);
+        _factory.Client.Health = (_, _) => throw new CloudApiException(503, null, "Xping Cloud failed to answer (HTTP 503).");
+
+        EnrichmentResult result = await EnrichAsync(
+            envelope, sessions: [Session(envelope.Findings[0].Subject.Assembly!)], subjectFor: Window());
+
+        CloudContextDto cloud = result.Envelope.Context!.Cloud!;
+        Assert.NotNull(result.Envelope.Findings[0].Cloud);
+        Assert.Equal(("partial", "server"), (cloud.Status, cloud.Reason));
+        Assert.Equal(("partial", "server"), (cloud.Projects[0].Status, cloud.Projects[0].Reason));
+        Assert.Equal(("unavailable", "server", null), (cloud.Health.State, cloud.Health.Reason, cloud.Health.TotalTests));
+        Assert.Equal("Cloud data partial: suite health not complete (server).", Assert.Single(result.Hints).Text);
+    }
+
+    [Fact]
+    public async Task ASelectionDoesNotAskTheSuiteHealth()
+    {
+        // Amendment 7B: under --id and --test the page holds the selection only.
+        _environment["XPING_APIKEY"] = ApiKey;
+        ReportEnvelope envelope = Many(1);
+
+        EnrichmentResult result = await EnrichAsync(envelope, sessions: [Session(envelope.Findings[0].Subject.Assembly!)]);
+
+        Assert.Empty(_factory.Client.HealthRead);
+        CloudContextDto cloud = result.Envelope.Context!.Cloud!;
+        Assert.Equal(("not-attempted", "none", null, 0), (cloud.Health.State, cloud.Health.Reason, cloud.Health.TotalTests, cloud.Health.Tests.Count));
+        Assert.Equal("ok", cloud.Status);
+    }
+
+    [Fact]
+    public async Task AHealthAnswering404IsAProjectCloudDoesNotHave()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.ProjectMissing = true;
+
+        EnrichmentResult result = await EnrichAsync(Clean(), sessions: [Session(HealthAssembly)], subjectFor: Window("fp-a"));
+
+        CloudContextDto cloud = result.Envelope.Context!.Cloud!;
+        Assert.Equal(("no-project", "not-found"), (cloud.Status, cloud.Reason));
+        Assert.Equal("not-attempted", cloud.Health.State);
+        Assert.StartsWith($"Cloud data unavailable: no Cloud project '{Project}'", Assert.Single(result.Hints).Text, StringComparison.Ordinal);
+    }
+
+    private const string HealthAssembly = "Shop.Tests";
+
+    /// <summary>
+    /// A report with no finding and no latest-run failure: nothing for the digest to ask about.
+    /// </summary>
+    private static ReportEnvelope Clean() => ReportFixtures.Get("latest-run") with { Findings = [], LatestRun = null };
+
+    /// <summary>
+    /// The window's tests, each in <see cref="HealthAssembly"/>, as the report would name them.
+    /// </summary>
+    private static Func<string, SubjectDto?> Window(params string[] fingerprints) =>
+        fingerprint => fingerprints.Contains(fingerprint)
+            ? new SubjectDto("test", fingerprint, $"Shop.Tests.{fingerprint}", fingerprint, fingerprint, null, null, null, HealthAssembly, null, null, null)
+            : null;
+
+    private static Task<HealthResponse?> Page(IEnumerable<string> fingerprints, int totalTests = 5, string? next = null) =>
+        Page([.. fingerprints.Select(f => ScriptedClient.Unhealthy(f))], totalTests, next);
+
+    private static Task<HealthResponse?> Page(IReadOnlyList<TestDigest> tests, int totalTests = 5, string? next = null) =>
+        Task.FromResult<HealthResponse?>(new HealthResponse(ScriptedClient.Computed, "emh-1", 365, totalTests, tests, [], next));
+
+    private static (string, string, int?, int, int, int, int) Counts(CloudHealthDto health) =>
+        (health.State, health.Reason, health.TotalTests, health.UnhealthyTests, health.ShownElsewhere, health.TestsShown, health.TestsTotal);
+
     private void SignIn() =>
         _keychain.Add(CredentialTestData.Record() with { CloudUrl = CredentialTestData.CloudUrl });
 
@@ -886,11 +1066,14 @@ public sealed class CloudEnricherTests : IDisposable
         ReportEnvelope envelope,
         string? projectFlag = null,
         Dictionary<string, string>? pins = null,
-        IReadOnlyList<TestSession>? sessions = null)
+        IReadOnlyList<TestSession>? sessions = null,
+        Func<string, SubjectDto?>? subjectFor = null,
+        bool showAll = false)
     {
         using ServiceProvider services = BuildServices();
 
-        var request = new EnrichmentRequest(_directory, projectFlag, pins ?? [], sessions ?? [], FindingsOf(envelope));
+        var request = new EnrichmentRequest(
+            _directory, projectFlag, pins ?? [], sessions ?? [], FindingsOf(envelope), subjectFor, showAll);
         return await services.GetRequiredService<CloudEnricher>().EnrichAsync(envelope, request, CancellationToken.None).ConfigureAwait(false);
     }
 
@@ -1153,6 +1336,45 @@ public sealed class CloudEnricherTests : IDisposable
                 Interlocked.Decrement(ref _inFlight);
             }
         }
+
+        public ConcurrentQueue<(string Project, IReadOnlyList<string> SessionKeys, string? Cursor)> HealthRead { get; } = new();
+
+        /// <summary>
+        /// Answers each health page from the project and cursor; a healthy suite of none by default.
+        /// </summary>
+        public Func<string, string?, Task<HealthResponse?>> Health { get; set; } =
+            (_, _) => Task.FromResult<HealthResponse?>(new HealthResponse(Computed, "emh-1", 365, 0, [], [], null));
+
+        public async Task<HealthResponse?> GetHealthAsync(
+            string projectKey, IReadOnlyList<string> sessionKeys, string? cursor, CancellationToken cancellationToken)
+        {
+            if (Throw is { } exception)
+                throw exception;
+
+            HealthRead.Enqueue((projectKey, sessionKeys, cursor));
+            if (ProjectMissing || MissingProjects.Contains(projectKey))
+                return null;
+
+            HealthResponse? page = await Health(projectKey, cursor).ConfigureAwait(false);
+            return page is null ? null : page with { Sessions = [.. sessionKeys.Select(k => new DigestSession(k, "complete", true, true))] };
+        }
+
+        /// <summary>
+        /// A health row: Cloud's digest of a test it calls unhealthy.
+        /// </summary>
+        public static TestDigest Unhealthy(string fingerprint, string verdict = "known-flaky", string? severity = "major") =>
+            new(
+                fingerprint,
+                "ok",
+                null,
+                Computed,
+                40,
+                verdict,
+                null,
+                new DigestFlaky(verdict == "known-flaky" ? "flaky" : "not-flaky", "timing", severity, Computed, Computed, null, Computed, "current"),
+                new DigestCanonical(10, 3, 0, null, "passed", Computed, null),
+                null,
+                []);
 
         public Task<RunsResponse?> GetRunsAsync(string projectKey, string fingerprint, int limit, CancellationToken cancellationToken)
         {

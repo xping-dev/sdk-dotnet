@@ -37,6 +37,18 @@ internal interface ICloudApiClient : IDisposable
     Task<DigestResponse?> GetDigestAsync(string projectKey, DigestRequest request, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Reads one page of the project's suite health (contract §6.5), or <see langword="null"/> when
+    /// the workspace has no project with that key.
+    /// </summary>
+    /// <param name="projectKey">The project.</param>
+    /// <param name="sessionKeys">Session keys to ask the state of; at most five.</param>
+    /// <param name="cursor">The previous page's <c>next</c>, or null for the first page.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <exception cref="CloudResponseException">The answer could not be read.</exception>
+    Task<HealthResponse?> GetHealthAsync(
+        string projectKey, IReadOnlyList<string> sessionKeys, string? cursor, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Reads the newest <paramref name="limit"/> runs of one test (contract §6.3), or
     /// <see langword="null"/> when the workspace has no such project or test.
     /// </summary>
