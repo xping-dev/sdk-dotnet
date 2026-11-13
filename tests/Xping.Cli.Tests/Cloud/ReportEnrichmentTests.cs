@@ -29,6 +29,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     private const string ApiKey = "team-read-key-0123456789";
     private const string FlagKey = "flag-read-key-0123456789";
     private const string DigestPath = $"{FakeCloud.GatewayPrefix}v1/projects/{Project}/tests/digest";
+    private const string HealthPath = $"{FakeCloud.GatewayPrefix}v1/projects/{Project}/tests/health";
 
     private readonly CliFlowHost _host = new();
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xping-report-enrichment", Guid.NewGuid().ToString("N"));
@@ -88,10 +89,57 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         JsonElement finding = Finding(json, FindingFingerprint);
         Assert.Equal(0.62, finding.GetProperty("cloud").GetProperty("confidence").GetProperty("score").GetDouble());
         Assert.Equal("moderately-reliable", finding.GetProperty("cloud").GetProperty("confidence").GetProperty("category").GetString());
-        Assert.Equal("1.30", json.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.31", json.GetProperty("schemaVersion").GetString());
         JsonElement session = Assert.Single(cloud.GetProperty("sessions").EnumerateArray());
         Assert.Equal(("complete", true), (session.GetProperty("state").GetString(), session.GetProperty("scored").GetBoolean()));
         Assert.Empty(text.Error);
+    }
+
+    [Fact]
+    public void Report_Health_ListsATestThatPassedHereAndLeavesTheSummaryLocal()
+    {
+        // #353: Stable1 never failed here, so nothing asked the digest about it; Cloud calls it flaky.
+        Seed();
+        CliResult local = Report("--json", "--fail-on", "low");
+        _host.Cloud.AddTest(Project, "fp-Stable1");
+        _host.Cloud.AddTest(Project, "fp-NotInThisWindow");
+        _host.SignIn();
+
+        CliResult result = Report("--json", "--fail-on", "low");
+
+        JsonElement json = result.Json();
+        JsonElement health = json.GetProperty("context").GetProperty("cloud").GetProperty("health");
+        Assert.Equal("ok", health.GetProperty("state").GetString());
+        JsonElement row = Assert.Single(health.GetProperty("tests").EnumerateArray());
+        Assert.Equal("fp-Stable1", row.GetProperty("subject").GetProperty("fingerprint").GetString());
+        Assert.Equal("known-flaky", row.GetProperty("digest").GetProperty("verdict").GetString());
+
+        // The two others the report already shows are counted; the one this window lacks is not.
+        Assert.Equal(
+            (4, 3, 2, 1, 1),
+            (health.GetProperty("totalTests").GetInt32(), health.GetProperty("unhealthyTests").GetInt32(),
+                health.GetProperty("shownElsewhere").GetInt32(), health.GetProperty("testsShown").GetInt32(),
+                health.GetProperty("testsTotal").GetInt32()));
+
+        // Contract R2, §7.6: Cloud never changes the summary or the exit code.
+        Assert.Equal(local.Code, result.Code);
+        Assert.Equal(local.Json().GetProperty("summary").GetRawText(), json.GetProperty("summary").GetRawText());
+        Assert.Contains("sessionKeys=", Assert.Single(_host.Cloud.GatewayRequests, r => r.Path == HealthPath).Query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Report_Health_IsNotAskedForASelection()
+    {
+        Seed();
+        string id = Report("--json").Json().GetProperty("findings")[0].GetProperty("id").GetString()!;
+        _host.SignIn();
+
+        JsonElement json = Report("--id", id, "--json").Json();
+
+        Assert.DoesNotContain(_host.Cloud.GatewayRequests, r => r.Path == HealthPath);
+        Assert.Equal(
+            "not-attempted",
+            json.GetProperty("context").GetProperty("cloud").GetProperty("health").GetProperty("state").GetString());
     }
 
     [Fact]
@@ -126,12 +174,14 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     [Fact]
     public async Task Report_Digest_Timeout_LocalIntact()
     {
-        // The pin binds the project without listing projects, so the one request held is the digest.
+        // The pin binds the project without listing projects, so the requests held are the digest
+        // and the suite health.
         Seed(pin: Project);
         CliResult local = Report();
         _host.SignIn();
         var never = new TaskCompletionSource();
         _host.Cloud.HoldGateway(DigestPath, never.Task);
+        _host.Cloud.HoldGateway(HealthPath, never.Task);
 
         // The attempt's own limit, short of the whole budget, so only the attempt times out.
         Task<CliResult> report = _host.Start(ReportArgs());
@@ -152,6 +202,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         int local = Report().Code;
         _host.SignIn();
         _host.Cloud.FailGateway(DigestPath, 50, HttpStatusCode.TooManyRequests, "Injected", retryAfter: 30);
+        _host.Cloud.FailGateway(HealthPath, 50, HttpStatusCode.TooManyRequests, "Injected", retryAfter: 30);
         DateTimeOffset started = _host.Time.GetUtcNow();
 
         CliResult result = await _host.DriveAsync(_host.Start(ReportArgs("--json")));
@@ -663,6 +714,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     private void FailEveryTestRead(HttpStatusCode status)
     {
         _host.Cloud.FailGateway(DigestPath, 50, status, "Injected");
+        _host.Cloud.FailGateway(HealthPath, 50, status, "Injected");
     }
 
     // A reason line and its continuations as one line: where it wraps depends on the names in it.

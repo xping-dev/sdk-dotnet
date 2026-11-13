@@ -161,9 +161,18 @@ internal static class EnvelopeStitcher
             };
         }
 
+        // Not a finding, so nothing to disagree with; the identity check still applies (§10).
+        CloudContextDto stitched = context with
+        {
+            Health = context.Health with
+            {
+                Tests = [.. context.Health.Tests.Select(t => t with { Digest = For(t.Subject, t.Digest, null) })]
+            }
+        };
+
         return envelope with
         {
-            Context = envelope.Context is { } existing ? existing with { Cloud = context } : new ContextDto(null, null, null, context),
+            Context = envelope.Context is { } existing ? existing with { Cloud = stitched } : new ContextDto(null, null, null, stitched),
             LatestRun = envelope.LatestRun is { } latest ? latest with { Failures = [.. latest.Failures.Select(Failure)] } : null,
             Test = envelope.Test is { } history ? History(history) : null,
             Findings = [.. envelope.Findings.Select(Finding)]

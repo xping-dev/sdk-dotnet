@@ -52,7 +52,9 @@ internal sealed partial class FakeCloud : IAsyncDisposable
     private readonly TimeProvider _time;
     private readonly Lock _gate = new();
     private readonly List<RecordedRequest> _requests = [];
-    private readonly Queue<Fault> _faults = new();
+    // In the order scripted, each matched by its own path: faults on two paths requested in parallel
+    // must not wait on each other.
+    private readonly List<Fault> _faults = [];
     private readonly Dictionary<string, AuthorizationCode> _codes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, RefreshToken> _refreshTokens = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Session> _sessions = new(StringComparer.Ordinal);
@@ -128,7 +130,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         lock (_gate)
         {
             for (int i = 0; i < count; i++)
-                _faults.Enqueue(new Fault(path, status, error, Drop: false, description, Problem: false, RetryAfter: null));
+                _faults.Add(new Fault(path, status, error, Drop: false, description, Problem: false, RetryAfter: null));
         }
     }
 
@@ -141,7 +143,7 @@ internal sealed partial class FakeCloud : IAsyncDisposable
         lock (_gate)
         {
             for (int i = 0; i < count; i++)
-                _faults.Enqueue(new Fault(path, 0, null, Drop: true, string.Empty, Problem: false, RetryAfter: null));
+                _faults.Add(new Fault(path, 0, null, Drop: true, string.Empty, Problem: false, RetryAfter: null));
         }
     }
 
@@ -274,9 +276,9 @@ internal sealed partial class FakeCloud : IAsyncDisposable
                 body,
                 _time.GetUtcNow()));
 
-            fault = _faults.TryPeek(out Fault? next) && string.Equals(next.Path, path, StringComparison.Ordinal)
-                ? _faults.Dequeue()
-                : null;
+            fault = _faults.Find(f => string.Equals(f.Path, path, StringComparison.Ordinal));
+            if (fault is not null)
+                _faults.Remove(fault);
 
             gatewayHold = _holds.GetValueOrDefault(path);
         }

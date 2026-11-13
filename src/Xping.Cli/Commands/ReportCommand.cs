@@ -9,6 +9,7 @@ using Xping.Cli.Cloud;
 using Xping.Cli.Hosting;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Contract;
+using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Rendering;
 using Xping.Cli.Report.Store;
@@ -102,7 +103,7 @@ internal sealed class ReportCommand(
         if (resolved.Window == null)
             return ReportUnavailable(resolved, store, options.Assembly, charset);
 
-        (ReportEnvelope envelope, AnalysisResult analysis) = Analyze(options, resolved, assembly, source);
+        (ReportEnvelope envelope, AnalysisResult analysis, AnalysisContext context) = Analyze(options, resolved, assembly, source);
 
         // On standard error even though the report also carries the count, and on every format:
         // a wrong clock is a defect on the machine rather than a fact about the suite, and the
@@ -123,7 +124,7 @@ internal sealed class ReportCommand(
         }
 
         return await EnrichAndRenderAsync(
-            options, envelope, analysis, resolved, startDirectory, store, capabilities, cancellationToken)
+            options, envelope, analysis, context.Tests, resolved, startDirectory, store, capabilities, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -252,7 +253,7 @@ internal sealed class ReportCommand(
             AssemblyAnalysis found = reported[0];
 
             return await EnrichAndRenderAsync(
-                options, found.Envelope!, found.Analysis!, found.Resolved, startDirectory, store, capabilities, cancellationToken)
+                options, found.Envelope!, found.Analysis!, null, found.Resolved, startDirectory, store, capabilities, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -312,7 +313,7 @@ internal sealed class ReportCommand(
             }
 
             using var warnings = new StringWriter();
-            (ReportEnvelope envelope, AnalysisResult analysis) = Analyze(options, resolved, assembly, source, warnings);
+            (ReportEnvelope envelope, AnalysisResult analysis, _) = Analyze(options, resolved, assembly, source, warnings);
 
             foreach (string line in warnings.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 io.Error.WriteLine($"{TerminalText.Printable(assembly, charset)}: {TerminalText.Printable(line, charset)}");
@@ -426,7 +427,7 @@ internal sealed class ReportCommand(
         if (!TestResolver.InWindow(match, resolved.Window))
             return OutsideWindow(options, query, match, resolved, charset);
 
-        (ReportEnvelope envelope, AnalysisResult analysis) = Analyze(
+        (ReportEnvelope envelope, AnalysisResult analysis, _) = Analyze(
             options,
             resolved,
             match.Assembly,
@@ -436,7 +437,7 @@ internal sealed class ReportCommand(
         WriteClockWarning(resolved);
 
         return await EnrichAndRenderAsync(
-            options, envelope, analysis, resolved, startDirectory, store, capabilities, cancellationToken)
+            options, envelope, analysis, null, resolved, startDirectory, store, capabilities, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -531,7 +532,7 @@ internal sealed class ReportCommand(
     /// </remarks>
     private void RenderUnresolved(ReportOptions options, WindowResult resolved, string assembly, TestHistoryDto history)
     {
-        (ReportEnvelope envelope, _) = Analyze(options, resolved, assembly, source: null, history: (_, _) => history);
+        (ReportEnvelope envelope, _, _) = Analyze(options, resolved, assembly, source: null, history: (_, _) => history);
 
         new JsonReportRenderer().Render(envelope, io.Output);
     }
@@ -578,12 +579,12 @@ internal sealed class ReportCommand(
     /// Builds what <c>--test</c> resolved to over the window, or <see langword="null"/> when the
     /// command is not <c>--test</c>.
     /// </param>
-    /// <returns>The envelope, and the analysis behind it.</returns>
+    /// <returns>The envelope, the analysis behind it, and the window it read.</returns>
     /// <remarks>
     /// One sequence for <c>report</c>, <c>--id</c> and <c>--test</c>, so the findings a selection
     /// answers about are always the full report's findings, computed the same way.
     /// </remarks>
-    private (ReportEnvelope Envelope, AnalysisResult Analysis) Analyze(
+    private (ReportEnvelope Envelope, AnalysisResult Analysis, AnalysisContext Context) Analyze(
         ReportOptions options,
         WindowResult resolved,
         string? assembly,
@@ -648,16 +649,21 @@ internal sealed class ReportCommand(
                 ? fingerprint => ShortFingerprintOf(source, assembly, fingerprint)
                 : null);
 
-        return (envelope, analysis);
+        return (envelope, analysis, context);
     }
 
     /// <summary>
     /// Adds Cloud data to a report the local analysis has finished deciding, then writes it.
     /// </summary>
+    /// <remarks>
+    /// <c>tests</c> is the window's tests, which the suite health lists the unhealthy ones of; null
+    /// where no full report can be the result.
+    /// </remarks>
     private async Task<int> EnrichAndRenderAsync(
         ReportOptions options,
         ReportEnvelope envelope,
         AnalysisResult analysis,
+        TestIndex? tests,
         WindowResult resolved,
         string startDirectory,
         ILocalSessionStore store,
@@ -672,12 +678,23 @@ internal sealed class ReportCommand(
         if (options.Format != ReportFormat.Summary)
         {
             // Under --id and --test the page holds the selection only. Asking about every finding
-            // behind it would spend the budget the subject's run history needs on rows nobody sees.
-            IReadOnlyList<Finding> findings = envelope.Selection is null && envelope.Test is null
+            // behind it, or the suite health, would spend the budget the subject's run history needs
+            // on rows nobody sees.
+            bool fullReport = envelope.Selection is null && envelope.Test is null;
+            IReadOnlyList<Finding> findings = fullReport
                 ? analysis.Findings
                 : [.. analysis.Findings.Where(f => envelope.Findings.Any(shown => shown.Id == f.Id))];
 
-            var request = new EnrichmentRequest(startDirectory, options.Project, SessionPins(window.Sessions), window.Sessions, findings);
+            var request = new EnrichmentRequest(
+                startDirectory,
+                options.Project,
+                SessionPins(window.Sessions),
+                window.Sessions,
+                findings,
+                !fullReport || tests is null ? null : fingerprint => tests.ReferenceFor(fingerprint) is { } test ? EnvelopeBuilder.ForTest(test) : null,
+
+                // A null --top is --all, which lifts every cap on the page.
+                ShowAll: options.Top == null);
             EnrichmentResult enriched = await enricher.EnrichAsync(envelope, request, cancellationToken).ConfigureAwait(false);
 
             WriteCloudHints(enriched.Hints, capabilities.Glyphs.Charset);
