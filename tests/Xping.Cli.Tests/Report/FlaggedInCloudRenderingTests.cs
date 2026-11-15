@@ -139,4 +139,39 @@ public sealed class FlaggedInCloudRenderingTests
 
         Assert.DoesNotContain(fenced, l => l.Contains("No findings.", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void ARowWithNoVerdictReadsFlaggedAndAScoreWithNoWindowHasNone()
+    {
+        CloudDigestDto digest = KnownFlaky.Digest with { Verdict = null, Confidence = KnownFlaky.Digest.Confidence! with { Window = null } };
+        string[] fenced = Fenced(Render(WithHealth(Envelope(), Listing(KnownFlaky with { Digest = digest }))));
+
+        Assert.Equal("    flagged      CheckoutTests.Checkout_Completes", fenced[3]);
+        Assert.Equal("                 cloud: confidence 0.41 - flaky (timing, major)", fenced[4]);
+    }
+
+    [Fact]
+    public void WithNoFindingsTheSectionFollowsTheLatestRunAfterABlankLine()
+    {
+        ReportEnvelope envelope = Get("latest-run") with { Findings = [] };
+        string[] fenced = Fenced(Render(WithHealth(envelope, Listing(KnownFlaky))));
+
+        int flagged = Array.FindIndex(fenced, l => l.StartsWith(Heading, StringComparison.Ordinal));
+
+        Assert.StartsWith("LATEST RUN", fenced[0], StringComparison.Ordinal);
+        Assert.Equal(string.Empty, fenced[flagged - 1]);
+        Assert.NotEqual(string.Empty, fenced[flagged - 2]);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AReportWithNoCloudContextHasNoSectionAndNoFooterCount(bool hasContext)
+    {
+        ReportEnvelope envelope = Envelope() with { Context = hasContext ? new ContextDto(null, null, null) : null };
+        string report = Render(envelope);
+
+        Assert.DoesNotContain(Heading, report, StringComparison.Ordinal);
+        Assert.DoesNotContain("flagged in Cloud", report, StringComparison.Ordinal);
+    }
 }

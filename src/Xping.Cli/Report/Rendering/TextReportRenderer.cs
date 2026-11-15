@@ -562,7 +562,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// data is partial or missing (Amendment 7G).
     /// </remarks>
     private static CloudHealthDto? Flagged(ReportEnvelope envelope) =>
-        envelope.Context?.Cloud?.Health is { } health && (health.Tests.Count > 0 || health.ShownElsewhere > 0)
+        envelope.Context?.Cloud is { Health: var health } && (health.Tests.Count > 0 || health.ShownElsewhere > 0)
             ? health
             : null;
 
@@ -2090,7 +2090,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         }
 
         if (envelope.Selection == null
-            && envelope.Context?.Cloud?.Health is { } health
+            && envelope.Context?.Cloud is { Health: var health }
             && health.TestsShown < health.TestsTotal)
         {
             counts.Add($"{Count(health.TestsShown)} of {Count(health.TestsTotal)} flagged in Cloud");
