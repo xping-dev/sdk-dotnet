@@ -1035,6 +1035,36 @@ public sealed class CloudEnricherTests : IDisposable
         Assert.StartsWith($"Cloud data unavailable: no Cloud project '{Project}'", Assert.Single(result.Hints).Text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task AFallbackResumesTheHealthAndItsFailureKeepsThePagesAlreadyRead()
+    {
+        SignIn();
+        _environment["XPING_APIKEY"] = ApiKey;
+        using var login = new ScriptedClient { Health = (_, cursor) => cursor is null ? Page(["fp-a"], next: "page-2") : throw new LoginRequiredException() };
+        using var key = new ScriptedClient { Health = (_, _) => throw new CloudApiException(503, null, "Xping Cloud failed to answer (HTTP 503).") };
+        _factory.ClientFor = credential => credential.Source == CredentialSource.StoredLogin ? login : key;
+
+        EnrichmentResult result = await EnrichAsync(Clean(), sessions: [Session(HealthAssembly)], subjectFor: Window("fp-a", "fp-b"));
+
+        CloudHealthDto health = result.Envelope.Context!.Cloud!.Health;
+        Assert.Equal("page-2", Assert.Single(key.HealthRead).Cursor);
+        Assert.Equal("partial", health.State);
+        Assert.Equal("fp-a", Assert.Single(health.Tests).Subject.Fingerprint);
+    }
+
+    [Theory]
+    [InlineData("emh-1")]
+    [InlineData("emh-2")]
+    public async Task AHealthOnlyReportKeepsCloudsSignatureAlgorithm(string algorithm)
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Health = (_, _) => Task.FromResult<HealthResponse?>(new HealthResponse(ScriptedClient.Computed, algorithm, 365, 5, [], [], null));
+
+        EnrichmentResult result = await EnrichAsync(Clean(), sessions: [Session(HealthAssembly)], subjectFor: Window("fp-a"));
+
+        Assert.Equal(algorithm, result.Envelope.Context!.Cloud!.SignatureAlgorithm);
+    }
+
     private const string HealthAssembly = "Shop.Tests";
 
     /// <summary>

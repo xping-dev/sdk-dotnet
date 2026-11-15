@@ -548,18 +548,22 @@ internal sealed class CloudEnricher(
         Ledger ledger,
         CancellationToken cancellationToken)
     {
-        // Ledgered before the first page, so pages read before the budget ran out still count.
-        var read = new HealthRead();
+        // The fallback resumes where the stored login stopped, so its own failure cannot cost the
+        // pages already read. Ledgered before the first page, so pages read before the budget ran
+        // out still count.
+        HealthRead read = project.Assemblies
+            .Select(a => ledger.Health.GetValueOrDefault(a))
+            .FirstOrDefault(r => r is { Pages: > 0 }) ?? new HealthRead();
+        read.Failure = null;
         foreach (string assembly in project.Assemblies)
             ledger.Health[assembly] = read;
 
-        string? cursor = null;
         try
         {
-            do
+            while (read.Pages < MaxHealthPages)
             {
                 HealthResponse? page = await client.GetHealthAsync(
-                    project.Binding.Key, read.Pages == 0 ? project.SessionKeys : [], cursor, cancellationToken).ConfigureAwait(false);
+                    project.Binding.Key, read.Pages == 0 ? project.SessionKeys : [], read.Next, cancellationToken).ConfigureAwait(false);
 
                 if (page is null)
                 {
@@ -570,15 +574,16 @@ internal sealed class CloudEnricher(
                 }
 
                 ledger.Record(project.Binding.Key, read, page, timeProvider.GetUtcNow());
-                cursor = page.Next;
+                if (page.Next is null)
+                {
+                    read.Complete = true;
+                    return true;
+                }
             }
-            while (cursor is not null && read.Pages < MaxHealthPages);
 
             // More pages than a report reads: a suite this unhealthy is reported as partial, not
             // as though the rest were healthy.
-            read.Complete = cursor is null;
-            if (!read.Complete)
-                read.Failure = new Failure("budget", "Xping Cloud's suite health has more pages than a report reads.");
+            read.Failure = new Failure("budget", "Xping Cloud's suite health has more pages than a report reads.");
         }
         catch (Exception ex) when (CredentialFailure(ex, credential) is null && IsReadFailure(ex, budget))
         {
@@ -1039,6 +1044,9 @@ internal sealed class CloudEnricher(
 
         public int Pages { get; set; }
 
+        /// <summary>Gets or sets the cursor of the next page to read; null before the first.</summary>
+        public string? Next { get; set; }
+
         /// <summary>Gets or sets whether the last page was read.</summary>
         public bool Complete { get; set; }
 
@@ -1119,16 +1127,7 @@ internal sealed class CloudEnricher(
         /// </summary>
         public void Record(string projectKey, IReadOnlyList<CloudTarget> batch, DigestResponse response, DateTimeOffset fetchedAt)
         {
-            bool mismatch = !string.Equals(response.SignatureAlgorithm, SignatureAlgorithmId, StringComparison.Ordinal);
-
-            lock (_gate)
-            {
-                // A mismatch is the value worth reporting: it is why every match reads unknown.
-                if (SignatureAlgorithm is null || mismatch)
-                    SignatureAlgorithm = response.SignatureAlgorithm;
-
-                RetentionDays ??= response.RetentionDays;
-            }
+            bool mismatch = RecordAlgorithm(response.SignatureAlgorithm, response.RetentionDays);
 
             Dictionary<string, TestDigest> answered = response.Tests
                 .Where(t => t is { Fingerprint: not null })
@@ -1159,10 +1158,15 @@ internal sealed class CloudEnricher(
         /// </summary>
         public void Record(string projectKey, HealthRead read, HealthResponse page, DateTimeOffset fetchedAt)
         {
-            lock (_gate)
-                RetentionDays ??= page.RetentionDays;
+            // A health without the algorithm says nothing about it; a digest's value is not undone.
+            if (page.SignatureAlgorithm is not null)
+                RecordAlgorithm(page.SignatureAlgorithm, page.RetentionDays);
+            else
+                lock (_gate)
+                    RetentionDays ??= page.RetentionDays;
 
             read.Pages++;
+            read.Next = page.Next;
             read.TotalTests ??= page.TotalTests;
             read.FetchedAt = fetchedAt;
 
@@ -1170,6 +1174,23 @@ internal sealed class CloudEnricher(
                 read.Rows.TryAdd(digest.Fingerprint, EnvelopeStitcher.ToDto(digest, fetchedAt));
 
             RecordSessions(projectKey, page.Sessions);
+        }
+
+        /// <returns>Whether the algorithm is not the one this CLI computes.</returns>
+        private bool RecordAlgorithm(string? signatureAlgorithm, int? retentionDays)
+        {
+            bool mismatch = !string.Equals(signatureAlgorithm, SignatureAlgorithmId, StringComparison.Ordinal);
+
+            lock (_gate)
+            {
+                // A mismatch is the value worth reporting: it is why every match reads unknown.
+                if (SignatureAlgorithm is null || mismatch)
+                    SignatureAlgorithm = signatureAlgorithm;
+
+                RetentionDays ??= retentionDays;
+            }
+
+            return mismatch;
         }
 
         private void RecordSessions(string projectKey, IReadOnlyList<DigestSession>? sessions)
