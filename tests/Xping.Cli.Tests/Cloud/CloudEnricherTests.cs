@@ -904,6 +904,78 @@ public sealed class CloudEnricherTests : IDisposable
     }
 
     [Fact]
+    public async Task TheHealthCountsItsKeptRowsByVerdictListedOrNot()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Health = (_, _) => Page(
+        [
+            ScriptedClient.Unhealthy("fp-a", "broken"),
+            ScriptedClient.Unhealthy("fp-b"),
+            ScriptedClient.Unhealthy("fp-c", "unstable"),
+            ScriptedClient.Unhealthy("fp-d", "quarantined"),
+            ScriptedClient.Unhealthy("fp-cloud-only", "broken")
+        ]);
+
+        EnrichmentResult result = await EnrichAsync(
+            Clean(), sessions: [Session(HealthAssembly)], subjectFor: Window("fp-a", "fp-b", "fp-c", "fp-d"));
+
+        CloudHealthDto health = result.Envelope.Context!.Cloud!.Health;
+        Assert.Equal(new CloudVerdictCountsDto(1, 1, 1, 1), health.Verdicts);
+        Assert.Equal(4, health.UnhealthyTests);
+    }
+
+    [Fact]
+    public async Task AnOverviewReadsASharedProjectsHealthOnceAndKeepsEachAssemblysOwnTests()
+    {
+        // Both assemblies bind to the one project the environment names.
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Health = (_, _) => Page(
+        [
+            ScriptedClient.Unhealthy("fp-a", "broken"),
+            ScriptedClient.Unhealthy("fp-b"),
+            ScriptedClient.Unhealthy("fp-c", "unstable")
+        ]);
+
+        OverviewEnrichment result = await EnrichOverviewAsync(
+            (HealthAssembly, Window("fp-a", "fp-b")),
+            (OtherAssembly, WindowIn(OtherAssembly, "fp-c")));
+
+        Assert.Single(_factory.Client.HealthRead);
+        Assert.Empty(_factory.Client.Requests);
+
+        OverviewCloudDto shop = result.Rows[HealthAssembly];
+        Assert.Equal(("ok", "none", Project), (shop.Status, shop.Reason, shop.ProjectKey));
+        Assert.Equal(new CloudHealthSummaryDto("ok", "none", 5, 2, new CloudVerdictCountsDto(1, 1, 0, 0)), shop.Health);
+        Assert.Equal(new CloudVerdictCountsDto(0, 0, 1, 0), result.Rows[OtherAssembly].Health.Verdicts);
+    }
+
+    [Fact]
+    public async Task AnOverviewWithoutACredentialIsNotAttemptedOnEveryRow()
+    {
+        OverviewEnrichment result = await EnrichOverviewAsync(
+            (HealthAssembly, Window("fp-a")),
+            (OtherAssembly, WindowIn(OtherAssembly, "fp-c")));
+
+        Assert.Empty(_factory.Client.HealthRead);
+        Assert.All(result.Rows.Values, row => Assert.Equal(("not-attempted", "not-attempted"), (row.Status, row.Health.State)));
+        Assert.Empty(result.Hints);
+    }
+
+    [Fact]
+    public async Task AnOverviewWhoseHealthFailsIsUnavailableOnEveryRowItAsked()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Health = (_, _) => throw new CloudApiException(503, null, "Xping Cloud failed to answer (HTTP 503).");
+
+        OverviewEnrichment result = await EnrichOverviewAsync((HealthAssembly, Window("fp-a")));
+
+        OverviewCloudDto row = result.Rows[HealthAssembly];
+        Assert.Equal(("unavailable", "server"), (row.Status, row.Reason));
+        Assert.Equal(("unavailable", "server"), (row.Health.State, row.Health.Reason));
+        Assert.Equal(CloudVerdictCountsDto.None, row.Health.Verdicts);
+    }
+
+    [Fact]
     public async Task HealthRowsAreWorstFirstAndATargetIsCountedNotListed()
     {
         _environment["XPING_APIKEY"] = ApiKey;
@@ -1126,6 +1198,7 @@ public sealed class CloudEnricherTests : IDisposable
     }
 
     private const string HealthAssembly = "Shop.Tests";
+    private const string OtherAssembly = "Cart.Tests";
 
     /// <summary>
     /// A report with no finding and no latest-run failure: nothing for the digest to ask about.
@@ -1139,6 +1212,9 @@ public sealed class CloudEnricherTests : IDisposable
         fingerprint => fingerprints.Contains(fingerprint)
             ? new SubjectDto("test", fingerprint, $"Shop.Tests.{fingerprint}", fingerprint, fingerprint, null, null, null, HealthAssembly, null, null, null)
             : null;
+
+    private static Func<string, SubjectDto?> WindowIn(string assembly, params string[] fingerprints) =>
+        fingerprint => Window(fingerprints)(fingerprint) is { } subject ? subject with { Assembly = assembly } : null;
 
     private static Task<HealthResponse?> Page(IEnumerable<string> fingerprints, int totalTests = 5, string? next = null) =>
         Page([.. fingerprints.Select(f => ScriptedClient.Unhealthy(f))], totalTests, next);
@@ -1166,6 +1242,18 @@ public sealed class CloudEnricherTests : IDisposable
         var request = new EnrichmentRequest(
             _directory, projectFlag, pins ?? [], sessions ?? [], findings ?? FindingsOf(envelope), subjectFor, showAll);
         return await services.GetRequiredService<CloudEnricher>().EnrichAsync(envelope, request, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    private async Task<OverviewEnrichment> EnrichOverviewAsync(params (string Assembly, Func<string, SubjectDto?> SubjectFor)[] rows)
+    {
+        using ServiceProvider services = BuildServices();
+
+        OverviewEnrichmentItem[] items =
+        [
+            .. rows.Select(r => new OverviewEnrichmentItem(
+                r.Assembly, Clean(), new EnrichmentRequest(_directory, null, new Dictionary<string, string>(), [Session(r.Assembly)], [], r.SubjectFor)))
+        ];
+        return await services.GetRequiredService<CloudEnricher>().EnrichOverviewAsync(items, CancellationToken.None).ConfigureAwait(false);
     }
 
     private ServiceProvider BuildServices()

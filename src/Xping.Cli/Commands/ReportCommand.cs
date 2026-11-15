@@ -91,7 +91,7 @@ internal sealed class ReportCommand(
             {
                 return options.Id is { } id
                     ? await RunIdAcrossAsync(options, id, assemblies, startDirectory, store, source, capabilities, cancellationToken).ConfigureAwait(false)
-                    : RunOverview(options, assemblies, store, source, capabilities);
+                    : await RunOverviewAsync(options, assemblies, startDirectory, store, source, capabilities, cancellationToken).ConfigureAwait(false);
             }
 
             assembly = assemblies.Count == 1 ? assemblies[0] : null;
@@ -139,16 +139,19 @@ internal sealed class ReportCommand(
     /// trusting both (report-format Amendment 6B).
     /// </para>
     /// <para>
-    /// Never enriched: the header a row copies is local, and Cloud data the report it opens did not
-    /// headline would be exactly the disagreement above.
+    /// Cloud adds only the suite health, the one Cloud line its report's header prints, read with
+    /// that report's own request (cloud-data-in-cli-cli-spec Amendment 8C). Anything its findings or
+    /// latest run would ask the digest is the report's to show.
     /// </para>
     /// </remarks>
-    private int RunOverview(
+    private async Task<int> RunOverviewAsync(
         ReportOptions options,
         IReadOnlyList<string> assemblies,
+        string startDirectory,
         ILocalSessionStore store,
         LocalSessionSource source,
-        OutputCapabilities capabilities)
+        OutputCapabilities capabilities,
+        CancellationToken cancellationToken)
     {
         TerminalCharset charset = capabilities.Glyphs.Charset;
 
@@ -156,9 +159,9 @@ internal sealed class ReportCommand(
         // rows the flag had no effect on, which reads as the flag being honoured.
         if (ListFlags(options) is { Length: > 0 } flags)
         {
-            io.Error.WriteLine(
-                $"{flags} needs --assembly: this store holds {assemblies.Count} assemblies, and a list of findings covers one.");
-            io.Error.WriteLine("Run xping report to see them, then add --assembly <name>.");
+            await io.Error.WriteLineAsync(
+                $"{flags} needs --assembly: this store holds {assemblies.Count} assemblies, and a list of findings covers one.").ConfigureAwait(false);
+            await io.Error.WriteLineAsync("Run xping report to see them, then add --assembly <name>.").ConfigureAwait(false);
             return ExitCodes.InsufficientData;
         }
 
@@ -179,13 +182,27 @@ internal sealed class ReportCommand(
                 if (analysis.Envelope is { } envelope)
                     summary.Render(envelope, io.Output);
                 else
-                    io.Output.WriteLine($"Xping: {TerminalText.Printable(analysis.Assembly, charset)}: {TerminalText.Printable(analysis.Unavailable!, charset)}");
+                    await io.Output.WriteLineAsync($"Xping: {TerminalText.Printable(analysis.Assembly, charset)}: {TerminalText.Printable(analysis.Unavailable!, charset)}").ConfigureAwait(false);
             }
         }
         else
         {
+            // Cloud fills only each row's cloud object; the exit code below reads the local findings alone.
+            OverviewEnrichment cloud = await enricher.EnrichOverviewAsync(
+                [
+                    .. analyses
+                        .Where(a => a.Envelope is not null)
+                        .Select(a => new OverviewEnrichmentItem(
+                            a.Assembly,
+                            a.Envelope!,
+                            RequestFor(options, a.Envelope!, a.Analysis!, a.Tests, a.Resolved.Window!, startDirectory)))
+                ],
+                cancellationToken).ConfigureAwait(false);
+
+            WriteCloudHints(cloud.Hints, charset);
+
             OverviewEnvelope overview = OverviewBuilder.Build(
-                [.. analyses.Select(a => new OverviewRow(a.Assembly, a.Envelope, a.Unavailable))],
+                [.. analyses.Select(a => new OverviewRow(a.Assembly, a.Envelope, a.Unavailable, cloud.Rows.GetValueOrDefault(a.Assembly)))],
                 assembly => new ReportScope(
                     assembly,
                     WindowResolution.Default,
@@ -205,12 +222,12 @@ internal sealed class ReportCommand(
                 bool pad = capabilities.Decorate;
 
                 if (pad)
-                    io.Output.WriteLine();
+                    await io.Output.WriteLineAsync().ConfigureAwait(false);
 
                 new OverviewTextRenderer(capabilities).Render(overview, io.Output);
 
                 if (pad)
-                    io.Output.WriteLine();
+                    await io.Output.WriteLineAsync().ConfigureAwait(false);
             }
         }
 
@@ -285,8 +302,9 @@ internal sealed class ReportCommand(
     /// <param name="Envelope">Its report; null when the window could not be opened.</param>
     /// <param name="Analysis">The analysis behind the report; null with it.</param>
     /// <param name="Unavailable">Why the window could not be opened; null when it was.</param>
+    /// <param name="Tests">The window's tests; null with the report.</param>
     private sealed record AssemblyAnalysis(
-        string Assembly, WindowResult Resolved, ReportEnvelope? Envelope, AnalysisResult? Analysis, string? Unavailable);
+        string Assembly, WindowResult Resolved, ReportEnvelope? Envelope, AnalysisResult? Analysis, string? Unavailable, TestIndex? Tests = null);
 
     /// <summary>
     /// Builds every assembly's report over the caller's window, as <c>--assembly</c> would build it.
@@ -313,12 +331,12 @@ internal sealed class ReportCommand(
             }
 
             using var warnings = new StringWriter();
-            (ReportEnvelope envelope, AnalysisResult analysis, _) = Analyze(options, resolved, assembly, source, warnings);
+            (ReportEnvelope envelope, AnalysisResult analysis, AnalysisContext context) = Analyze(options, resolved, assembly, source, warnings);
 
             foreach (string line in warnings.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 io.Error.WriteLine($"{TerminalText.Printable(assembly, charset)}: {TerminalText.Printable(line, charset)}");
 
-            analyses.Add(new AssemblyAnalysis(assembly, resolved, envelope, analysis, null));
+            analyses.Add(new AssemblyAnalysis(assembly, resolved, envelope, analysis, null, context.Tests));
         }
 
         return analyses;
@@ -677,24 +695,7 @@ internal sealed class ReportCommand(
         // one-line summary has no slot for Cloud data, so it is not worth a request.
         if (options.Format != ReportFormat.Summary)
         {
-            // Under --id and --test the page holds the selection only. Asking about every finding
-            // behind it, or the suite health, would spend the budget the subject's run history needs
-            // on rows nobody sees.
-            bool fullReport = envelope.Selection is null && envelope.Test is null;
-            IReadOnlyList<Finding> findings = fullReport
-                ? analysis.Findings
-                : [.. analysis.Findings.Where(f => envelope.Findings.Any(shown => shown.Id == f.Id))];
-
-            var request = new EnrichmentRequest(
-                startDirectory,
-                options.Project,
-                SessionPins(window.Sessions),
-                window.Sessions,
-                findings,
-                !fullReport || tests is null ? null : fingerprint => tests.ReferenceFor(fingerprint) is { } test ? EnvelopeBuilder.ForTest(test) : null,
-
-                // A null --top is --all, which lifts every cap on the page.
-                ShowAll: options.Top == null);
+            EnrichmentRequest request = RequestFor(options, envelope, analysis, tests, window, startDirectory);
             EnrichmentResult enriched = await enricher.EnrichAsync(envelope, request, cancellationToken).ConfigureAwait(false);
 
             WriteCloudHints(enriched.Hints, capabilities.Glyphs.Charset);
@@ -702,6 +703,33 @@ internal sealed class ReportCommand(
         }
 
         return Render(options, envelope, analysis, window, store, capabilities);
+    }
+
+    /// <summary>
+    /// What a report asks Cloud beyond its envelope. The overview builds each row's with this too, so
+    /// a row keeps the health rows its report keeps.
+    /// </summary>
+    private static EnrichmentRequest RequestFor(
+        ReportOptions options, ReportEnvelope envelope, AnalysisResult analysis, TestIndex? tests, AnalysisWindow window, string startDirectory)
+    {
+        // Under --id and --test the page holds the selection only. Asking about every finding
+        // behind it, or the suite health, would spend the budget the subject's run history needs
+        // on rows nobody sees.
+        bool fullReport = envelope.Selection is null && envelope.Test is null;
+        IReadOnlyList<Finding> findings = fullReport
+            ? analysis.Findings
+            : [.. analysis.Findings.Where(f => envelope.Findings.Any(shown => shown.Id == f.Id))];
+
+        return new EnrichmentRequest(
+            startDirectory,
+            options.Project,
+            SessionPins(window.Sessions),
+            window.Sessions,
+            findings,
+            !fullReport || tests is null ? null : fingerprint => tests.ReferenceFor(fingerprint) is { } test ? EnvelopeBuilder.ForTest(test) : null,
+
+            // A null --top is --all, which lifts every cap on the page.
+            ShowAll: options.Top == null);
     }
 
     /// <summary>

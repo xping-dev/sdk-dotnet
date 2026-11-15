@@ -118,8 +118,10 @@ internal sealed record ReportEnvelope(
     /// failures like any other.
     /// 1.31 is where <c>context.cloud</c> gained <c>health</c>: the window's tests Cloud calls
     /// unhealthy, read once per project, whether or not the local analysis named them.
+    /// 1.32 is where <c>context.cloud.health</c> gained <c>verdicts</c>, its unhealthy tests by
+    /// Cloud's verdict, and each overview row gained <c>cloud</c>: the same counts for its assembly.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.31";
+    public const string CurrentSchemaVersion = "1.32";
 }
 
 /// <summary>

@@ -74,6 +74,10 @@ internal sealed record CloudContextDto(
 /// <param name="Reason">The same vocabulary as <see cref="CloudContextDto.Reason"/>.</param>
 /// <param name="TotalTests">The tests Cloud classified in the projects read; null when no page answered.</param>
 /// <param name="UnhealthyTests">The window's tests Cloud calls unhealthy, listed or not.</param>
+/// <param name="Verdicts">
+/// <paramref name="UnhealthyTests"/> by Cloud's verdict: the token the report's header and its
+/// overview row print (cloud-data-in-cli-cli-spec Amendment 8A).
+/// </param>
 /// <param name="ShownElsewhere">
 /// Of those, the tests the page already names: a finding's test or member after <c>--top</c>, or a
 /// latest-run row after its cap.
@@ -89,13 +93,93 @@ internal sealed record CloudHealthDto(
     string Reason,
     int? TotalTests,
     int UnhealthyTests,
+    CloudVerdictCountsDto Verdicts,
     int ShownElsewhere,
     IReadOnlyList<CloudHealthTestDto> Tests,
     int TestsShown,
     int TestsTotal)
 {
     /// <summary>The health of a report that did not ask for it.</summary>
-    public static CloudHealthDto NotAttempted { get; } = new("not-attempted", "none", null, 0, 0, [], 0, 0);
+    public static CloudHealthDto NotAttempted { get; } = Unanswered("not-attempted", "none");
+
+    /// <summary>A health with no page read: nothing kept, nothing listed.</summary>
+    /// <param name="state"><c>not-attempted</c> or <c>unavailable</c>.</param>
+    /// <param name="reason">Why.</param>
+    /// <returns>The health.</returns>
+    public static CloudHealthDto Unanswered(string state, string reason) =>
+        new(state, reason, null, 0, CloudVerdictCountsDto.None, 0, [], 0, 0);
+}
+
+/// <summary>
+/// The window's tests Xping Cloud calls unhealthy, counted by its verdict
+/// (cloud-data-in-cli-cli-spec Amendment 8A).
+/// </summary>
+/// <param name="Broken">Verdict <c>broken</c>.</param>
+/// <param name="KnownFlaky">Verdict <c>known-flaky</c>.</param>
+/// <param name="Unstable">Verdict <c>unstable</c>.</param>
+/// <param name="Flagged">Any other verdict, or none.</param>
+internal sealed record CloudVerdictCountsDto(int Broken, int KnownFlaky, int Unstable, int Flagged)
+{
+    /// <summary>No test counted.</summary>
+    public static CloudVerdictCountsDto None { get; } = new(0, 0, 0, 0);
+
+    /// <summary>
+    /// Counts the digests of the kept health rows. The one count both the report and the overview
+    /// print, so the two cannot disagree.
+    /// </summary>
+    /// <param name="digests">One per kept test.</param>
+    /// <returns>The counts.</returns>
+    public static CloudVerdictCountsDto From(IEnumerable<CloudDigestDto> digests)
+    {
+        ArgumentNullException.ThrowIfNull(digests);
+
+        int broken = 0, knownFlaky = 0, unstable = 0, flagged = 0;
+        foreach (CloudDigestDto digest in digests)
+        {
+            switch (digest.Verdict)
+            {
+                case "broken": broken++; break;
+                case "known-flaky": knownFlaky++; break;
+                case "unstable": unstable++; break;
+                default: flagged++; break;
+            }
+        }
+
+        return new CloudVerdictCountsDto(broken, knownFlaky, unstable, flagged);
+    }
+}
+
+/// <summary>
+/// One overview row's Cloud data: the suite health of its assembly, without the listed tests
+/// (cloud-data-in-cli-cli-spec Amendment 8D).
+/// </summary>
+/// <param name="Status">
+/// The assembly's project row status; the same vocabulary as <see cref="CloudContextDto.Status"/>.
+/// </param>
+/// <param name="Reason">The same vocabulary as <see cref="CloudContextDto.Reason"/>.</param>
+/// <param name="ProjectKey">The project the assembly was bound to, or null.</param>
+/// <param name="Health">Its suite health.</param>
+internal sealed record OverviewCloudDto(string Status, string Reason, string? ProjectKey, CloudHealthSummaryDto Health);
+
+/// <summary>
+/// A suite health without its listed tests: what an overview row carries.
+/// </summary>
+/// <param name="State">As <see cref="CloudHealthDto.State"/>.</param>
+/// <param name="Reason">As <see cref="CloudHealthDto.Reason"/>.</param>
+/// <param name="TotalTests">As <see cref="CloudHealthDto.TotalTests"/>.</param>
+/// <param name="UnhealthyTests">As <see cref="CloudHealthDto.UnhealthyTests"/>.</param>
+/// <param name="Verdicts">As <see cref="CloudHealthDto.Verdicts"/>.</param>
+internal sealed record CloudHealthSummaryDto(
+    string State, string Reason, int? TotalTests, int UnhealthyTests, CloudVerdictCountsDto Verdicts)
+{
+    /// <summary>The summary of a full health.</summary>
+    /// <param name="health">The health.</param>
+    /// <returns>Its summary.</returns>
+    public static CloudHealthSummaryDto Of(CloudHealthDto health)
+    {
+        ArgumentNullException.ThrowIfNull(health);
+        return new(health.State, health.Reason, health.TotalTests, health.UnhealthyTests, health.Verdicts);
+    }
 }
 
 /// <summary>

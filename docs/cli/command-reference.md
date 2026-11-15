@@ -887,11 +887,11 @@ Search.Tests                                                   no findings
 Details: xping report --assembly Checkout.Tests
 ```
 
-Each row repeats the header of that assembly's own report: the same window, the same numbers. The overview is local only; `--assembly` adds [Cloud data](#cloud-data).
+Each row repeats the header of that assembly's own report: the same window, the same numbers. Signed in, the overview also reads each assembly's [suite health](#flagged-in-cloud) from Xping Cloud, and nothing else. `--assembly` adds the rest of the [Cloud data](#cloud-data).
 
 - `--runs` and `--since` set every assembly's window. An assembly with no runs in it gets a row that says so.
 - `--fail-on` judges every assembly, so one suite's finding fails the build even when another suite ran last.
-- `--summary` prints one line per assembly. `--json` writes an envelope with `"scope": "overview"` and an `assemblies` array; an assembly's own report has `"scope": "assembly"`.
+- `--summary` prints one line per assembly. `--json` writes an envelope with `"scope": "overview"` and an `assemblies` array; an assembly's own report has `"scope": "assembly"`. Each row's `cloud` holds its project row's `status`, `reason` and `projectKey`, and its `health` without the listed tests: the same `verdicts` its own report counts. It is `null` for a row with no window.
 - `--top`, `--all` and `--kind` describe one list of findings, so they need `--assembly`.
 - `--id` without `--assembly` looks in every assembly. `--test` already does.
 
@@ -1084,7 +1084,7 @@ API key; the name is also `null` when the sign-in predates it), `elapsedMs`, `fe
 in `sessions` whether Cloud has received and scored this machine's newest runs, and in `health`
 [the suite's health](#flagged-in-cloud): its `state` (`ok`, `partial`, `unavailable` or
 `not-attempted`, which `--id` and `--test` always are) and `reason`, the `totalTests` Cloud
-classified, the `unhealthyTests` in your window, the `shownElsewhere` the page already names (a
+classified, the `unhealthyTests` in your window and their `verdicts` (`broken`, `knownFlaky`, `unstable`, and `flagged` for any other), the `shownElsewhere` the page already names (a
 finding's test or member after `--top`, or a latest-run row after its cap), and the rest in `tests`, each a local `subject` and Cloud's `digest`, with
 `testsShown` and `testsTotal` for the cap. `summary` never counts them.
 
@@ -1114,7 +1114,7 @@ names, and `tests` is `healthy` plus `flagged` plus `failedLatestRun`:
 
 ```json
 {
-  "schemaVersion": "1.31",
+  "schemaVersion": "1.32",
   "scope": "assembly",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": {
@@ -1131,7 +1131,8 @@ names, and `tests` is `healthy` plus `flagged` plus `failedLatestRun`:
         { "sessionKey": "6f9a2f1c-…", "projectKey": "checkout-tests", "state": "complete", "scored": true, "flakyExamined": true }
       ],
       "health": {
-        "state": "ok", "reason": "none", "totalTests": 412, "unhealthyTests": 3, "shownElsewhere": 2,
+        "state": "ok", "reason": "none", "totalTests": 412, "unhealthyTests": 3,
+        "verdicts": { "broken": 1, "knownFlaky": 2, "unstable": 0, "flagged": 0 }, "shownElsewhere": 2,
         "tests": [ { "subject": { "type": "test", "fingerprint": "…", "fullyQualifiedName": "Checkout.Tests.CartTests.Checkout_Rounds", … }, "digest": { "verdict": "known-flaky", … } } ],
         "testsShown": 1, "testsTotal": 1
       }
