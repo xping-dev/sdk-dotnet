@@ -1,9 +1,12 @@
 name: Nightly
 
-# The CLI's Monte Carlo calibration tests (Category=Calibration): false-positive rates and power of
-# the duration and Brunner-Munzel scoring, over thousands of simulated suites. They take minutes and
-# only fail when the statistics change, so they run here rather than on every PR (#325). A PR that
-# changes src/Xping.Cli/Report/Scoring or src/Xping.Cli/Report/Providers runs them by hand.
+# Suites too slow for every PR:
+# - The CLI's Monte Carlo calibration tests (Category=Calibration): false-positive rates and power of
+#   the duration and Brunner-Munzel scoring, over thousands of simulated suites. They take minutes and
+#   only fail when the statistics change (#325). A PR that changes src/Xping.Cli/Report/Scoring or
+#   src/Xping.Cli/Report/Providers runs them by hand.
+# - The integration tests, which build and run every sample under vstest and MTP. ci.yml also runs
+#   them on each push to main; nightly catches drift in the floating 10.0.x SDK and runner image.
 on:
   schedule:
     - cron: '0 2 * * *'
@@ -31,3 +34,38 @@ jobs:
 
       - name: Run calibration tests
         run: dotnet test tests/Xping.Cli.Tests --no-build --configuration Release --filter "Category=Calibration" --logger "console;verbosity=normal"
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # The suite records itself to Xping Cloud, as in ci.yml. SampleRunner strips these from the
+    # sample runs it starts.
+    env:
+      XPING_ENABLED: true
+      XPING_APIKEY: ${{ secrets.XPING_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The whole solution, as ci.yml builds it: the samples' nested builds then find the SDK built.
+      - name: Build
+        run: dotnet build --configuration Release
+
+      - name: Run integration tests
+        run: dotnet test tests/Xping.Sdk.Integration.Tests --no-build --configuration Release --logger "console;verbosity=normal" --results-directory ./results --blame-hang-timeout 7m --blame-hang-dump-type mini
+
+      - name: Upload hang diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blame-hang
+          path: |
+            results/**/Sequence_*.xml
+            results/**/*.dmp
+          if-no-files-found: ignore
