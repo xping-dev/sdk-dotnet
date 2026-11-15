@@ -198,6 +198,42 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     }
 
     /// <summary>
+    /// A <c>FLAGGED IN CLOUD</c> row's verdict, in the status column (Amendment 7G): Cloud's word,
+    /// in words. The suite health sends only <c>broken</c>, <c>known-flaky</c> and <c>unstable</c>;
+    /// anything else is printed as sent, and the renderer cuts it to the column.
+    /// </summary>
+    public string HealthVerdict(CloudDigestDto digest) => digest.Verdict is { } verdict ? Words(verdict) : "flagged";
+
+    /// <summary>
+    /// A <c>FLAGGED IN CLOUD</c> row's Cloud line (Amendment 7G): the confidence, or the evidence
+    /// Cloud lacks when it withheld the score; <c>broken since …</c>, the one verdict whose line says
+    /// more than the status column; and the flaky state whenever Cloud examined it. No match phrase:
+    /// nothing failed here to match.
+    /// </summary>
+    public IReadOnlyList<string> Health(CloudDigestDto digest)
+    {
+        var segments = new List<string>();
+
+        if (ScoreOf(digest.Confidence) is { } score)
+            segments.Add($"confidence {Score(score)}" + (Window(digest.Confidence!.Window) is { } length ? $" ({length})" : string.Empty));
+        else if (digest.Confidence is { State: "insufficient-evidence" } confidence && EvidenceToken(confidence) is { } evidence)
+            segments.Add(evidence);
+
+        if (digest.Verdict == "broken" && Verdict(digest, brief: true) is { } broken && broken != "broken")
+            segments.Add(broken);
+
+        // The kind without its date where Cloud calls the test flaky: the date is the verdict's,
+        // and the row has 48 columns. Any other examined state is said in full, so a known-flaky
+        // row whose ledger now reads inconclusive says so.
+        if (digest.Flaky is { State: "flaky" } flaky)
+            segments.Add(FlakyKind(flaky));
+        else if (digest.Flaky is { State: not (null or "not-examined") } examined && FlakyPhrase(examined) is { } phrase)
+            segments.Add(phrase);
+
+        return segments;
+    }
+
+    /// <summary>
     /// The finding's confidence line, <c>cloud: confidence 0.22 ▼0.61 · highly unreliable · 35 d</c>;
     /// for a score Cloud withheld, the evidence it lacks; null when there is no score to speak of
     /// (Amendment 3O).
@@ -434,10 +470,15 @@ internal sealed class CloudText(ReportGlyphs glyphs)
 
     private string FlakyNow(CloudFlakyDto flaky)
     {
-        string[] kind = new[] { flaky.Category, flaky.Severity }.OfType<string>().Select(Words).ToArray();
-        string what = kind.Length > 0 ? $"flaky ({string.Join(", ", kind)})" : "flaky";
-
+        string what = FlakyKind(flaky);
         return flaky.Since is { } since ? $"{what} since {Date(since)}" : what;
+    }
+
+    /// <summary><c>flaky (timing, major)</c>, or <c>flaky</c> when Cloud sent neither.</summary>
+    private string FlakyKind(CloudFlakyDto flaky)
+    {
+        string[] kind = new[] { flaky.Category, flaky.Severity }.OfType<string>().Select(Words).ToArray();
+        return kind.Length > 0 ? $"flaky ({string.Join(", ", kind)})" : "flaky";
     }
 
     private string? MatchPhrase(string match, CloudSignatureDto? signature) => match switch

@@ -301,7 +301,7 @@ internal sealed class CloudEnricher(
             ledger.Answers.Count,
             projects,
             [.. ledger.Sessions.Values.OrderBy(s => s.ProjectKey, StringComparer.Ordinal).ThenBy(s => s.SessionKey, StringComparer.Ordinal)],
-            Health(request, plan, healthAssemblies, ledger));
+            Health(request, envelope, healthAssemblies, ledger));
 
         CloudTestHistoryDto? test = envelope.Test?.Test is null
             ? null
@@ -753,10 +753,10 @@ internal sealed class CloudEnricher(
 
     /// <summary>
     /// The window's tests Cloud calls unhealthy (Amendment 7D, 7E): the health rows of the window's
-    /// tests in each assembly read, less the ones the report already shows Cloud's verdict for.
+    /// tests in each assembly read, less the ones the page already names.
     /// </summary>
     private static CloudHealthDto Health(
-        EnrichmentRequest request, TargetPlan plan, IReadOnlyList<string> healthAssemblies, Ledger ledger)
+        EnrichmentRequest request, ReportEnvelope envelope, IReadOnlyList<string> healthAssemblies, Ledger ledger)
     {
         if (request.SubjectFor is not { } subjectFor)
             return CloudHealthDto.NotAttempted;
@@ -793,8 +793,7 @@ internal sealed class CloudEnricher(
             }
         }
 
-        // A target already shows Cloud's verdict on its finding or its latest-run row.
-        HashSet<string> elsewhere = [.. plan.Targets.Select(t => t.Fingerprint)];
+        HashSet<string> elsewhere = Shown(envelope);
 
         List<CloudHealthTestDto> listed =
         [
@@ -818,6 +817,25 @@ internal sealed class CloudEnricher(
             shown,
             shown.Count,
             listed.Count);
+    }
+
+    /// <summary>
+    /// The tests the page names above the section: every finding's test or members after
+    /// <c>--top</c>, and the latest-run rows after their cap (Amendment 7D).
+    /// </summary>
+    /// <remarks>
+    /// What is printed, not what Cloud was asked about. The targets also hold the findings
+    /// <c>--top</c> cut, the failures past the latest-run cap and an environmental run's, and a
+    /// test counted as shown above that is nowhere on the page is a test the report hides.
+    /// </remarks>
+    private static HashSet<string> Shown(ReportEnvelope envelope)
+    {
+        IEnumerable<SubjectDto> findings = envelope.Findings.SelectMany(f => f.Subject.Members ?? [f.Subject]);
+        IEnumerable<SubjectDto> latest = envelope.LatestRun is { IsLikelyEnvironmental: false } run
+            ? run.Failures.Select(f => f.Subject)
+            : [];
+
+        return [.. findings.Concat(latest).Select(s => s.Fingerprint).OfType<string>()];
     }
 
     private static int VerdictRank(string? verdict) => verdict switch

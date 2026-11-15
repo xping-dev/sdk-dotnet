@@ -75,7 +75,8 @@ internal sealed record CloudContextDto(
 /// <param name="TotalTests">The tests Cloud classified in the projects read; null when no page answered.</param>
 /// <param name="UnhealthyTests">The window's tests Cloud calls unhealthy, listed or not.</param>
 /// <param name="ShownElsewhere">
-/// Of those, the tests the report already shows Cloud's verdict for, on a finding or a latest-run row.
+/// Of those, the tests the page already names: a finding's test or member after <c>--top</c>, or a
+/// latest-run row after its cap.
 /// </param>
 /// <param name="Tests">The rest, worst first, after the cap.</param>
 /// <param name="TestsShown">Rows in <paramref name="Tests"/>.</param>
