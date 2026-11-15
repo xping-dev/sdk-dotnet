@@ -1,0 +1,16 @@
+Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e · cloud
+412 tests · 412 healthy · 0 flagged
+
+```
+FLAGGED IN CLOUD                                 3 with no local finding
+────────────────────────────────────────────────────────────────────────
+
+    broken       LedgerTests.Post_RejectsADuplicateEntry
+                 cloud: confidence 0.22 (35 d) · broken since 2026-10-11
+
+    known flaky  CheckoutTests.Checkout_CompletesWithinTheServiceBudget
+                 cloud: confidence 0.41 (35 d) · flaky (timing, major)
+
+    unstable     InventoryTests.Reserve_ReleasesOnTimeout
+                 cloud: confidence 0.81 (35 d)
+```

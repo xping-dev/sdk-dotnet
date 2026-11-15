@@ -903,7 +903,7 @@ Runs recorded before the SDK could name the assembly belong to no suite. They st
 
 When the CLI has a credential — a sign-in from `xping login`, `--api-key`, or `XPING_APIKEY` — the
 report also asks Xping Cloud what it knows about each test it names, across every run uploaded to
-it. The rows, their order and the exit code stay local. Cloud adds lines, and each line says where
+it, and which other tests it calls unhealthy ([Flagged in Cloud](#flagged-in-cloud)). The rows, their order and the exit code stay local. Cloud adds lines, and each line says where
 its value came from, `cloud:` or `local:`:
 
 ```
@@ -937,6 +937,46 @@ its value came from, `cloud:` or `local:`:
   `RUNS IN CLOUD`, its newest runs on every machine: outcome, tier, CI or not, machine, branch and
   commit. The runs are read only when a second of the four-second budget is left; otherwise the
   block says `not fetched (budget)`.
+
+#### Flagged in Cloud
+
+A test can pass here and still be one Cloud calls known flaky, broken or unstable from every other
+machine's runs. So a full report also asks Cloud once per project for the tests it considers
+unhealthy, and lists the ones in your window that no finding names in a `FLAGGED IN CLOUD` section
+after the findings:
+
+<!-- xping:sample cloud-health -->
+````
+Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e · cloud
+412 tests · 412 healthy · 0 flagged
+
+```
+FLAGGED IN CLOUD                                 3 with no local finding
+────────────────────────────────────────────────────────────────────────
+
+    broken       LedgerTests.Post_RejectsADuplicateEntry
+                 cloud: confidence 0.22 (35 d) · broken since 2026-10-11
+
+    known flaky  CheckoutTests.Checkout_CompletesWithinTheServiceBudget
+                 cloud: confidence 0.41 (35 d) · flaky (timing, major)
+
+    unstable     InventoryTests.Reserve_ReleasesOnTimeout
+                 cloud: confidence 0.81 (35 d)
+```
+````
+
+- Each row puts Cloud's verdict where the latest run puts its status, then the test's name and a
+  `cloud:` line: the confidence, the date for `broken since`, and the flaky kind.
+- A test whose finding or latest-run row already shows Cloud's verdict is not listed again; the
+  section closes with `Also flagged in Cloud: 2 tests shown above.`
+- At most ten rows are shown, worst verdict first (`broken`, `known flaky`, `unstable`). `--all`
+  lifts the cap with the findings'; `--top` does not apply.
+- Tests Cloud knows that are not in your local window are never listed.
+- The section changes nothing local: the counts in the header, `--fail-on` and the exit code are
+  this machine's. A listed test stays in `healthy`, which means "no local finding". It does
+  withhold `No findings.`, as the latest run does.
+- `--id` and `--test` do not ask for the suite's health. When the read is cut short, the line above
+  the block says `Cloud data partial: suite health not complete (budget).`
 
 Every Cloud value names its window (`35 d`, `14 d`, `10 runs`); `lifetime` is the one all-time
 total. Cloud times are in UTC. With `--ascii`, `·` is `-`, `▼` is `v` and `≠` is `!=`.
@@ -1039,7 +1079,12 @@ Cloud matches failures with a different hash than this CLI. It also carries the 
 API key; the name is also `null` when the sign-in predates it), `elapsedMs`, `fetchedAt`, how many tests were asked about
 (`requestedTests`) and answered (`enrichedTests`), one row per assembly in `projects` with its
 `projectKey`, `source` (`flag`, `env`, `config`, `session` or `name-match`), `status` and `reason`,
-and in `sessions` whether Cloud has received and scored this machine's newest runs.
+in `sessions` whether Cloud has received and scored this machine's newest runs, and in `health`
+[the suite's health](#flagged-in-cloud): its `state` (`ok`, `partial`, `unavailable` or
+`not-attempted`, which `--id` and `--test` always are) and `reason`, the `totalTests` Cloud
+classified, the `unhealthyTests` in your window, the `shownElsewhere` already on a finding or a
+latest-run row, and the rest in `tests`, each a local `subject` and Cloud's `digest`, with
+`testsShown` and `testsTotal` for the cap. `summary` never counts them.
 
 Each single-test finding carries a `cloud` object with Cloud's view of its test, or `null` when
 Cloud did not answer for it: its `state` (`unknown` when Cloud does not know the test), the
@@ -1067,7 +1112,7 @@ names, and `tests` is `healthy` plus `flagged` plus `failedLatestRun`:
 
 ```json
 {
-  "schemaVersion": "1.30",
+  "schemaVersion": "1.31",
   "scope": "assembly",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": {
@@ -1082,7 +1127,12 @@ names, and `tests` is `healthy` plus `flagged` plus `failedLatestRun`:
       ],
       "sessions": [
         { "sessionKey": "6f9a2f1c-…", "projectKey": "checkout-tests", "state": "complete", "scored": true, "flakyExamined": true }
-      ]
+      ],
+      "health": {
+        "state": "ok", "reason": "none", "totalTests": 412, "unhealthyTests": 3, "shownElsewhere": 2,
+        "tests": [ { "subject": { "type": "test", "fingerprint": "…", "fullyQualifiedName": "Checkout.Tests.CartTests.Checkout_Rounds", … }, "digest": { "verdict": "known-flaky", … } } ],
+        "testsShown": 1, "testsTotal": 1
+      }
     }
   },
   "summary": {

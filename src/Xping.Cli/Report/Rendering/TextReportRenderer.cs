@@ -118,6 +118,10 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     // spaces off, so the label reads as a label and the provenance as provenance.
     private const string LatestRunLabel = "LATEST RUN";
 
+    // What the suite health's section is called (Amendment 7G). Cloud's words, so the heading says
+    // whose flag it is.
+    private const string FlaggedInCloudLabel = "FLAGGED IN CLOUD";
+
     // Members named before the rest become a count. Three is enough to recognise what the cluster
     // is -- one test suite, one fixture, one namespace -- and a forty-member cluster listed in full
     // is a finding nobody scrolls past. The whole list is in the JSON, where a caller reads it by
@@ -480,6 +484,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         // just happened, and the section is absent when nothing did, so the top slot costs nothing
         // in the healthy case.
         bool latestRunSpoke = WriteLatestRun(builder, envelope);
+        CloudHealthDto? health = Flagged(envelope);
 
         if (envelope.Findings.Count == 0)
         {
@@ -496,16 +501,28 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             // The blank line separates the section from what follows it, so it is written only
             // once there is something to follow. A report whose whole content is the section ends
             // on its last row.
-            if (EmptyReport(envelope.Summary, latestRunSpoke) is not { } sentence)
-                return;
+            bool spoke = latestRunSpoke;
 
-            if (latestRunSpoke)
-                builder.AppendLine();
+            if (EmptyReport(envelope.Summary, latestRunSpoke || health is { Tests.Count: > 0 }) is { } sentence)
+            {
+                if (spoke)
+                    builder.AppendLine();
 
-            List<string> reason = Wrap(sentence, FenceWidth - EmptyReportIndent);
+                List<string> reason = Wrap(sentence, FenceWidth - EmptyReportIndent);
 
-            for (int index = 0; index < reason.Count; index++)
-                builder.Append(' ', index == 0 ? 0 : EmptyReportIndent).AppendLine(reason[index]);
+                for (int index = 0; index < reason.Count; index++)
+                    builder.Append(' ', index == 0 ? 0 : EmptyReportIndent).AppendLine(reason[index]);
+
+                spoke = true;
+            }
+
+            if (health is not null)
+            {
+                if (spoke)
+                    builder.AppendLine();
+
+                WriteFlaggedInCloud(builder, health);
+            }
 
             return;
         }
@@ -527,6 +544,83 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
                 builder.AppendLine();
 
             WriteFinding(builder, envelope.Findings[index], index + 1, envelope.Context?.Cloud);
+        }
+
+        if (health is not null)
+        {
+            builder.AppendLine();
+            WriteFlaggedInCloud(builder, health);
+        }
+    }
+
+    /// <summary>
+    /// The suite health, when the report has a <c>FLAGGED IN CLOUD</c> section to write.
+    /// </summary>
+    /// <remarks>
+    /// Absent when nothing is listed and nothing was counted elsewhere. A health that is not
+    /// <c>ok</c> adds nothing of its own: the reason line above the fence already says the Cloud
+    /// data is partial or missing (Amendment 7G).
+    /// </remarks>
+    private static CloudHealthDto? Flagged(ReportEnvelope envelope) =>
+        envelope.Context?.Cloud?.Health is { } health && (health.Tests.Count > 0 || health.ShownElsewhere > 0)
+            ? health
+            : null;
+
+    /// <summary>
+    /// Writes the tests Xping Cloud calls unhealthy that passed here and no finding names (Amendment
+    /// 7G).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Laid out as the latest run's rows, with Cloud's verdict where the local status word sits: the
+    /// verdict is the only claim the row makes, and it is Cloud's. Nothing local is said, because
+    /// locally there is nothing to say.
+    /// </para>
+    /// <para>
+    /// After the findings and never among them. The findings, the summary and <c>--fail-on</c> are
+    /// this machine's (contract R2); this section is what every machine saw, and a reader who
+    /// counts the rows above it gets the local answer.
+    /// </para>
+    /// </remarks>
+    private void WriteFlaggedInCloud(StringBuilder builder, CloudHealthDto health)
+    {
+        WriteHeading(
+            builder,
+            FlaggedInCloudLabel,
+            health.TestsTotal > 0 ? $"{Count(health.TestsTotal)} with no local finding" : string.Empty);
+
+        for (int index = 0; index < health.Tests.Count; index++)
+        {
+            if (index > 0)
+                builder.AppendLine();
+
+            CloudHealthTestDto test = health.Tests[index];
+            string verdict = cloudText.HealthVerdict(test.Digest);
+
+            builder.Append(' ', LatestRunIndent)
+                   .Append(verdict)
+                   .Append(' ', Math.Max(1, LatestRunStatusWidth - verdict.Length))
+                   .AppendLine(FitName(Name(test.Subject), LatestRunBudget));
+
+            WriteCloudLine(builder, cloudText.Health(test.Digest));
+        }
+
+        // As the latest run closes: the cap first, about the rows, then the line about the report.
+        bool capped = health.TestsShown < health.TestsTotal;
+
+        if ((capped || health.ShownElsewhere > 0) && health.Tests.Count > 0)
+            builder.AppendLine();
+
+        if (capped)
+        {
+            builder.Append(' ', LatestRunIndent).AppendLine(capabilities.Dim(
+                $"Showing {Count(health.TestsShown)} of {Count(health.TestsTotal)}"));
+        }
+
+        if (health.ShownElsewhere > 0)
+        {
+            foreach (string line in Wrap($"Also flagged in Cloud: {Tests(health.ShownElsewhere)} shown above.", FenceWidth - LatestRunIndent))
+                builder.Append(' ', LatestRunIndent).AppendLine(line);
         }
     }
 
@@ -1619,7 +1713,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         // Under the local sentence, never in its place: the two are about different histories, this
         // machine's and every machine's (contract L5).
-        WriteLatestRunCloud(builder, failure, context);
+        WriteCloudLine(builder, cloudText.LatestRun(failure, context));
 
         var trailer = new List<string>();
 
@@ -1645,18 +1739,17 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     }
 
     /// <summary>
-    /// Writes a latest-run row's Cloud line, wrapped at its segments (§7.5, Amendment 3G).
+    /// Writes a latest-run or flagged-in-Cloud row's Cloud line, wrapped at its segments (§7.5,
+    /// Amendment 3G).
     /// </summary>
     /// <remarks>
     /// Nothing is dropped: the confidence leads and the verdict and the match follow, wrapped at
     /// their boundaries (Amendment 3P).
     /// </remarks>
-    private void WriteLatestRunCloud(StringBuilder builder, LatestRunFailureDto failure, CloudContextDto? context)
+    private void WriteCloudLine(StringBuilder builder, IReadOnlyList<string> segments)
     {
         const string prefix = "cloud: ";
         int width = LatestRunBudget - prefix.Length;
-
-        IReadOnlyList<string> segments = cloudText.LatestRun(failure, context);
 
         if (segments.Count == 0)
             return;
@@ -1991,6 +2084,13 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             && latest.FailuresShown < latest.FailuresTotal)
         {
             counts.Add($"{Count(latest.FailuresShown)} of {Count(latest.FailuresTotal)} {Plural(latest.FailuresTotal, "failure")}");
+        }
+
+        if (envelope.Selection == null
+            && envelope.Context?.Cloud?.Health is { } health
+            && health.TestsShown < health.TestsTotal)
+        {
+            counts.Add($"{Count(health.TestsShown)} of {Count(health.TestsTotal)} flagged in Cloud");
         }
 
         if (counts.Count == 0)
