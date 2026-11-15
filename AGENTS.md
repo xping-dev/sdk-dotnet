@@ -100,6 +100,9 @@ Enforced by `.editorconfig` and `Directory.Build.props` (`AnalysisMode=All`,
   through the process environment.
 - The xUnit v3 adapter's tests run on xUnit v3 themselves (vstest, `xunit.v3.mtp-off`) and drive a
   real v3 pipeline over `tests/Xping.Sdk.XUnit.V3.Probe`, a class library whose tests fail on purpose.
+- The integration tests (`tests/Xping.Sdk.Integration.Tests`) build and run each sample in a child
+  process, ~4 minutes. CI skips them on PRs and runs them on pushes to `main` and in `nightly.yml`.
+  A PR that changes an adapter, `buildTransitive/` targets or `samples/` runs them before merging.
 - The integration tests run printed repro commands through `/bin/sh` and through `pwsh`
   (PowerShell 7.3+, e.g. `brew install powershell`). Without pwsh those rows fail and say so.
 - Adapter behavior that depends on a test runner (vstest shutdown, MSTest cleanup, xUnit

@@ -67,7 +67,12 @@ jobs:
 
       # 7 minutes rather than 3: a test here waits up to 5 minutes for a sample run
       # (SampleRunner.RunTimeout) and reports that itself.
+      #
+      # Not on PRs: each case builds and runs a sample in a child process, one after another, and the
+      # suite was ~4 of the job's ~7 minutes. It runs on every push to main and in nightly.yml. A PR
+      # that changes an adapter, the MSBuild targets or samples/ runs it by hand.
       - name: Run Integration Tests
+        if: github.event_name != 'pull_request'
         run: dotnet test tests/Xping.Sdk.Integration.Tests/ --no-build --collect:"XPlat Code Coverage" --configuration Release --logger "trx" --logger "console;verbosity=normal" --results-directory ./coverage --blame-hang-timeout 7m --blame-hang-dump-type mini
         timeout-minutes: 10
 
