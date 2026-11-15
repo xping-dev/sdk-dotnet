@@ -99,6 +99,32 @@ internal sealed class CloudApiClient : ICloudApiClient
             : throw new CloudResponseException("The DataGateway answered the digest with a body the CLI cannot read.");
     }
 
+    public async Task<HealthResponse?> GetHealthAsync(
+        string projectKey, IReadOnlyList<string> sessionKeys, string? cursor, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(projectKey);
+        ArgumentNullException.ThrowIfNull(sessionKeys);
+
+        var route = new StringBuilder(string.Create(
+            CultureInfo.InvariantCulture,
+            $"projects/{Uri.EscapeDataString(projectKey)}/tests/health?pageSize={CloudEnricher.MaxHealthPageSize}"));
+
+        if (cursor is not null)
+            route.Append("&cursor=").Append(Uri.EscapeDataString(cursor));
+
+        foreach (string sessionKey in sessionKeys)
+            route.Append("&sessionKeys=").Append(Uri.EscapeDataString(sessionKey));
+
+        string? body = await SendAsync(HttpMethod.Get, route.ToString(), content: null, cancellationToken).ConfigureAwait(false);
+        if (body is null)
+            return null;
+
+        // As the digest: only a body without a test list is unreadable.
+        return Read<HealthResponse>(body) is { Tests: not null } health
+            ? health
+            : throw new CloudResponseException("The DataGateway answered the suite health with a body the CLI cannot read.");
+    }
+
     public async Task<RunsResponse?> GetRunsAsync(string projectKey, string fingerprint, int limit, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectKey);

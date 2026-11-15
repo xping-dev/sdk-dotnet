@@ -41,6 +41,7 @@ namespace Xping.Cli.Report.Contract;
 /// <param name="EnrichedTests">Of those, the tests Cloud answered for, known to it or not.</param>
 /// <param name="Projects">One row per assembly asked about, in target order.</param>
 /// <param name="Sessions">What Cloud knows of this machine's newest sessions.</param>
+/// <param name="Health">What Cloud calls unhealthy among the window's tests.</param>
 internal sealed record CloudContextDto(
     string Status,
     string Reason,
@@ -55,7 +56,53 @@ internal sealed record CloudContextDto(
     int RequestedTests,
     int EnrichedTests,
     IReadOnlyList<CloudProjectDto> Projects,
-    IReadOnlyList<CloudSessionDto> Sessions);
+    IReadOnlyList<CloudSessionDto> Sessions,
+    CloudHealthDto Health);
+
+/// <summary>
+/// The window's tests Xping Cloud calls <c>known-flaky</c>, <c>broken</c> or <c>unstable</c>, read
+/// once per project from its suite health (contract §6.5).
+/// </summary>
+/// <remarks>
+/// Never counted in <c>summary</c> and never read by <c>--fail-on</c> (contract R2, §7.6): a test
+/// listed here with no local finding is still <c>healthy</c>, which means "no local finding".
+/// </remarks>
+/// <param name="State">
+/// <c>ok</c>, <c>partial</c> (pages missing), <c>unavailable</c>, or <c>not-attempted</c> (no
+/// credential, <c>--id</c>, <c>--test</c>, no project bound).
+/// </param>
+/// <param name="Reason">The same vocabulary as <see cref="CloudContextDto.Reason"/>.</param>
+/// <param name="TotalTests">The tests Cloud classified in the projects read; null when no page answered.</param>
+/// <param name="UnhealthyTests">The window's tests Cloud calls unhealthy, listed or not.</param>
+/// <param name="ShownElsewhere">
+/// Of those, the tests the report already shows Cloud's verdict for, on a finding or a latest-run row.
+/// </param>
+/// <param name="Tests">The rest, worst first, after the cap.</param>
+/// <param name="TestsShown">Rows in <paramref name="Tests"/>.</param>
+/// <param name="TestsTotal">
+/// Rows before the cap. Where it exceeds <paramref name="TestsShown"/>, the envelope's
+/// <c>truncated.command</c> shows the rest.
+/// </param>
+internal sealed record CloudHealthDto(
+    string State,
+    string Reason,
+    int? TotalTests,
+    int UnhealthyTests,
+    int ShownElsewhere,
+    IReadOnlyList<CloudHealthTestDto> Tests,
+    int TestsShown,
+    int TestsTotal)
+{
+    /// <summary>The health of a report that did not ask for it.</summary>
+    public static CloudHealthDto NotAttempted { get; } = new("not-attempted", "none", null, 0, 0, [], 0, 0);
+}
+
+/// <summary>
+/// One test of the window Xping Cloud calls unhealthy, and Cloud's view of it.
+/// </summary>
+/// <param name="Subject">The local test.</param>
+/// <param name="Digest">Cloud's digest of it.</param>
+internal sealed record CloudHealthTestDto(SubjectDto Subject, CloudDigestDto Digest);
 
 /// <summary>
 /// The Cloud project one assembly was bound to, and how reading it went.

@@ -116,8 +116,10 @@ internal sealed record ReportEnvelope(
     /// 1.30 is where <c>summary</c> gained <c>failedLatestRun</c> and stopped counting those tests as
     /// healthy, and where <c>latestRun</c> lost <c>suppressed</c>: a window of one run lists its
     /// failures like any other.
+    /// 1.31 is where <c>context.cloud</c> gained <c>health</c>: the window's tests Cloud calls
+    /// unhealthy, read once per project, whether or not the local analysis named them.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.30";
+    public const string CurrentSchemaVersion = "1.31";
 }
 
 /// <summary>
