@@ -503,7 +503,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             // on its last row.
             bool spoke = latestRunSpoke;
 
-            if (EmptyReport(envelope.Summary, latestRunSpoke || health is { Tests.Count: > 0 }) is { } sentence)
+            if (EmptyReport(envelope.Summary, latestRunSpoke || health is not null) is { } sentence)
             {
                 if (spoke)
                     builder.AppendLine();
@@ -595,33 +595,63 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
                 builder.AppendLine();
 
             CloudHealthTestDto test = health.Tests[index];
-            string verdict = cloudText.HealthVerdict(test.Digest);
-
-            builder.Append(' ', LatestRunIndent)
-                   .Append(verdict)
-                   .Append(' ', Math.Max(1, LatestRunStatusWidth - verdict.Length))
-                   .AppendLine(FitName(Name(test.Subject), LatestRunBudget));
-
+            WriteStatusRow(builder, cloudText.HealthVerdict(test.Digest), emphasis: false, test.Subject);
             WriteCloudLine(builder, cloudText.Health(test.Digest));
         }
 
-        // As the latest run closes: the cap first, about the rows, then the line about the report.
-        bool capped = health.TestsShown < health.TestsTotal;
+        WriteSectionClose(
+            builder,
+            health.Tests.Count > 0,
+            health.TestsShown,
+            health.TestsTotal,
+            health.ShownElsewhere > 0 ? $"Also flagged in Cloud: {Tests(health.ShownElsewhere)} shown above." : null);
+    }
 
-        if ((capped || health.ShownElsewhere > 0) && health.Tests.Count > 0)
+    /// <summary>
+    /// Writes a latest-run or flagged-in-Cloud row's first line: the status in its column, then the
+    /// name at the column after it.
+    /// </summary>
+    /// <remarks>
+    /// The status is cut to its column: a local status word always fits, but a verdict Cloud adds
+    /// later is printed as sent and must not carry the name past the fence. Padded against the plain
+    /// word, because escape codes occupy no columns, and padding to a length that counted them would
+    /// put the name short of its column on a terminal.
+    /// </remarks>
+    private void WriteStatusRow(StringBuilder builder, string status, bool emphasis, SubjectDto subject)
+    {
+        status = TerminalText.Head(status, LatestRunStatusWidth - 1);
+
+        builder.Append(' ', LatestRunIndent)
+               .Append(emphasis ? capabilities.Emphasis(status) : status)
+               .Append(' ', LatestRunStatusWidth - status.Length)
+               .AppendLine(FitName(Name(subject), LatestRunBudget));
+    }
+
+    /// <summary>
+    /// Closes a latest-run or flagged-in-Cloud section: the cap first, because it is about the rows,
+    /// then the line about the report.
+    /// </summary>
+    /// <remarks>
+    /// The cap line is dim like the footer, and carries no command: the one that lifts it is the
+    /// footer's, below the fence, where a long --directory cannot push it past the fence's width.
+    /// The closing line sits at the section's own indent and not the rows', so the budget is the
+    /// fence less four rather than less seventeen.
+    /// </remarks>
+    private void WriteSectionClose(StringBuilder builder, bool hasRows, int shown, int total, string? closing)
+    {
+        bool capped = shown < total;
+
+        if ((capped || closing is not null) && hasRows)
             builder.AppendLine();
 
         if (capped)
-        {
-            builder.Append(' ', LatestRunIndent).AppendLine(capabilities.Dim(
-                $"Showing {Count(health.TestsShown)} of {Count(health.TestsTotal)}"));
-        }
+            builder.Append(' ', LatestRunIndent).AppendLine(capabilities.Dim($"Showing {Count(shown)} of {Count(total)}"));
 
-        if (health.ShownElsewhere > 0)
-        {
-            foreach (string line in Wrap($"Also flagged in Cloud: {Tests(health.ShownElsewhere)} shown above.", FenceWidth - LatestRunIndent))
-                builder.Append(' ', LatestRunIndent).AppendLine(line);
-        }
+        if (closing is null)
+            return;
+
+        foreach (string line in Wrap(closing, FenceWidth - LatestRunIndent))
+            builder.Append(' ', LatestRunIndent).AppendLine(line);
     }
 
     /// <summary>
@@ -1616,32 +1646,13 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
             WriteLatestRunFailure(builder, latest.Failures[index], envelope.Context?.Cloud);
         }
 
-        // The two closing lines sit together under the rows, the cap first because it is about the
-        // rows and the "also failing" line because it is about the run. The cap line is dim like
-        // the footer, and carries no command: the one that lifts it is the footer's, below the
-        // fence, where a long --directory cannot push it past the fence's width.
-        bool capped = latest.FailuresShown < latest.FailuresTotal;
-
-        if (capped || latest.ExplainedByFindings > 0)
-        {
-            if (latest.Failures.Count > 0)
-                builder.AppendLine();
-        }
-
-        if (capped)
-        {
-            builder.Append(' ', LatestRunIndent).AppendLine(capabilities.Dim(
-                $"Showing {latest.FailuresShown.ToString(CultureInfo.InvariantCulture)} of " +
-                latest.FailuresTotal.ToString(CultureInfo.InvariantCulture)));
-        }
-
-        if (latest.ExplainedByFindings > 0)
-        {
-            // At the section's own indent and not the rows', so the budget is the fence less four
-            // rather than less seventeen. A continuation aligns under "Also failing".
-            foreach (string line in Wrap(AlsoFailing(latest, envelope.Findings), FenceWidth - LatestRunIndent))
-                builder.Append(' ', LatestRunIndent).AppendLine(line);
-        }
+        // The "also failing" line is about the run, so it follows the cap, which is about the rows.
+        WriteSectionClose(
+            builder,
+            latest.Failures.Count > 0,
+            latest.FailuresShown,
+            latest.FailuresTotal,
+            latest.ExplainedByFindings > 0 ? AlsoFailing(latest, envelope.Findings) : null);
 
         return true;
     }
@@ -1698,15 +1709,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// </remarks>
     private void WriteLatestRunFailure(StringBuilder builder, LatestRunFailureDto failure, CloudContextDto? context)
     {
-        string status = Recorded(ReportVocabulary.StatusWordsFor(failure.Status));
-        string decorated = failure.Status == "new" ? capabilities.Emphasis(status) : status;
-
-        // Padded against the plain word: escape codes occupy no columns, and padding to a length
-        // that counted them would put the name short of its column on a terminal.
-        builder.Append(' ', LatestRunIndent)
-               .Append(decorated)
-               .Append(' ', Math.Max(1, LatestRunStatusWidth - status.Length))
-               .AppendLine(FitName(Name(failure.Subject), LatestRunBudget));
+        WriteStatusRow(builder, Recorded(ReportVocabulary.StatusWordsFor(failure.Status)), failure.Status == "new", failure.Subject);
 
         foreach (string line in Wrap(Recorded(failure.Contrast), LatestRunBudget))
             builder.Append(' ', LatestRunRowIndent).AppendLine(line);

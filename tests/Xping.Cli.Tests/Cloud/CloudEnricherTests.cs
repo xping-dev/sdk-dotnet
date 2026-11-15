@@ -928,6 +928,66 @@ public sealed class CloudEnricherTests : IDisposable
         Assert.NotNull(result.Envelope.Findings[0].Cloud);
     }
 
+    [Fact]
+    public async Task AFindingTopCutIsListedNotCountedAsShownAbove()
+    {
+        // Review of #358: the digest still asks about a finding --top cut, but the page does not
+        // show it, so its Cloud verdict belongs in the section.
+        _environment["XPING_APIKEY"] = ApiKey;
+        ReportEnvelope full = Many(1) with { Findings = [Many(1).Findings[0] with { Subject = Many(1).Findings[0].Subject with { Assembly = HealthAssembly } }] };
+        _factory.Client.Health = (_, _) => Page(["fp-0"]);
+
+        EnrichmentResult result = await EnrichAsync(
+            full with { Findings = [] }, sessions: [Session(HealthAssembly)], subjectFor: Window("fp-0"), findings: FindingsOf(full));
+
+        CloudHealthDto health = result.Envelope.Context!.Cloud!.Health;
+        Assert.Equal(["fp-0"], Assert.Single(_factory.Client.Batches));
+        Assert.Equal("fp-0", Assert.Single(health.Tests).Subject.Fingerprint);
+        Assert.Equal(0, health.ShownElsewhere);
+    }
+
+    [Fact]
+    public async Task AClusterFindingsMemberIsCountedAsShownAbove()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        FindingDto template = Many(1).Findings[0];
+        SubjectDto member = template.Subject with { Fingerprint = "fp-member", Assembly = HealthAssembly };
+        FindingDto cluster = template with
+        {
+            Subject = new SubjectDto("group", null, null, null, null, "NullReferenceException", null, null, HealthAssembly, "g_1", 1, [member])
+        };
+        _factory.Client.Health = (_, _) => Page(["fp-member"]);
+
+        EnrichmentResult result = await EnrichAsync(
+            Many(1) with { Findings = [cluster] }, sessions: [Session(HealthAssembly)], subjectFor: Window("fp-member"));
+
+        CloudHealthDto health = result.Envelope.Context!.Cloud!.Health;
+        Assert.Empty(health.Tests);
+        Assert.Equal(1, health.ShownElsewhere);
+    }
+
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 0)]
+    public async Task ALatestRunRowIsShownAboveOnlyWhenTheRunIsItemised(bool environmental, int shownElsewhere)
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        ReportEnvelope envelope = ReportFixtures.Get("latest-run");
+        LatestRunFailureDto failure = envelope.LatestRun!.Failures[0];
+        envelope = envelope with
+        {
+            Findings = [],
+            LatestRun = envelope.LatestRun with { IsLikelyEnvironmental = environmental, Failures = [failure with { Subject = failure.Subject with { Fingerprint = "fp-l", Assembly = HealthAssembly } }] }
+        };
+        _factory.Client.Health = (_, _) => Page(["fp-l"]);
+
+        EnrichmentResult result = await EnrichAsync(envelope, sessions: [Session(HealthAssembly)], subjectFor: Window("fp-l"));
+
+        CloudHealthDto health = result.Envelope.Context!.Cloud!.Health;
+        Assert.Equal(shownElsewhere, health.ShownElsewhere);
+        Assert.Equal(1 - shownElsewhere, health.Tests.Count);
+    }
+
     [Theory]
     [InlineData(false, CloudEnricher.MaxHealthRows)]
     [InlineData(true, CloudEnricher.MaxHealthRows + 2)]
@@ -1098,12 +1158,13 @@ public sealed class CloudEnricherTests : IDisposable
         Dictionary<string, string>? pins = null,
         IReadOnlyList<TestSession>? sessions = null,
         Func<string, SubjectDto?>? subjectFor = null,
-        bool showAll = false)
+        bool showAll = false,
+        List<Finding>? findings = null)
     {
         using ServiceProvider services = BuildServices();
 
         var request = new EnrichmentRequest(
-            _directory, projectFlag, pins ?? [], sessions ?? [], FindingsOf(envelope), subjectFor, showAll);
+            _directory, projectFlag, pins ?? [], sessions ?? [], findings ?? FindingsOf(envelope), subjectFor, showAll);
         return await services.GetRequiredService<CloudEnricher>().EnrichAsync(envelope, request, CancellationToken.None).ConfigureAwait(false);
     }
 

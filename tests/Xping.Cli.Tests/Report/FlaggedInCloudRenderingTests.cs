@@ -100,4 +100,43 @@ public sealed class FlaggedInCloudRenderingTests
 
         Assert.Equal(5, fenced.Length);
     }
+
+    [Fact]
+    public void AVerdictLongerThanTheStatusColumnIsCutToIt()
+    {
+        CloudHealthTestDto row = KnownFlaky with { Digest = KnownFlaky.Digest with { Verdict = "quarantined-by-owner" } };
+        string[] fenced = Fenced(Render(WithHealth(Envelope(), Listing(row))));
+
+        Assert.Equal("    quarantined  CheckoutTests.Checkout_Completes", fenced[3]);
+    }
+
+    [Fact]
+    public void AVerdictIsWordedOnce()
+    {
+        CloudHealthTestDto row = HealthTest("MyApp.Tests.CheckoutTests.Checkout_Completes", CloudDigest("no-history", score: null, flaky: "not-examined"));
+        string[] fenced = Fenced(Render(WithHealth(Envelope(), Listing(row))));
+
+        Assert.Equal("    no history   CheckoutTests.Checkout_Completes", fenced[3]);
+        Assert.Equal("                 cloud: evidence sparse (ESS 4 of 10, 14 d)", fenced[4]);
+    }
+
+    [Fact]
+    public void AFlakyStateOtherThanFlakyIsSaid()
+    {
+        CloudHealthTestDto row = HealthTest("MyApp.Tests.CheckoutTests.Checkout_Completes", CloudDigest("known-flaky", flaky: "inconclusive", score: 0.41, delta: null));
+        string[] fenced = Fenced(Render(WithHealth(Envelope(), Listing(row))));
+
+        Assert.Equal(
+            ["                 cloud: confidence 0.41 (35 d)", "                        flaky inconclusive in 14 d"],
+            fenced[4..6]);
+    }
+
+    [Fact]
+    public void TheCleanBillIsWithheldWheneverTheSectionPrints()
+    {
+        // A count alone still says something sits above, which a pass glyph would contradict.
+        string[] fenced = Fenced(Render(WithHealth(Envelope(), new CloudHealthDto("ok", "none", 412, 1, 1, [], 0, 0))));
+
+        Assert.DoesNotContain(fenced, l => l.Contains("No findings.", StringComparison.Ordinal));
+    }
 }

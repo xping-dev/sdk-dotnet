@@ -942,8 +942,8 @@ its value came from, `cloud:` or `local:`:
 
 A test can pass here and still be one Cloud calls known flaky, broken or unstable from every other
 machine's runs. So a full report also asks Cloud once per project for the tests it considers
-unhealthy, and lists the ones in your window that no finding names in a `FLAGGED IN CLOUD` section
-after the findings:
+unhealthy, and lists the ones in your window that the page does not already name in a
+`FLAGGED IN CLOUD` section after the findings:
 
 <!-- xping:sample cloud-health -->
 ````
@@ -956,25 +956,27 @@ FLAGGED IN CLOUD                                 3 with no local finding
 
     broken       LedgerTests.Post_RejectsADuplicateEntry
                  cloud: confidence 0.22 (35 d) · broken since 2026-10-11
+                        not flaky in 14 d
 
     known flaky  CheckoutTests.Checkout_CompletesWithinTheServiceBudget
                  cloud: confidence 0.41 (35 d) · flaky (timing, major)
 
     unstable     InventoryTests.Reserve_ReleasesOnTimeout
-                 cloud: confidence 0.81 (35 d)
+                 cloud: confidence 0.81 (35 d) · not flaky in 14 d
 ```
 ````
 
 - Each row puts Cloud's verdict where the latest run puts its status, then the test's name and a
-  `cloud:` line: the confidence, the date for `broken since`, and the flaky kind.
-- A test whose finding or latest-run row already shows Cloud's verdict is not listed again; the
-  section closes with `Also flagged in Cloud: 2 tests shown above.`
+  `cloud:` line: the confidence, the date for `broken since`, and Cloud's flaky state.
+- A test already on the page, as a finding, a member of a cluster finding, or a latest-run row, is
+  not listed again; the section closes with `Also flagged in Cloud: 2 tests shown above.` A finding
+  `--top` left out, or a failure past the latest run's cap, is not on the page, so it is listed.
 - At most ten rows are shown, worst verdict first (`broken`, `known flaky`, `unstable`). `--all`
   lifts the cap with the findings'; `--top` does not apply.
 - Tests Cloud knows that are not in your local window are never listed.
 - The section changes nothing local: the counts in the header, `--fail-on` and the exit code are
-  this machine's. A listed test stays in `healthy`, which means "no local finding". It does
-  withhold `No findings.`, as the latest run does.
+  this machine's. A listed test stays in `healthy`, which means "no local finding". The section
+  does withhold `No findings.`, as the latest run does.
 - `--id` and `--test` do not ask for the suite's health. When the read is cut short, the line above
   the block says `Cloud data partial: suite health not complete (budget).`
 
@@ -1082,8 +1084,8 @@ API key; the name is also `null` when the sign-in predates it), `elapsedMs`, `fe
 in `sessions` whether Cloud has received and scored this machine's newest runs, and in `health`
 [the suite's health](#flagged-in-cloud): its `state` (`ok`, `partial`, `unavailable` or
 `not-attempted`, which `--id` and `--test` always are) and `reason`, the `totalTests` Cloud
-classified, the `unhealthyTests` in your window, the `shownElsewhere` already on a finding or a
-latest-run row, and the rest in `tests`, each a local `subject` and Cloud's `digest`, with
+classified, the `unhealthyTests` in your window, the `shownElsewhere` the page already names (a
+finding's test or member after `--top`, or a latest-run row after its cap), and the rest in `tests`, each a local `subject` and Cloud's `digest`, with
 `testsShown` and `testsTotal` for the cap. `summary` never counts them.
 
 Each single-test finding carries a `cloud` object with Cloud's view of its test, or `null` when

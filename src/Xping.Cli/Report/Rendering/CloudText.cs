@@ -198,19 +198,17 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     }
 
     /// <summary>
-    /// A <c>FLAGGED IN CLOUD</c> row's verdict, in the status column (Amendment 7G).
+    /// A <c>FLAGGED IN CLOUD</c> row's verdict, in the status column (Amendment 7G): Cloud's word,
+    /// in words. The suite health sends only <c>broken</c>, <c>known-flaky</c> and <c>unstable</c>;
+    /// anything else is printed as sent, and the renderer cuts it to the column.
     /// </summary>
-    public string HealthVerdict(CloudDigestDto digest) => digest.Verdict switch
-    {
-        "known-flaky" => "known flaky",
-        null => "flagged",
-        string verdict => Recorded(verdict)
-    };
+    public string HealthVerdict(CloudDigestDto digest) => digest.Verdict is { } verdict ? Words(verdict) : "flagged";
 
     /// <summary>
-    /// A <c>FLAGGED IN CLOUD</c> row's Cloud line: the latest-run line's confidence, the verdict
-    /// only where it says more than the status column (<c>broken since …</c>), and the flaky kind
-    /// (Amendment 7G). No match phrase: nothing failed here to match.
+    /// A <c>FLAGGED IN CLOUD</c> row's Cloud line (Amendment 7G): the confidence, or the evidence
+    /// Cloud lacks when it withheld the score; <c>broken since …</c>, the one verdict whose line says
+    /// more than the status column; and the flaky state whenever Cloud examined it. No match phrase:
+    /// nothing failed here to match.
     /// </summary>
     public IReadOnlyList<string> Health(CloudDigestDto digest)
     {
@@ -218,12 +216,19 @@ internal sealed class CloudText(ReportGlyphs glyphs)
 
         if (ScoreOf(digest.Confidence) is { } score)
             segments.Add($"confidence {Score(score)}" + (Window(digest.Confidence!.Window) is { } length ? $" ({length})" : string.Empty));
+        else if (digest.Confidence is { State: "insufficient-evidence" } confidence && EvidenceToken(confidence) is { } evidence)
+            segments.Add(evidence);
 
-        if (Verdict(digest, brief: true) is { } verdict && verdict != HealthVerdict(digest))
-            segments.Add(verdict);
+        if (digest.Verdict == "broken" && Verdict(digest, brief: true) is { } broken && broken != "broken")
+            segments.Add(broken);
 
+        // The kind without its date where Cloud calls the test flaky: the date is the verdict's,
+        // and the row has 48 columns. Any other examined state is said in full, so a known-flaky
+        // row whose ledger now reads inconclusive says so.
         if (digest.Flaky is { State: "flaky" } flaky)
             segments.Add(FlakyKind(flaky));
+        else if (digest.Flaky is { State: not (null or "not-examined") } examined && FlakyPhrase(examined) is { } phrase)
+            segments.Add(phrase);
 
         return segments;
     }
