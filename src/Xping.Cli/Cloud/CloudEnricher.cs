@@ -226,13 +226,14 @@ internal sealed class CloudEnricher(
         // Each assembly's sessions hold only its own executions, so their concatenation still names
         // each one's newest session first.
         ReportEnvelope combined = items[0].Envelope with { Findings = [], LatestRun = null, Selection = null, Test = null };
+        // The combined filter is only the context's health; each row's is its own assembly's.
         var request = new EnrichmentRequest(
             first.Directory,
             first.ProjectFlag,
             pins,
             [.. items.SelectMany(i => i.Request.Sessions)],
             [],
-            static _ => null);
+            fingerprint => subjectFor.Values.Select(s => s(fingerprint)).FirstOrDefault(s => s is not null));
 
         try
         {
@@ -240,16 +241,21 @@ internal sealed class CloudEnricher(
             CloudContextDto cloud = enriched.Result.Envelope.Context?.Cloud
                 ?? throw new InvalidOperationException("The enrichment set no Cloud context.");
 
+            // An enrichment that ended before any read says the same of every row. Past that, a row
+            // without a project row or a health of its own was not asked, whatever the others got.
+            bool read = enriched.HealthByAssembly.Count > 0;
+
             return new OverviewEnrichment(
                 items.ToDictionary(
                     i => i.Assembly,
                     i =>
                     {
                         CloudProjectDto? project = cloud.Projects.FirstOrDefault(p => p.Assembly == i.Assembly);
-                        CloudHealthDto health = enriched.HealthByAssembly.GetValueOrDefault(i.Assembly) ?? cloud.Health;
+                        CloudHealthDto health = enriched.HealthByAssembly.GetValueOrDefault(i.Assembly)
+                            ?? (read ? CloudHealthDto.NotAttempted : cloud.Health);
                         return new OverviewCloudDto(
-                            project?.Status ?? cloud.Status,
-                            project?.Reason ?? cloud.Reason,
+                            project?.Status ?? (read ? "not-attempted" : cloud.Status),
+                            project?.Reason ?? (read ? "none" : cloud.Reason),
                             project?.ProjectKey,
                             CloudHealthSummaryDto.Of(health));
                     },
@@ -347,12 +353,11 @@ internal sealed class CloudEnricher(
                 credential.Warnings.Count > 0 ? [new CloudHint(Unavailable + credential.Warnings[0], Always: false)] : []));
         }
 
-        TargetPlan plan = TargetPlanner.Plan(envelope, request.Findings, request.Sessions);
-
-        // The overview asks the health alone (Amendment 8C): the planner also targets the newest
+        // The overview asks the health alone (Amendment 8C): a report's plan also targets the newest
         // run's failures from the sessions, and those are its report's to show.
-        if (healthFor is not null)
-            plan = plan with { Targets = [] };
+        TargetPlan plan = healthFor is null
+            ? TargetPlanner.Plan(envelope, request.Findings, request.Sessions)
+            : TargetPlanner.PlanHealth(request.Sessions);
 
         // Bound from the sessions, not the targets: a clean run has no target, and its health is
         // exactly what a reader cannot get any other way (Amendment 7B).

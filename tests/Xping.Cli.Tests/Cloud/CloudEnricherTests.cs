@@ -950,6 +950,24 @@ public sealed class CloudEnricherTests : IDisposable
     }
 
     [Fact]
+    public async Task AnOverviewRowItDidNotAskIsNotAttemptedWhateverTheOthersGot()
+    {
+        _environment["XPING_APIKEY"] = ApiKey;
+        _factory.Client.Health = (_, _) => Page(["fp-a"]);
+
+        // A window with no session names no session key, so nothing binds the assembly.
+        OverviewEnrichment result = await EnrichOverviewAsync(
+        [
+            OverviewItem(HealthAssembly, Window("fp-a"), [Session(HealthAssembly)]),
+            OverviewItem(OtherAssembly, WindowIn(OtherAssembly, "fp-a"), [])
+        ]);
+
+        Assert.Equal(("ok", 1), (result.Rows[HealthAssembly].Status, result.Rows[HealthAssembly].Health.UnhealthyTests));
+        OverviewCloudDto unasked = result.Rows[OtherAssembly];
+        Assert.Equal(("not-attempted", "not-attempted"), (unasked.Status, unasked.Health.State));
+    }
+
+    [Fact]
     public async Task AnOverviewWithoutACredentialIsNotAttemptedOnEveryRow()
     {
         OverviewEnrichment result = await EnrichOverviewAsync(
@@ -1244,17 +1262,17 @@ public sealed class CloudEnricherTests : IDisposable
         return await services.GetRequiredService<CloudEnricher>().EnrichAsync(envelope, request, CancellationToken.None).ConfigureAwait(false);
     }
 
-    private async Task<OverviewEnrichment> EnrichOverviewAsync(params (string Assembly, Func<string, SubjectDto?> SubjectFor)[] rows)
+    private Task<OverviewEnrichment> EnrichOverviewAsync(params (string Assembly, Func<string, SubjectDto?> SubjectFor)[] rows) =>
+        EnrichOverviewAsync([.. rows.Select(r => OverviewItem(r.Assembly, r.SubjectFor, [Session(r.Assembly)]))]);
+
+    private async Task<OverviewEnrichment> EnrichOverviewAsync(OverviewEnrichmentItem[] items)
     {
         using ServiceProvider services = BuildServices();
-
-        OverviewEnrichmentItem[] items =
-        [
-            .. rows.Select(r => new OverviewEnrichmentItem(
-                r.Assembly, Clean(), new EnrichmentRequest(_directory, null, new Dictionary<string, string>(), [Session(r.Assembly)], [], r.SubjectFor)))
-        ];
         return await services.GetRequiredService<CloudEnricher>().EnrichOverviewAsync(items, CancellationToken.None).ConfigureAwait(false);
     }
+
+    private OverviewEnrichmentItem OverviewItem(string assembly, Func<string, SubjectDto?> subjectFor, IReadOnlyList<TestSession> sessions) =>
+        new(assembly, Clean(), new EnrichmentRequest(_directory, null, new Dictionary<string, string>(), sessions, [], subjectFor));
 
     private ServiceProvider BuildServices()
     {
