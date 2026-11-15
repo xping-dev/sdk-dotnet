@@ -142,6 +142,17 @@ failed that no finding names.
 |---|---|---|---|
 | A | D4: line 2 is `N tests · N healthy · N flagged`, and tests is healthy plus flagged | Line 2 appends `N failed in latest run` after `flagged` when the count is non-zero. Tests is healthy plus flagged plus that count. The overview's second line (Amendment 6C) appends it in the same position. Schema `1.30` | D4, Amendment 6C |
 
+### Amendment 8 — from #347: the Cloud token
+
+`cloud-data-in-cli-cli-spec.md` Amendment 8 defines a Cloud token both views print: Cloud's verdict
+counts over the assembly's window, from the suite health.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | Amendment 6B: Cloud data stays out of the overview until a token exists that both views print | The token exists. A row also repeats the header's `cloud:` token line. The header-copy rule holds: the row never carries a number that report does not show | Amendment 6B |
+| B | D4: the header is the provenance line, then the counts | Below the counts and the caveats, above the reason line, a dim `cloud: 2 broken · 1 known flaky` when the health answered (cloud spec Amendment 8E) | D4 |
+| C | Amendment 6C: two lines per assembly | A third line when Cloud has something to say for the row: the token, or the reason Cloud could not answer (cloud spec Amendment 8F). Rows are still ordered by local findings only. Schema `1.32`: `assemblies[].cloud` | Amendment 6C, 6G |
+
 ---
 
 ## 1. Ground truth
