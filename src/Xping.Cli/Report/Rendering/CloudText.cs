@@ -105,6 +105,67 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     }
 
     /// <summary>
+    /// The suite health's verdict counts, the token the report's header and its overview row print
+    /// (cloud-data-in-cli-cli-spec Amendment 8E); null when the health did not answer.
+    /// </summary>
+    /// <param name="state">The health's state.</param>
+    /// <param name="verdicts">Its counts.</param>
+    /// <returns>The token, without its <c>cloud:</c> prefix.</returns>
+    public string? HealthToken(string state, CloudVerdictCountsDto verdicts)
+    {
+        ArgumentNullException.ThrowIfNull(verdicts);
+
+        if (state is not ("ok" or "partial"))
+            return null;
+
+        List<string> parts = [];
+        Add(verdicts.Broken, "broken");
+        Add(verdicts.KnownFlaky, "known flaky");
+        Add(verdicts.Unstable, "unstable");
+        Add(verdicts.Flagged, "flagged");
+
+        string token = parts.Count == 0 ? "no test flagged" : string.Join(Joint, parts);
+        return state == "partial" ? token + " (partial)" : token;
+
+        void Add(int count, string word)
+        {
+            if (count > 0)
+                parts.Add($"{TextReportRenderer.Count(count)} {word}");
+        }
+    }
+
+    /// <summary>
+    /// Why an overview row has no Cloud token (Amendment 8F); null when there is nothing to say.
+    /// </summary>
+    /// <remarks>
+    /// The header's reason in the row's own words. An overview row has no credential or workspace
+    /// of its own, so a workspace is "this workspace", and the stderr hint carries the rest.
+    /// </remarks>
+    /// <param name="assembly">The row's assembly.</param>
+    /// <param name="cloud">The row's Cloud data.</param>
+    /// <returns>The reason, without its <c>cloud:</c> prefix.</returns>
+    public string? RowReason(string assembly, OverviewCloudDto cloud)
+    {
+        ArgumentNullException.ThrowIfNull(cloud);
+
+        if (cloud.Status is "ok" or NotAttempted)
+            return null;
+
+        const string fix = "pass --project <key>";
+        string reason = Recorded(cloud.Reason);
+
+        return cloud.Status switch
+        {
+            "unavailable" => $"unavailable ({reason}){Joint}showing local results only",
+            "login-required" => $"login required{Joint}run xping login",
+            "forbidden" => $"forbidden{Joint}showing local results only",
+            "no-project" when cloud.ProjectKey is { } key => $"not in this workspace: project {Recorded(key)}{Joint}{fix}",
+            "no-project" => $"no project in this workspace for {Recorded(assembly)}{Joint}{fix}",
+            _ => $"{Recorded(cloud.Status)} ({reason})"
+        };
+    }
+
+    /// <summary>
     /// A finding's label and the Cloud lines under its name (§7.2, Amendment 3D–3F, 3I, 3O).
     /// </summary>
     /// <param name="finding">The finding.</param>

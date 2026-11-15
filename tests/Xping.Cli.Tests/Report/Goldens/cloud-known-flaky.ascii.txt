@@ -1,5 +1,6 @@
 Xping | MyApp.Tests | 20 runs | 2026-08-05 -> 2026-08-19 | main@a3f9c2e | cloud
 412 tests | 411 healthy | 1 flagged
+cloud: 1 known flaky
 
 ```
 NEEDS ATTENTION (1 medium)                             most severe first
@@ -11,6 +12,11 @@ NEEDS ATTENTION (1 medium)                             most severe first
     local: flaky in 20 runs here
     failed 4 of 20 executions (20%) in 4 of 20 runs, 1 failure mode
     evidence moderate | -env-cluster | f_5da7c018 | ...eckoutTests.cs:27
+
+FLAGGED IN CLOUD
+------------------------------------------------------------------------
+
+    Also flagged in Cloud: 1 test shown above.
 ```
 
 rates: the marker on each finding says which runs its percentage was

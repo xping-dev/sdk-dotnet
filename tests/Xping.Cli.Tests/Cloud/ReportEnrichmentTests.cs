@@ -519,6 +519,26 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         Assert.Equal(1, overview.GetProperty("verdicts").GetProperty("broken").GetInt32());
     }
 
+    /// <summary>
+    /// Cloud-data Amendment 8E, 8F: the overview row prints the Cloud line its report's header prints.
+    /// </summary>
+    [Fact]
+    public void Report_Overview_TextRowRepeatsItsReportsCloudLine()
+    {
+        Seed(assembly: "Other.Tests");
+        Seed(startOrdinal: 8);
+        _host.Cloud.AddTest(Project, "fp-Stable1", test => test["verdict"] = "broken");
+        _host.SignIn();
+
+        string[] overview = ReportText.Lines(Report("--ascii", "--no-color").Output);
+        string[] report = ReportText.Lines(Report("--ascii", "--no-color", "--assembly", Assembly).Output);
+
+        string header = Assert.Single(report, l => l.StartsWith("cloud: ", StringComparison.Ordinal) && l.Contains("broken", StringComparison.Ordinal));
+        int row = Array.FindIndex(overview, l => l.StartsWith(Assembly + " ", StringComparison.Ordinal));
+        Assert.Equal("  " + header, overview[row + 2]);
+        Assert.Contains("  cloud: no project in this workspace for Other.Tests - pass --project <key>", overview);
+    }
+
     [Fact]
     public void Report_Overview_SignedOutAsksNothing()
     {

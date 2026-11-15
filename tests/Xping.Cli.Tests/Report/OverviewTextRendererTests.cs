@@ -42,6 +42,78 @@ public sealed class OverviewTextRendererTests
         return ReportText.Lines(writer.ToString());
     }
 
+    private static OverviewCloudDto Cloud(
+        string status = "ok", string reason = "none", string state = "ok", CloudVerdictCountsDto? verdicts = null, string? projectKey = "shop") =>
+        new(status, reason, projectKey, new CloudHealthSummaryDto(state, reason, 40, 0, verdicts ?? CloudVerdictCountsDto.None));
+
+    /// <summary>
+    /// Cloud-data Amendment 8F: the row's third line is the token its report's header prints.
+    /// </summary>
+    [Fact]
+    public void ARowCloudAnsweredForEndsOnItsVerdicts()
+    {
+        string[] lines = Render(Row("Alpha.Tests", 120, 3, 20) with { Cloud = Cloud(verdicts: new CloudVerdictCountsDto(2, 1, 0, 0)) });
+
+        Assert.Equal("  cloud: 2 broken - 1 known flaky", lines[4]);
+        Assert.Equal(string.Empty, lines[5]);
+    }
+
+    [Theory]
+    [InlineData("ok", "none", "ok", "  cloud: no test flagged")]
+    [InlineData("partial", "budget", "partial", "  cloud: no test flagged (partial)")]
+    [InlineData("unavailable", "timeout", "unavailable", "  cloud: unavailable (timeout) - showing local results only")]
+    [InlineData("login-required", "none", "not-attempted", "  cloud: login required - run xping login")]
+    [InlineData("no-project", "not-found", "not-attempted", "  cloud: not in this workspace: project shop - pass --project <key>")]
+    public void ARowsCloudLineIsItsTokenOrWhyThereIsNone(string status, string reason, string state, string expected)
+    {
+        string[] lines = Render(Row("Alpha.Tests", 120, 3, 20) with { Cloud = Cloud(status, reason, state) });
+
+        Assert.Equal(expected, lines[4]);
+    }
+
+    [Fact]
+    public void AReasonEveryRowSharesIsSaidOnceUnderTheHeader()
+    {
+        OverviewCloudDto timedOut = Cloud("unavailable", "credential-timeout", "unavailable");
+
+        string[] lines = Render(
+            Row("Alpha.Tests", 120, 3, 20) with { Cloud = timedOut },
+            Row("Beta.Tests", 10, 0, 5) with { Cloud = timedOut });
+
+        Assert.Equal("cloud: unavailable (credential-timeout) - showing local results only", lines[1]);
+        Assert.Single(lines, l => l.Contains("cloud:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ReasonsThatDifferStayOnTheirRows()
+    {
+        string[] lines = Render(
+            Row("Alpha.Tests", 120, 3, 20) with { Cloud = Cloud(verdicts: new CloudVerdictCountsDto(1, 0, 0, 0)) },
+            Row("Beta.Tests", 10, 0, 5) with { Cloud = Cloud("no-project", "not-found", "not-attempted", projectKey: null) });
+
+        Assert.Equal(string.Empty, lines[1]);
+        Assert.Contains("  cloud: 1 broken", lines);
+        Assert.Contains("  cloud: no project in this workspace for Beta.Tests - pass --project <key>", lines);
+    }
+
+    [Fact]
+    public void AnUnboundRowNamesItsAssembly()
+    {
+        string[] lines = Render(Row("Alpha.Tests", 120, 3, 20) with { Cloud = Cloud("no-project", "not-found", "not-attempted", projectKey: null) });
+
+        Assert.Equal("  cloud: no project in this workspace for Alpha.Tests - pass --project <key>", lines[4]);
+    }
+
+    [Fact]
+    public void ARowCloudWasNotAskedAboutHasNoCloudLine()
+    {
+        string[] signedOut = Render(Row("Alpha.Tests", 120, 3, 20) with { Cloud = Cloud("not-attempted", "none", "not-attempted") });
+        string[] local = Render(Row("Alpha.Tests", 120, 3, 20));
+
+        Assert.Equal(local, signedOut);
+        Assert.DoesNotContain(local, l => l.Contains("cloud", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void TheHeaderCountsTheAssemblies()
     {

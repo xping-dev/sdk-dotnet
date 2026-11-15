@@ -10,7 +10,8 @@ using Xping.Cli.Reporting;
 namespace Xping.Cli.Report.Rendering;
 
 /// <summary>
-/// Writes the overview for a person: two lines per assembly and the command that opens one.
+/// Writes the overview for a person: two lines per assembly, a third for Cloud, and the command
+/// that opens one.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -29,6 +30,8 @@ internal sealed class OverviewTextRenderer(OutputCapabilities capabilities)
 {
     private const int DetailIndent = 2;
 
+    private readonly CloudText cloudText = new(capabilities.Glyphs);
+
     /// <summary>
     /// Writes the overview.
     /// </summary>
@@ -43,6 +46,19 @@ internal sealed class OverviewTextRenderer(OutputCapabilities capabilities)
         string indent = new(' ', DetailIndent);
 
         output.WriteLine($"Xping{separator}{envelope.Assemblies.Count.ToString(CultureInfo.InvariantCulture)} assemblies");
+
+        // A credential refused or timed out fails every row the same way: said once, under the
+        // header, instead of as many times as there are assemblies (Amendment 8F).
+        List<AssemblyOverviewDto> asked = [.. envelope.Assemblies.Where(a => a.Cloud is not null)];
+        string? shared = asked.Count > 1
+            && asked.All(a => cloudText.HealthToken(a.Cloud!.Health.State, a.Cloud.Health.Verdicts) is null)
+            && asked.Select(CloudLine).Distinct(StringComparer.Ordinal).ToList() is [{ } only]
+                ? only
+                : null;
+
+        if (shared is not null)
+            output.WriteLine(capabilities.Dim("cloud: " + shared));
+
         output.WriteLine();
 
         foreach (AssemblyOverviewDto row in envelope.Assemblies)
@@ -79,6 +95,9 @@ internal sealed class OverviewTextRenderer(OutputCapabilities capabilities)
             counts.Add("last " + window.To.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture));
 
             output.WriteLine(capabilities.Dim(indent + string.Join(separator, counts)));
+
+            if (shared is null && CloudLine(row) is { } line)
+                output.WriteLine(capabilities.Dim(indent + "cloud: " + line));
         }
 
         // The first row's command, because the first row is the one most worth opening. A line of its
@@ -89,6 +108,15 @@ internal sealed class OverviewTextRenderer(OutputCapabilities capabilities)
             output.WriteLine($"Details: {TerminalText.Printable(envelope.Assemblies[0].Command, TerminalCharset.Command)}");
         }
     }
+
+    /// <summary>
+    /// The header's Cloud line, in its words (Amendment 8F): the row repeats what its report says of
+    /// Cloud, and says nothing when the report would say nothing.
+    /// </summary>
+    private string? CloudLine(AssemblyOverviewDto row) =>
+        row.Cloud is { } cloud
+            ? cloudText.HealthToken(cloud.Health.State, cloud.Health.Verdicts) ?? cloudText.RowReason(row.Assembly, cloud)
+            : null;
 
     /// <summary>
     /// The name on the left and the verdict against the fence's right edge, or one space after a

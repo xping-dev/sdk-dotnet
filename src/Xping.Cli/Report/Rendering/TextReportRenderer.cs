@@ -344,17 +344,28 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         WriteUnmeasured(builder, summary, separator);
         WriteCaveats(builder, envelope, separator);
 
+        // Cloud's verdicts over the window, the one Cloud line the assembly's overview row repeats
+        // (Amendment 8E). Under the counts it sits beside, and never among them: they are local.
+        if (envelope.Context?.Cloud?.Health is { } health && cloudText.HealthToken(health.State, health.Verdicts) is { } verdicts)
+            WriteSourceLine(builder, verdicts);
+
         // Last, above the fence: it qualifies everything in the block, and a pasted block keeps it.
         // Dim, because it is about the source and not about any test (§7.6).
-        // Wrapped like the block it sits over: it is pasted with it.
         if (cloudText.Reason(envelope.Context?.Cloud) is { } reason)
-        {
-            const string prefix = "cloud: ";
-            List<string> lines = Wrap(reason, FenceWidth - prefix.Length);
+            WriteSourceLine(builder, reason);
+    }
 
-            for (int index = 0; index < lines.Count; index++)
-                builder.AppendLine(capabilities.Dim((index == 0 ? prefix : new string(' ', prefix.Length)) + lines[index]));
-        }
+    /// <summary>
+    /// Writes a dim <c>cloud:</c> line above the fence, wrapped like the block it sits over: it is
+    /// pasted with it.
+    /// </summary>
+    private void WriteSourceLine(StringBuilder builder, string text)
+    {
+        const string prefix = "cloud: ";
+        List<string> lines = Wrap(text, FenceWidth - prefix.Length);
+
+        for (int index = 0; index < lines.Count; index++)
+            builder.AppendLine(capabilities.Dim((index == 0 ? prefix : new string(' ', prefix.Length)) + lines[index]));
     }
 
     /// <summary>

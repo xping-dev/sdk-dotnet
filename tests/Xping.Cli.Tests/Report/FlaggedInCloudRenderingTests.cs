@@ -32,7 +32,7 @@ public sealed class FlaggedInCloudRenderingTests
     [Fact]
     public void AReportWithNothingFlaggedInCloudHasNoSection()
     {
-        string report = Render(Get("cloud-broken"));
+        string report = Render(WithHealth(Get("cloud-broken"), new CloudHealthDto("ok", "none", 412, 0, CloudVerdictCountsDto.None, 0, [], 0, 0)));
 
         Assert.DoesNotContain(Heading, report, StringComparison.Ordinal);
     }
