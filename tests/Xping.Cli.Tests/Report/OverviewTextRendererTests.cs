@@ -85,6 +85,33 @@ public sealed class OverviewTextRendererTests
     }
 
     [Fact]
+    public void ARowNotAskedAboutDoesNotKeepTheOthersSharedReasonOnTheirRows()
+    {
+        OverviewCloudDto timedOut = Cloud("unavailable", "timeout", "unavailable");
+
+        string[] lines = Render(
+            Row("Alpha.Tests", 120, 3, 20) with { Cloud = timedOut },
+            Row("Beta.Tests", 10, 0, 5) with { Cloud = timedOut },
+            Row("Gamma.Tests", 10, 0, 5) with { Cloud = Cloud("not-attempted", "none", "not-attempted") });
+
+        Assert.Equal("cloud: unavailable (timeout) - showing local results only", lines[1]);
+        Assert.Single(lines, l => l.Contains("cloud:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ARowsCloudLineWrapsAtTheFence()
+    {
+        string[] lines = Render(Row("Company.Product.Search.Tests", 120, 3, 20) with
+        {
+            Cloud = Cloud("no-project", "not-found", "not-attempted", projectKey: null)
+        });
+
+        Assert.Equal("  cloud: no project in this workspace for Company.Product.Search.Tests -", lines[4]);
+        Assert.Equal("         pass --project <key>", lines[5]);
+        Assert.All(lines, l => Assert.InRange(l.Length, 0, TextReportRenderer.FenceWidth));
+    }
+
+    [Fact]
     public void ReasonsThatDifferStayOnTheirRows()
     {
         string[] lines = Render(
@@ -93,7 +120,7 @@ public sealed class OverviewTextRendererTests
 
         Assert.Equal(string.Empty, lines[1]);
         Assert.Contains("  cloud: 1 broken", lines);
-        Assert.Contains("  cloud: no project in this workspace for Beta.Tests - pass --project <key>", lines);
+        Assert.Contains("  cloud: no project in this workspace for Beta.Tests - pass --project", lines);
     }
 
     [Fact]
@@ -101,7 +128,8 @@ public sealed class OverviewTextRendererTests
     {
         string[] lines = Render(Row("Alpha.Tests", 120, 3, 20) with { Cloud = Cloud("no-project", "not-found", "not-attempted", projectKey: null) });
 
-        Assert.Equal("  cloud: no project in this workspace for Alpha.Tests - pass --project <key>", lines[4]);
+        Assert.Equal("  cloud: no project in this workspace for Alpha.Tests - pass --project", lines[4]);
+        Assert.Equal("         <key>", lines[5]);
     }
 
     [Fact]

@@ -79,12 +79,14 @@ internal static partial class ReportFixtures
     /// </summary>
     private static CloudHealthDto ShownHealth(ReportEnvelope envelope)
     {
+        // One digest per test, as the health sends it: a test with two findings is counted once.
         CloudDigestDto[] shown =
         [
-            .. envelope.Findings.Select(f => f.Cloud)
-                .Concat(envelope.LatestRun?.Failures.Select(f => f.Cloud?.Digest) ?? [])
-                .OfType<CloudDigestDto>()
-                .Where(d => d.Verdict is "broken" or "known-flaky" or "unstable")
+            .. envelope.Findings.Select(f => (f.Subject, Digest: f.Cloud))
+                .Concat(envelope.LatestRun?.Failures.Select(f => (f.Subject, Digest: f.Cloud?.Digest)) ?? [])
+                .Where(s => s.Digest?.Verdict is "broken" or "known-flaky" or "unstable")
+                .DistinctBy(s => s.Subject.Fingerprint ?? s.Subject.FullyQualifiedName, StringComparer.Ordinal)
+                .Select(s => s.Digest!)
         ];
 
         return new CloudHealthDto("ok", "none", 412, shown.Length, CloudVerdictCountsDto.From(shown), shown.Length, [], 0, 0);

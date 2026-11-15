@@ -87,20 +87,13 @@ internal sealed class CloudText(ReportGlyphs glyphs)
         if (context is null || context.Status is "ok" or NotAttempted)
             return null;
 
-        string reason = Recorded(context.Reason);
-
         return context.Status switch
         {
-            "unavailable" => $"unavailable ({reason}){Joint}showing local results only",
-            "login-required" => $"login required{Joint}run xping login",
-            "forbidden" when context.Credential == "api-key" =>
-                $"forbidden{Joint}API keys need the Team plan; run xping login instead",
-            "forbidden" => $"forbidden{Joint}showing local results only",
             "no-project" => NoProject(context),
             "partial" =>
                 $"partial, {TextReportRenderer.Count(context.EnrichedTests)} of " +
-                $"{TextReportRenderer.Count(context.RequestedTests)} tests answered ({reason})",
-            _ => $"{Recorded(context.Status)} ({reason})"
+                $"{TextReportRenderer.Count(context.RequestedTests)} tests answered ({Recorded(context.Reason)})",
+            _ => Failure(context.Status, context.Reason, context.Credential)
         };
     }
 
@@ -151,18 +144,9 @@ internal sealed class CloudText(ReportGlyphs glyphs)
         if (cloud.Status is "ok" or NotAttempted)
             return null;
 
-        const string fix = "pass --project <key>";
-        string reason = Recorded(cloud.Reason);
-
-        return cloud.Status switch
-        {
-            "unavailable" => $"unavailable ({reason}){Joint}showing local results only",
-            "login-required" => $"login required{Joint}run xping login",
-            "forbidden" => $"forbidden{Joint}showing local results only",
-            "no-project" when cloud.ProjectKey is { } key => $"not in this workspace: project {Recorded(key)}{Joint}{fix}",
-            "no-project" => $"no project in this workspace for {Recorded(assembly)}{Joint}{fix}",
-            _ => $"{Recorded(cloud.Status)} ({reason})"
-        };
+        return cloud.Status == "no-project"
+            ? NoProject("this workspace", cloud.ProjectKey, assembly)
+            : Failure(cloud.Status, cloud.Reason, credential: null);
     }
 
     /// <summary>
@@ -451,19 +435,38 @@ internal sealed class CloudText(ReportGlyphs glyphs)
 
     private string NoProject(CloudContextDto context)
     {
-        const string fix = "pass --project <key>";
-
         // Without a name (an API key, or a token issued before the claim) the line says "this
         // workspace" (Amendment 3B); with one it names it (Amendment 4B, contract §7.4).
         string workspace = context.Workspace is { } name ? "workspace " + Recorded(name) : "this workspace";
+        CloudProjectDto? row = context.Projects.FirstOrDefault(p => p.Status == "no-project");
 
-        return context.Projects.FirstOrDefault(p => p.Status == "no-project") switch
-        {
-            { ProjectKey: { } key } => $"not in {workspace}: project {Recorded(key)}{Joint}{fix}",
-            { } row => $"no project in {workspace} for {Recorded(row.Assembly)}{Joint}{fix}",
-            null => $"no project in {workspace}{Joint}{fix}"
-        };
+        return NoProject(workspace, row?.ProjectKey, row?.Assembly);
     }
+
+    private string NoProject(string workspace, string? projectKey, string? assembly)
+    {
+        const string fix = "pass --project <key>";
+
+        if (projectKey is not null)
+            return $"not in {workspace}: project {Recorded(projectKey)}{Joint}{fix}";
+
+        return assembly is not null
+            ? $"no project in {workspace} for {Recorded(assembly)}{Joint}{fix}"
+            : $"no project in {workspace}{Joint}{fix}";
+    }
+
+    /// <summary>
+    /// The §7.6 words for a status the header and an overview row say alike, from one place so the
+    /// row keeps repeating its report's line (Amendment 8F).
+    /// </summary>
+    private string Failure(string status, string reason, string? credential) => status switch
+    {
+        "unavailable" => $"unavailable ({Recorded(reason)}){Joint}showing local results only",
+        "login-required" => $"login required{Joint}run xping login",
+        "forbidden" when credential == "api-key" => $"forbidden{Joint}API keys need the Team plan; run xping login instead",
+        "forbidden" => $"forbidden{Joint}showing local results only",
+        _ => $"{Recorded(status)} ({Recorded(reason)})"
+    };
 
     private string? NameDiffers(CloudDigestDto digest) =>
         digest.Identity == "name-mismatch" && digest.TestName is { } name ? "cloud: known as " + Recorded(name) : null;

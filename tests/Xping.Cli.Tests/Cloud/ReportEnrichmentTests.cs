@@ -536,7 +536,9 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         string header = Assert.Single(report, l => l.StartsWith("cloud: ", StringComparison.Ordinal) && l.Contains("broken", StringComparison.Ordinal));
         int row = Array.FindIndex(overview, l => l.StartsWith(Assembly + " ", StringComparison.Ordinal));
         Assert.Equal("  " + header, overview[row + 2]);
-        Assert.Contains("  cloud: no project in this workspace for Other.Tests - pass --project <key>", overview);
+        int other = Array.FindIndex(overview, l => l.StartsWith("Other.Tests ", StringComparison.Ordinal));
+        Assert.Equal("  cloud: no project in this workspace for Other.Tests - pass --project", overview[other + 2]);
+        Assert.Equal("         <key>", overview[other + 3]);
     }
 
     [Fact]

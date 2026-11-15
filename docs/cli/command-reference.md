@@ -885,7 +885,8 @@ Billing.Tests                                                  no findings
   cloud: no test flagged
 Search.Tests                                                   no findings
   57 tests · 0 flagged · 6 runs · last 2026-11-02 09:12
-  cloud: no project in this workspace for Search.Tests · pass --project <key>
+  cloud: no project in this workspace for Search.Tests · pass --project
+         <key>
 
 Details: xping report --assembly Checkout.Tests
 ```

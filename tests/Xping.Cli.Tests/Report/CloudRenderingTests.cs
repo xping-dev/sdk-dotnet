@@ -115,9 +115,21 @@ public sealed class CloudRenderingTests
     [Fact]
     public void ASelectionHasNoHealthToken()
     {
-        string[] lines = Lines(Render(Get("detail-cloud"), Unicode));
+        // Health the renderer would print on a full report: the page, not the fixture, keeps it off.
+        ReportEnvelope selection = Get("detail-cloud");
+        CloudContextDto context = CloudContext(selection, "ok", "none");
+        ReportEnvelope envelope = selection with
+        {
+            Context = selection.Context! with
+            {
+                Cloud = context with
+                {
+                    Health = CloudHealthDto.Unanswered("ok", "none") with { Verdicts = new CloudVerdictCountsDto(2, 1, 0, 0) }
+                }
+            }
+        };
 
-        Assert.DoesNotContain(lines, l => l.StartsWith("cloud: ", StringComparison.Ordinal) && l.Contains("flagged", StringComparison.Ordinal));
+        Assert.DoesNotContain("cloud: 2 broken · 1 known flaky", Lines(Render(envelope, Unicode)));
     }
 
     [Fact]

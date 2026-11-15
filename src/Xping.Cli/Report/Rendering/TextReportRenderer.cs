@@ -346,7 +346,9 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
 
         // Cloud's verdicts over the window, the one Cloud line the assembly's overview row repeats
         // (Amendment 8E). Under the counts it sits beside, and never among them: they are local.
-        if (envelope.Context?.Cloud?.Health is { } health && cloudText.HealthToken(health.State, health.Verdicts) is { } verdicts)
+        // Not on a selection: the health is the suite's, and the page is not (Amendment 8E).
+        if (envelope.Selection is null && envelope.Test is null
+            && envelope.Context?.Cloud?.Health is { } health && cloudText.HealthToken(health.State, health.Verdicts) is { } verdicts)
             WriteSourceLine(builder, verdicts);
 
         // Last, above the fence: it qualifies everything in the block, and a pasted block keeps it.
@@ -2480,7 +2482,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
     /// an assertion fragment, and half of one is unsearchable — the fence overflowing by a few
     /// columns is the smaller harm.
     /// </remarks>
-    private static List<string> Wrap(string text, int width)
+    internal static List<string> Wrap(string text, int width)
     {
         var lines = new List<string>();
         var line = new StringBuilder();
