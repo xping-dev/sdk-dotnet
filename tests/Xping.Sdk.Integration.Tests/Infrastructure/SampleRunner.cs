@@ -53,6 +53,12 @@ internal sealed class SampleRunner : IDisposable
 
     private static readonly TimeSpan RunTimeout = TimeSpan.FromMinutes(5);
 
+    // The build arguments each sample output folder was last built with, keyed by the folder: an MTP
+    // build has its own, and the -p: variants share the default one. A run reuses the build when it
+    // matches, which saves most of the ~60 nested builds. Unlocked: every test that runs a sample is
+    // in one collection, so they run one after another.
+    private static readonly Dictionary<string, string> BuiltSamples = new(StringComparer.Ordinal);
+
     private readonly string _scratch = Path.Combine(
         Path.GetTempPath(), "xping-tests", Guid.NewGuid().ToString("N"));
 
@@ -95,6 +101,25 @@ internal sealed class SampleRunner : IDisposable
         if (runner != TestRunner.VsTest)
             build.Add("-p:XpingTestRunner=MTP");
         build.AddRange(msbuildProperties.Select(property => $"-p:{property}"));
+
+        // xUnit v2 has no MTP flavour, so its sample has one output folder.
+        string output = runner != TestRunner.VsTest && sample != "SampleApp.XUnit" ? $"{sample}/mtp" : sample;
+        string buildKey = string.Join(" ", build);
+        if (!BuiltSamples.TryGetValue(output, out string? built) || built != buildKey)
+        {
+            // Forgotten first, so a failed build is not taken for the folder's contents.
+            BuiltSamples.Remove(output);
+            (int exitCode, string log) = await DotnetAsync(
+                    repositoryRoot, new[] { "build", project }.Concat(build), environment, $"build of {sample}")
+                .ConfigureAwait(true);
+            if (exitCode != 0)
+                return (exitCode, log);
+
+            BuiltSamples[output] = buildKey;
+        }
+
+        // The configuration and properties still pick the output folder.
+        build.Add("--no-build");
 
         string[] mtpArguments = ["--filter", filter, "--report-trx", "--results-directory", ResultsPath];
         (string workingDirectory, IEnumerable<string> arguments) = runner switch
