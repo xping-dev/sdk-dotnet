@@ -1,5 +1,6 @@
 Xping · SampleApp.XUnit · 20 runs · 2026-09-05 09:00 → 16:21 · main@eab9867 · cloud
 16 tests · 10 healthy · 6 flagged
+cloud: 2 broken · 12 known flaky
 
 ```
 LATEST RUN  16:21 · eab9867                               2 new failures

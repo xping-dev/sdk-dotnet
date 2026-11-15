@@ -10,7 +10,8 @@ using Xping.Cli.Reporting;
 namespace Xping.Cli.Report.Rendering;
 
 /// <summary>
-/// Writes the overview for a person: two lines per assembly and the command that opens one.
+/// Writes the overview for a person: two lines per assembly, a third for Cloud, and the command
+/// that opens one.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -20,14 +21,17 @@ namespace Xping.Cli.Report.Rendering;
 /// opinion (report-format Amendment 6B).
 /// </para>
 /// <para>
-/// Two lines rather than one: the name and its verdict are what the reader scans, and the counts
-/// beside them on one line would push past the fence width on any real assembly name.
+/// The counts on a line of their own: the name and its verdict are what the reader scans, and the
+/// counts beside them would push past the fence width on any real assembly name. Cloud's line goes
+/// under them, wrapped to the fence like the header's (Amendment 8F).
 /// </para>
 /// </remarks>
 /// <param name="capabilities">What the output stream can show.</param>
 internal sealed class OverviewTextRenderer(OutputCapabilities capabilities)
 {
     private const int DetailIndent = 2;
+
+    private readonly CloudText cloudText = new(capabilities.Glyphs);
 
     /// <summary>
     /// Writes the overview.
@@ -43,10 +47,28 @@ internal sealed class OverviewTextRenderer(OutputCapabilities capabilities)
         string indent = new(' ', DetailIndent);
 
         output.WriteLine($"Xping{separator}{envelope.Assemblies.Count.ToString(CultureInfo.InvariantCulture)} assemblies");
+
+        // Each row's Cloud line, once: the token, else the reason. A reason every row Cloud was asked
+        // about prints, with no token among them (a credential refused or timed out), is said once,
+        // under the header, instead of as many times as there are assemblies (Amendment 8F). A row
+        // with no line was not asked about and has no say.
+        string?[] tokens = [.. envelope.Assemblies.Select(a => a.Cloud is { } c ? cloudText.HealthToken(c.Health.State, c.Health.Verdicts) : null)];
+        string?[] lines = [.. envelope.Assemblies.Select((a, i) => tokens[i] ?? (a.Cloud is { } c ? cloudText.RowReason(a.Assembly, c) : null))];
+        string[] said = [.. lines.OfType<string>()];
+        string? shared = said.Length > 1
+            && tokens.All(t => t is null)
+            && said.Distinct(StringComparer.Ordinal).ToList() is [{ } only]
+                ? only
+                : null;
+
+        if (shared is not null)
+            WriteCloudLine(output, string.Empty, shared);
+
         output.WriteLine();
 
-        foreach (AssemblyOverviewDto row in envelope.Assemblies)
+        for (int index = 0; index < envelope.Assemblies.Count; index++)
         {
+            AssemblyOverviewDto row = envelope.Assemblies[index];
             string name = Recorded(row.Assembly);
 
             if (row.Summary is not { } summary || row.Window is not { } window)
@@ -79,6 +101,9 @@ internal sealed class OverviewTextRenderer(OutputCapabilities capabilities)
             counts.Add("last " + window.To.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture));
 
             output.WriteLine(capabilities.Dim(indent + string.Join(separator, counts)));
+
+            if (shared is null && lines[index] is { } line)
+                WriteCloudLine(output, indent, line);
         }
 
         // The first row's command, because the first row is the one most worth opening. A line of its
@@ -88,6 +113,18 @@ internal sealed class OverviewTextRenderer(OutputCapabilities capabilities)
             output.WriteLine();
             output.WriteLine($"Details: {TerminalText.Printable(envelope.Assemblies[0].Command, TerminalCharset.Command)}");
         }
+    }
+
+    /// <summary>
+    /// Writes a dim <c>cloud:</c> line, wrapped to the fence as the report's header wraps it.
+    /// </summary>
+    private void WriteCloudLine(TextWriter output, string indent, string text)
+    {
+        const string prefix = "cloud: ";
+        List<string> wrapped = TextReportRenderer.Wrap(text, TextReportRenderer.FenceWidth - indent.Length - prefix.Length);
+
+        for (int index = 0; index < wrapped.Count; index++)
+            output.WriteLine(capabilities.Dim(indent + (index == 0 ? prefix : new string(' ', prefix.Length)) + wrapped[index]));
     }
 
     /// <summary>

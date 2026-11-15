@@ -879,15 +879,19 @@ Xping · 3 assemblies
 
 Checkout.Tests                               4 findings (1 high, 3 medium)
   412 tests · 4 flagged · 20 runs · last 2026-11-08 16:45
+  cloud: 1 broken · 2 known flaky
 Billing.Tests                                                  no findings
   96 tests · 0 flagged · 20 runs · last 2026-11-08 16:44
+  cloud: no test flagged
 Search.Tests                                                   no findings
   57 tests · 0 flagged · 6 runs · last 2026-11-02 09:12
+  cloud: no project in this workspace for Search.Tests · pass --project
+         <key>
 
 Details: xping report --assembly Checkout.Tests
 ```
 
-Each row repeats the header of that assembly's own report: the same window, the same numbers. Signed in, the overview also reads each assembly's [suite health](#flagged-in-cloud) from Xping Cloud, and nothing else. `--assembly` adds the rest of the [Cloud data](#cloud-data).
+Each row repeats the header of that assembly's own report: the same window, the same numbers. Signed in, the overview also reads each assembly's [suite health](#flagged-in-cloud) from Xping Cloud, and nothing else. A row then gains the `cloud:` line its report's header prints, such as `cloud: 1 broken · 2 known flaky`, or why Cloud could not answer for it (`cloud: no project in this workspace for Search.Tests · pass --project <key>`). A reason every row shares, such as `cloud: login required · run xping login`, is printed once under the first line. `--assembly` adds the rest of the [Cloud data](#cloud-data).
 
 - `--runs` and `--since` set every assembly's window. An assembly with no runs in it gets a row that says so.
 - `--fail-on` judges every assembly, so one suite's finding fails the build even when another suite ran last.
@@ -916,6 +920,10 @@ its value came from, `cloud:` or `local:`:
 
 - The header ends in `· cloud` when anything on the page came from Cloud, and in
   `· cloud (partial)` when only some tests were answered.
+- On a full report, a `cloud:` line under the counts gives Cloud's verdicts over your window's
+  tests, shown on the page or not: `cloud: 1 broken · 2 known flaky`, or `cloud: no test flagged`.
+  It ends in `(partial)` when the suite's health was not read to the end. The overview prints the
+  same line for each assembly.
 - **The confidence line** comes first under the name on every finding Cloud has scored: the score,
   its change, Cloud's category and the window it was computed over. With too little evidence it
   reads `cloud: evidence sparse (ESS 4 of 10, 14 d)` instead. The score is Cloud's; the verdict is
@@ -949,6 +957,7 @@ unhealthy, and lists the ones in your window that the page does not already name
 ````
 Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e · cloud
 412 tests · 412 healthy · 0 flagged
+cloud: 1 broken · 1 known flaky · 1 unstable
 
 ```
 FLAGGED IN CLOUD                                 3 with no local finding

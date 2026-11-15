@@ -68,8 +68,28 @@ internal static partial class ReportFixtures
             ],
             answered ? [new CloudSessionDto("4f1c0c9e-5d2a-4b7e-9c1f-0a2b3c4d5e6f", CloudProject, "complete", true, true)] : [],
 
-            // Read, and nothing Cloud calls unhealthy beyond what the findings already show.
-            answered ? new CloudHealthDto("ok", "none", 412, 0, CloudVerdictCountsDto.None, 0, [], 0, 0) : CloudHealthDto.NotAttempted);
+            // Read on a full report only (Amendment 7B), and nothing Cloud calls unhealthy beyond
+            // what the page already shows.
+            answered && envelope.Selection is null && envelope.Test is null ? ShownHealth(envelope) : CloudHealthDto.NotAttempted);
+    }
+
+    /// <summary>
+    /// The health of a page whose findings and latest-run rows carry every test Cloud calls
+    /// unhealthy: each counted, none listed.
+    /// </summary>
+    private static CloudHealthDto ShownHealth(ReportEnvelope envelope)
+    {
+        // One digest per test, as the health sends it: a test with two findings is counted once.
+        CloudDigestDto[] shown =
+        [
+            .. envelope.Findings.Select(f => (f.Subject, Digest: f.Cloud))
+                .Concat(envelope.LatestRun?.Failures.Select(f => (f.Subject, Digest: f.Cloud?.Digest)) ?? [])
+                .Where(s => s.Digest?.Verdict is "broken" or "known-flaky" or "unstable")
+                .DistinctBy(s => s.Subject.Fingerprint ?? s.Subject.FullyQualifiedName, StringComparer.Ordinal)
+                .Select(s => s.Digest!)
+        ];
+
+        return new CloudHealthDto("ok", "none", 412, shown.Length, CloudVerdictCountsDto.From(shown), shown.Length, [], 0, 0);
     }
 
     /// <summary>
