@@ -46,9 +46,15 @@ internal sealed record OverviewEnvelope(
 /// <param name="Summary">Its report's counts; null when the window could not be opened.</param>
 /// <param name="Unavailable">Why the window could not be opened; null when it was.</param>
 /// <param name="Command">The command that opens this assembly's report.</param>
+/// <param name="Cloud">
+/// Its suite health in Xping Cloud, the token its report's header prints
+/// (cloud-data-in-cli-cli-spec Amendment 8D); null when the window could not be opened or Cloud
+/// was not asked.
+/// </param>
 internal sealed record AssemblyOverviewDto(
     string Assembly,
     WindowDto? Window,
     SummaryDto? Summary,
     string? Unavailable,
-    string Command);
+    string Command,
+    OverviewCloudDto? Cloud);

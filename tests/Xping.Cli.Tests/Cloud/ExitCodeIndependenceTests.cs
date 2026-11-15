@@ -23,6 +23,7 @@ public sealed class ExitCodeIndependenceTests : IAsyncDisposable
     private const string Project = "myapp-tests";
     private const string ApiKey = "team-read-key-0123456789";
     private const string UploadOnlyKey = "upload-only-key-0123456789";
+    private const string OtherAssembly = "Other.Tests";
 
     private readonly CliFlowHost _host = new();
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xping-exit-independence", Guid.NewGuid().ToString("N"));
@@ -80,6 +81,36 @@ public sealed class ExitCodeIndependenceTests : IAsyncDisposable
             result.Json().GetProperty("context").GetProperty("cloud").GetProperty("status").GetString());
     }
 
+    /// <summary>
+    /// Cloud-data Amendment 8G: the overview asks Cloud too, and its exit code is still the local one.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Statuses))]
+    public async Task TheOverviewsExitCodeIsTheLocalOneUnderEveryCloudStatus(string scenario)
+    {
+        Seed(OtherAssembly);
+        int expected = Run("report", "--directory", _root, "--fail-on", "low").Code;
+
+        string[] args = Arrange(scenario);
+        CliResult result = await _host.DriveAsync(_host.Start(["report", "--directory", _root, "--fail-on", "low", "--json", .. args]));
+
+        Assert.Equal(ExitCodes.FindingsAtThreshold, expected);
+        Assert.Equal(expected, result.Code);
+        Assert.Equal("overview", result.Json().GetProperty("scope").GetString());
+
+        // The health carries no signature, so a new algorithm changes nothing in the overview.
+        Assert.Equal(
+            scenario switch
+            {
+                "signature-algorithm" => "ok",
+                "rate-limited" => "unavailable",
+                _ => scenario
+            },
+            result.Json().GetProperty("assemblies").EnumerateArray()
+                .Single(a => a.GetProperty("assembly").GetString() == TestSessionFactory.DefaultAssembly)
+                .GetProperty("cloud").GetProperty("status").GetString());
+    }
+
     private string[] Arrange(string scenario)
     {
         switch (scenario)
@@ -127,8 +158,10 @@ public sealed class ExitCodeIndependenceTests : IAsyncDisposable
     /// <summary>
     /// Eight runs in which <c>Removed0</c> vanishes after five and the newest fails <c>Stable0</c>.
     /// </summary>
-    private void Seed()
+    /// <param name="assembly">The assembly the runs record; another than the default makes the store an overview.</param>
+    private void Seed(string assembly = TestSessionFactory.DefaultAssembly)
     {
+        int first = assembly == TestSessionFactory.DefaultAssembly ? 0 : 8;
         ILocalSessionStore store = LocalSessionStore.Create(storePath: _root);
 
         for (int i = 0; i < 8; i++)
@@ -139,15 +172,16 @@ public sealed class ExitCodeIndependenceTests : IAsyncDisposable
                 TestSessionFactory.Execution(
                     "Stable0",
                     newest ? TestOutcome.Failed : TestOutcome.Passed,
+                    assembly: assembly,
                     exceptionType: newest ? "System.NullReferenceException" : null,
                     errorMessage: newest ? "boom" : null),
-                TestSessionFactory.Execution("Stable1")
+                TestSessionFactory.Execution("Stable1", assembly: assembly)
             ];
 
             if (i < 5)
-                executions.Add(TestSessionFactory.Execution("Removed0"));
+                executions.Add(TestSessionFactory.Execution("Removed0", assembly: assembly));
 
-            store.Write(TestSessionFactory.Session(i, executions));
+            store.Write(TestSessionFactory.Session(first + i, executions));
         }
     }
 }

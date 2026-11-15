@@ -59,6 +59,22 @@ internal sealed record CloudHint(string Text, bool Always);
 internal sealed record EnrichmentResult(ReportEnvelope Envelope, IReadOnlyList<CloudHint> Hints);
 
 /// <summary>
+/// One assembly of the overview, as its own report would ask Cloud about it.
+/// </summary>
+/// <param name="Assembly">The assembly.</param>
+/// <param name="Envelope">Its report.</param>
+/// <param name="Request">
+/// Its report's request: the same sessions, pins and window filter, so the overview keeps the rows its
+/// report keeps (cloud-data-in-cli-cli-spec Amendment 8C).
+/// </param>
+internal sealed record OverviewEnrichmentItem(string Assembly, ReportEnvelope Envelope, EnrichmentRequest Request);
+
+/// <summary>
+/// The overview's Cloud data, one entry per assembly asked about, and the hints to print.
+/// </summary>
+internal sealed record OverviewEnrichment(IReadOnlyDictionary<string, OverviewCloudDto> Rows, IReadOnlyList<CloudHint> Hints);
+
+/// <summary>
 /// How the Cloud layer went, decided once at the end of an enrichment (cloud-data-in-cli-cli-spec §3.4).
 /// </summary>
 /// <param name="Status">The <c>context.cloud.status</c>.</param>
@@ -156,7 +172,7 @@ internal sealed class CloudEnricher(
 
         try
         {
-            return await EnrichCoreAsync(envelope, request, cancellationToken).ConfigureAwait(false);
+            return (await EnrichCoreAsync(envelope, request, null, cancellationToken).ConfigureAwait(false)).Result;
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -164,6 +180,7 @@ internal sealed class CloudEnricher(
             logger.LogInformation(ex, "Cloud enrichment failed: {Message}", ex.Message);
             var failed = new CloudContextDto(
                 "unavailable", "none", 0, null, null, null, null, null, null, null, 0, 0, [], [], HealthUnavailable(request, "none"));
+
             // Only the context is set: the defect may be in the stitcher, and running it again here
             // would throw past the one place that keeps Cloud from breaking the local report.
             return new EnrichmentResult(
@@ -175,8 +192,110 @@ internal sealed class CloudEnricher(
         }
     }
 
-    private async Task<EnrichmentResult> EnrichCoreAsync(
-        ReportEnvelope envelope, EnrichmentRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// Reads the suite health of every assembly of the overview, in one budget with one credential
+    /// (cloud-data-in-cli-cli-spec Amendment 8C).
+    /// </summary>
+    /// <remarks>
+    /// Health alone: the overview has no finding to ask the digest about, and a token counted from
+    /// anything the report's targets decide would let the row and the header disagree. Each
+    /// assembly's rows are kept by its own window, as its own report keeps them. Never throws except
+    /// for the caller's own cancellation (contract §8.2 F1).
+    /// </remarks>
+    public async Task<OverviewEnrichment> EnrichOverviewAsync(
+        IReadOnlyList<OverviewEnrichmentItem> items, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+
+        if (items.Count == 0)
+            return new OverviewEnrichment(new Dictionary<string, OverviewCloudDto>(StringComparer.Ordinal), []);
+
+        var subjectFor = new Dictionary<string, Func<string, SubjectDto?>>(StringComparer.Ordinal);
+        var pins = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (OverviewEnrichmentItem item in items)
+        {
+            if (item.Request.SubjectFor is { } subjects)
+                subjectFor[item.Assembly] = subjects;
+
+            foreach ((string assembly, string pin) in item.Request.SessionPins)
+                pins.TryAdd(assembly, pin);
+        }
+
+        EnrichmentRequest first = items[0].Request;
+
+        // Each assembly's sessions hold only its own executions, so their concatenation still names
+        // each one's newest session first.
+        ReportEnvelope combined = items[0].Envelope with { Findings = [], LatestRun = null, Selection = null, Test = null };
+        // The combined filter is only the context's health; each row's is its own assembly's.
+        var request = new EnrichmentRequest(
+            first.Directory,
+            first.ProjectFlag,
+            pins,
+            [.. items.SelectMany(i => i.Request.Sessions)],
+            [],
+            fingerprint => subjectFor.Values.Select(s => s(fingerprint)).FirstOrDefault(s => s is not null));
+
+        try
+        {
+            Enriched enriched = await EnrichCoreAsync(combined, request, subjectFor, cancellationToken).ConfigureAwait(false);
+            CloudContextDto cloud = enriched.Result.Envelope.Context?.Cloud
+                ?? throw new InvalidOperationException("The enrichment set no Cloud context.");
+
+            // An enrichment that ended before any read says the same of every row. Past that, a row
+            // without a project row or a health of its own was not asked, whatever the others got.
+            bool read = enriched.HealthByAssembly.Count > 0;
+
+            return new OverviewEnrichment(
+                items.ToDictionary(
+                    i => i.Assembly,
+                    i =>
+                    {
+                        CloudProjectDto? project = cloud.Projects.FirstOrDefault(p => p.Assembly == i.Assembly);
+                        CloudHealthDto health = enriched.HealthByAssembly.GetValueOrDefault(i.Assembly)
+                            ?? (read ? CloudHealthDto.NotAttempted : cloud.Health);
+                        return new OverviewCloudDto(
+                            project?.Status ?? (read ? "not-attempted" : cloud.Status),
+                            project?.Reason ?? (read ? "none" : cloud.Reason),
+                            project?.ProjectKey,
+                            CloudHealthSummaryDto.Of(health));
+                    },
+                    StringComparer.Ordinal),
+                enriched.Result.Hints);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogInformation(ex, "Cloud enrichment failed: {Message}", ex.Message);
+            var failed = new OverviewCloudDto(
+                "unavailable", "none", null, CloudHealthSummaryDto.Of(CloudHealthDto.Unanswered("unavailable", "none")));
+
+            return new OverviewEnrichment(items.ToDictionary(i => i.Assembly, _ => failed, StringComparer.Ordinal), []);
+        }
+    }
+
+    /// <summary>
+    /// An enrichment's result, and, for the overview, each assembly's own health.
+    /// </summary>
+    private sealed record Enriched(EnrichmentResult Result, IReadOnlyDictionary<string, CloudHealthDto> HealthByAssembly)
+    {
+        public static Enriched Only(EnrichmentResult result) =>
+            new(result, new Dictionary<string, CloudHealthDto>(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// The enrichment, after the fail-open wrapper.
+    /// </summary>
+    /// <param name="envelope">The report.</param>
+    /// <param name="request">What the report knows beyond it.</param>
+    /// <param name="healthFor">
+    /// For the overview: each assembly's window filter, to read its health on its own. Null for a
+    /// report, whose health is one over its assembly.
+    /// </param>
+    /// <param name="cancellationToken">The caller's cancellation.</param>
+    private async Task<Enriched> EnrichCoreAsync(
+        ReportEnvelope envelope,
+        EnrichmentRequest request,
+        IReadOnlyDictionary<string, Func<string, SubjectDto?>>? healthFor,
+        CancellationToken cancellationToken)
     {
         using var budget = new CloudBudget(timeProvider, cancellationToken);
 
@@ -187,9 +306,9 @@ internal sealed class CloudEnricher(
         }
         catch (CliConfigurationException ex)
         {
-            return new EnrichmentResult(
+            return Enriched.Only(new EnrichmentResult(
                 Unchanged(envelope, NotAttempted(null, null), "not-attempted"),
-                [new CloudHint(Unavailable + ex.Message, Always: false)]);
+                [new CloudHint(Unavailable + ex.Message, Always: false)]));
         }
 
         string cloudUrl = configuration.CloudUrl.Value;
@@ -215,9 +334,9 @@ internal sealed class CloudEnricher(
                 null, null, null, null, null, null, 0, 0, [], [],
                 HealthUnavailable(request, "credential-timeout"));
 
-            return new EnrichmentResult(
+            return Enriched.Only(new EnrichmentResult(
                 Unchanged(envelope, timedOut, "unavailable"),
-                [new CloudHint(Unavailable + CredentialTimeoutReason, Always: false)]);
+                [new CloudHint(Unavailable + CredentialTimeoutReason, Always: false)]));
         }
 
         logger.LogInformation("credential: {Credential}", Describe(credential));
@@ -229,12 +348,16 @@ internal sealed class CloudEnricher(
         {
             // A sign-in file that was refused or corrupt is the one silent "no credential" the user
             // can act on (§11.6); every other way of having none is the default local mode.
-            return new EnrichmentResult(
+            return Enriched.Only(new EnrichmentResult(
                 Unchanged(envelope, NotAttempted(cloudUrl, null), "not-attempted"),
-                credential.Warnings.Count > 0 ? [new CloudHint(Unavailable + credential.Warnings[0], Always: false)] : []);
+                credential.Warnings.Count > 0 ? [new CloudHint(Unavailable + credential.Warnings[0], Always: false)] : []));
         }
 
-        TargetPlan plan = TargetPlanner.Plan(envelope, request.Findings, request.Sessions);
+        // The overview asks the health alone (Amendment 8C): a report's plan also targets the newest
+        // run's failures from the sessions, and those are its report's to show.
+        TargetPlan plan = healthFor is null
+            ? TargetPlanner.Plan(envelope, request.Findings, request.Sessions)
+            : TargetPlanner.PlanHealth(request.Sessions);
 
         // Bound from the sessions, not the targets: a clean run has no target, and its health is
         // exactly what a reader cannot get any other way (Amendment 7B).
@@ -243,7 +366,7 @@ internal sealed class CloudEnricher(
             : [.. plan.SessionKeys.Keys.Order(StringComparer.Ordinal)];
 
         if (plan.Targets.Count == 0 && healthAssemblies.Count == 0)
-            return new EnrichmentResult(Unchanged(envelope, NotAttempted(cloudUrl, credential), "not-attempted"), []);
+            return Enriched.Only(new EnrichmentResult(Unchanged(envelope, NotAttempted(cloudUrl, credential), "not-attempted"), []));
 
         var ledger = new Ledger();
         await AttemptAsync(
@@ -301,7 +424,7 @@ internal sealed class CloudEnricher(
             ledger.Answers.Count,
             projects,
             [.. ledger.Sessions.Values.OrderBy(s => s.ProjectKey, StringComparer.Ordinal).ThenBy(s => s.SessionKey, StringComparer.Ordinal)],
-            Health(request, envelope, healthAssemblies, ledger));
+            Health(request.SubjectFor, request.ShowAll, envelope, healthAssemblies, ledger));
 
         CloudTestHistoryDto? test = envelope.Test?.Test is null
             ? null
@@ -319,7 +442,18 @@ internal sealed class CloudEnricher(
             context,
             test);
 
-        return new EnrichmentResult(enriched, outcome.Hint is { } hint ? [hint] : []);
+        var result = new EnrichmentResult(enriched, outcome.Hint is { } hint ? [hint] : []);
+        if (healthFor is null)
+            return Enriched.Only(result);
+
+        return new Enriched(
+            result,
+            healthFor.ToDictionary(
+                h => h.Key,
+                h => healthAssemblies.Contains(h.Key)
+                    ? Health(h.Value, request.ShowAll, envelope, [h.Key], ledger)
+                    : CloudHealthDto.NotAttempted,
+                StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -756,9 +890,9 @@ internal sealed class CloudEnricher(
     /// tests in each assembly read, less the ones the page already names.
     /// </summary>
     private static CloudHealthDto Health(
-        EnrichmentRequest request, ReportEnvelope envelope, IReadOnlyList<string> healthAssemblies, Ledger ledger)
+        Func<string, SubjectDto?>? subjectFor, bool showAll, ReportEnvelope envelope, IReadOnlyList<string> healthAssemblies, Ledger ledger)
     {
-        if (request.SubjectFor is not { } subjectFor)
+        if (subjectFor is null)
             return CloudHealthDto.NotAttempted;
 
         // An assembly with no project has no health to read; one whose binding failed is still asked.
@@ -806,13 +940,14 @@ internal sealed class CloudEnricher(
                 .ThenBy(t => t.Subject.Fingerprint, StringComparer.Ordinal)
         ];
 
-        List<CloudHealthTestDto> shown = request.ShowAll ? listed : [.. listed.Take(MaxHealthRows)];
+        List<CloudHealthTestDto> shown = showAll ? listed : [.. listed.Take(MaxHealthRows)];
 
         return new CloudHealthDto(
             state,
             reason,
             distinct.Any(r => r.TotalTests is not null) ? distinct.Sum(r => r.TotalTests ?? 0) : null,
             kept.Count,
+            CloudVerdictCountsDto.From(kept.Values.Select(t => t.Digest)),
             kept.Count - listed.Count,
             shown,
             shown.Count,
@@ -989,7 +1124,7 @@ internal sealed class CloudEnricher(
     /// been asked.
     /// </summary>
     private static CloudHealthDto HealthUnavailable(EnrichmentRequest request, string reason) =>
-        request.SubjectFor is null ? CloudHealthDto.NotAttempted : new CloudHealthDto("unavailable", reason, null, 0, 0, [], 0, 0);
+        request.SubjectFor is null ? CloudHealthDto.NotAttempted : CloudHealthDto.Unanswered("unavailable", reason);
 
     private static long Milliseconds(TimeSpan elapsed) => (long)elapsed.TotalMilliseconds;
 

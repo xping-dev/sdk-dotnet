@@ -112,6 +112,17 @@ internal static partial class TargetPlanner
         return new TargetPlan(targets, SessionKeys(sessions));
     }
 
+    /// <summary>
+    /// Plans the questions of a page that asks only the suite health: no target, the session keys.
+    /// </summary>
+    /// <param name="sessions">The window's sessions, newest first.</param>
+    /// <returns>The plan.</returns>
+    public static TargetPlan PlanHealth(IReadOnlyList<TestSession> sessions)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        return new TargetPlan([], SessionKeys(sessions));
+    }
+
     private static IEnumerable<(string? Assembly, string? Fingerprint)> Subjects(SubjectDto? subject) =>
         subject is null ? [] : [(subject.Assembly, subject.Fingerprint)];
 

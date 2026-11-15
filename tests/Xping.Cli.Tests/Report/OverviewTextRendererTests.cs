@@ -30,7 +30,7 @@ public sealed class OverviewTextRendererTests
 
         var window = new WindowDto(Newest.AddDays(-2), Newest, runs, "default", null, 0, []);
 
-        return new AssemblyOverviewDto(assembly, window, summary, null, $"xping report --assembly {assembly}");
+        return new AssemblyOverviewDto(assembly, window, summary, null, $"xping report --assembly {assembly}", null);
     }
 
     private static string[] Render(params AssemblyOverviewDto[] rows)
@@ -119,7 +119,7 @@ public sealed class OverviewTextRendererTests
     public void AnAssemblyWithNoWindowSaysWhy()
     {
         string[] lines = Render(new AssemblyOverviewDto(
-            "Alpha.Tests", null, null, "No sessions recorded on or after 2099-01-01.", "xping report --assembly Alpha.Tests"));
+            "Alpha.Tests", null, null, "No sessions recorded on or after 2099-01-01.", "xping report --assembly Alpha.Tests", null));
 
         Assert.EndsWith("no window", lines[2], StringComparison.Ordinal);
         Assert.Equal("  No sessions recorded on or after 2099-01-01.", lines[3]);

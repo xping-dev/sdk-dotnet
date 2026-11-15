@@ -97,6 +97,23 @@ public sealed class OverviewBuilderTests
         Assert.Equal("xping report --assembly 'My App.Tests' --runs 5", overview.Assemblies[0].Command);
     }
 
+    /// <summary>
+    /// Cloud-data Amendment 8D: a row carries its assembly's Cloud data, and a row with no window none.
+    /// </summary>
+    [Fact]
+    public void ARowCarriesItsCloudDataUnlessItHasNoWindow()
+    {
+        var cloud = new OverviewCloudDto(
+            "ok", "none", "shop", new CloudHealthSummaryDto("ok", "none", 9, 1, new CloudVerdictCountsDto(1, 0, 0, 0)));
+
+        OverviewEnvelope overview = Build(
+            new OverviewRow("Shop.Tests", WithCounts(0, 0, 0), null, cloud),
+            new OverviewRow("Missing.Tests", null, "No runs recorded.", cloud));
+
+        Assert.Same(cloud, overview.Assemblies[0].Cloud);
+        Assert.Null(overview.Assemblies[1].Cloud);
+    }
+
     [Fact]
     public void TheEnvelopeSaysItIsAnOverviewAtTheCurrentSchema()
     {

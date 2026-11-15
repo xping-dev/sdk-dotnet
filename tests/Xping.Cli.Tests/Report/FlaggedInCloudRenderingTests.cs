@@ -27,7 +27,7 @@ public sealed class FlaggedInCloudRenderingTests
     }
 
     private static CloudHealthDto Listing(params CloudHealthTestDto[] tests) =>
-        new("ok", "none", 412, tests.Length, 0, tests, tests.Length, tests.Length);
+        new("ok", "none", 412, tests.Length, CloudVerdictCountsDto.From(tests.Select(t => t.Digest)), 0, tests, tests.Length, tests.Length);
 
     [Fact]
     public void AReportWithNothingFlaggedInCloudHasNoSection()
@@ -73,7 +73,7 @@ public sealed class FlaggedInCloudRenderingTests
     public void TestsShownAboveAreCountedOnTheClosingLineEvenWithNoRows()
     {
         ReportEnvelope envelope = Envelope(Finding("Flaky", "medium", "Beta", "failed 6 of 20 executions (30%)"));
-        string[] fenced = Fenced(Render(WithHealth(envelope, new CloudHealthDto("ok", "none", 412, 2, 2, [], 0, 0))));
+        string[] fenced = Fenced(Render(WithHealth(envelope, new CloudHealthDto("ok", "none", 412, 2, new CloudVerdictCountsDto(2, 0, 0, 0), 2, [], 0, 0))));
 
         int flagged = Array.FindIndex(fenced, l => l.StartsWith(Heading, StringComparison.Ordinal));
 
@@ -85,7 +85,7 @@ public sealed class FlaggedInCloudRenderingTests
     public void ACappedListSaysSoAndTheFooterNamesTheCommand()
     {
         CloudHealthTestDto[] tests = [.. Enumerable.Range(0, 10).Select(_ => KnownFlaky)];
-        string report = Render(WithHealth(Envelope(), new CloudHealthDto("ok", "none", 412, 14, 0, tests, 10, 14)));
+        string report = Render(WithHealth(Envelope(), new CloudHealthDto("ok", "none", 412, 14, CloudVerdictCountsDto.From(tests.Select(t => t.Digest)), 0, tests, 10, 14)));
 
         Assert.Contains("    Showing 10 of 14", Fenced(report));
         Assert.Contains(Lines(report), l => l.StartsWith("Showing 10 of 14 flagged in Cloud", StringComparison.Ordinal));
@@ -135,7 +135,7 @@ public sealed class FlaggedInCloudRenderingTests
     public void TheCleanBillIsWithheldWheneverTheSectionPrints()
     {
         // A count alone still says something sits above, which a pass glyph would contradict.
-        string[] fenced = Fenced(Render(WithHealth(Envelope(), new CloudHealthDto("ok", "none", 412, 1, 1, [], 0, 0))));
+        string[] fenced = Fenced(Render(WithHealth(Envelope(), new CloudHealthDto("ok", "none", 412, 1, new CloudVerdictCountsDto(1, 0, 0, 0), 1, [], 0, 0))));
 
         Assert.DoesNotContain(fenced, l => l.Contains("No findings.", StringComparison.Ordinal));
     }

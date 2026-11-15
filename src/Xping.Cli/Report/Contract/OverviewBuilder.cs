@@ -11,7 +11,8 @@ namespace Xping.Cli.Report.Contract;
 /// <param name="Assembly">The assembly.</param>
 /// <param name="Envelope">Its report; null when its window could not be opened.</param>
 /// <param name="Unavailable">Why the window could not be opened; null when it was.</param>
-internal sealed record OverviewRow(string Assembly, ReportEnvelope? Envelope, string? Unavailable);
+/// <param name="Cloud">Its Cloud data; null when Cloud was not asked.</param>
+internal sealed record OverviewRow(string Assembly, ReportEnvelope? Envelope, string? Unavailable, OverviewCloudDto? Cloud = null);
 
 /// <summary>
 /// Builds the overview from every assembly's finished report.
@@ -42,7 +43,8 @@ internal static class OverviewBuilder
                 row.Envelope?.Window,
                 row.Envelope?.Summary,
                 row.Envelope == null ? row.Unavailable : null,
-                DrillDown.ForAssembly(scopeFor(row.Assembly))))]);
+                DrillDown.ForAssembly(scopeFor(row.Assembly)),
+                row.Envelope == null ? null : row.Cloud))]);
     }
 
     /// <summary>
