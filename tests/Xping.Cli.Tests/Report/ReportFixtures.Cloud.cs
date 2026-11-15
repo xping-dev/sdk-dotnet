@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using System.Globalization;
+using Xping.Cli.Report;
 using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
 
@@ -64,7 +66,10 @@ internal static partial class ReportFixtures
                 .. assemblies.OfType<string>().Distinct(StringComparer.Ordinal).Select(assembly =>
                     new CloudProjectDto(assembly, CloudProject, "session", status, reason))
             ],
-            answered ? [new CloudSessionDto("4f1c0c9e-5d2a-4b7e-9c1f-0a2b3c4d5e6f", CloudProject, "complete", true, true)] : []);
+            answered ? [new CloudSessionDto("4f1c0c9e-5d2a-4b7e-9c1f-0a2b3c4d5e6f", CloudProject, "complete", true, true)] : [],
+
+            // Read, and nothing Cloud calls unhealthy beyond what the findings already show.
+            answered ? new CloudHealthDto("ok", "none", 412, 0, 0, [], 0, 0) : CloudHealthDto.NotAttempted);
     }
 
     /// <summary>
@@ -262,6 +267,60 @@ internal static partial class ReportFixtures
         ReportEnvelope envelope = Build("latest-run");
         return WithCloud(envelope, CloudContext(envelope, "login-required", "none"));
     }
+
+    // A clean run here that Cloud's suite health disagrees with: a test broken on the canonical
+    // branch, one it knows is flaky, and one unstable, in the order the enricher lists them. The
+    // clean bill is withheld (Amendment 7G).
+    private static ReportEnvelope CloudHealth()
+    {
+        ReportEnvelope envelope = Build("empty");
+        CloudHealthTestDto[] tests =
+        [
+            HealthTest("MyApp.Tests.LedgerTests.Post_RejectsADuplicateEntry", CloudDigest("broken"), envelope.Context?.Assembly),
+            HealthTest("MyApp.Tests.CheckoutTests.Checkout_CompletesWithinTheServiceBudget", CloudDigest("known-flaky", flaky: "flaky", score: 0.41, delta: null), envelope.Context?.Assembly),
+            HealthTest("MyApp.Tests.InventoryTests.Reserve_ReleasesOnTimeout", CloudDigest("unstable", score: 0.81, delta: -0.02), envelope.Context?.Assembly)
+        ];
+
+        CloudContextDto context = CloudContext(envelope) with
+        {
+            Health = new CloudHealthDto("ok", "none", 412, tests.Length, 0, tests, tests.Length, tests.Length)
+        };
+
+        return WithCloud(envelope, context);
+    }
+
+    // The latest-run report with more flagged tests than a report lists, and two whose Cloud verdict
+    // is already on a finding or a latest-run row above.
+    private static ReportEnvelope CloudHealthCapped()
+    {
+        ReportEnvelope envelope = CloudBroken();
+        CloudHealthTestDto[] tests =
+        [
+            .. Enumerable.Range(1, 12).Select(i => HealthTest(
+                $"MyApp.Tests.CatalogTests.Search_ReturnsPage{i.ToString("00", CultureInfo.InvariantCulture)}",
+                CloudDigest("known-flaky", flaky: "flaky", score: 0.41, delta: null),
+                envelope.LatestRun!.Failures[0].Subject.Assembly))
+        ];
+
+        return envelope with
+        {
+            Context = envelope.Context! with
+            {
+                Cloud = envelope.Context.Cloud! with
+                {
+                    Health = new CloudHealthDto("ok", "none", 412, tests.Length + 2, 2, [.. tests.Take(10)], 10, tests.Length)
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// A suite-health row: the local test, and Cloud's digest of it.
+    /// </summary>
+    public static CloudHealthTestDto HealthTest(string name, CloudDigestDto digest, string? assembly = "MyApp.Tests") =>
+        new(
+            new SubjectDto("test", $"fp-{name}", name, name, SubjectNames.ShortName(name, name), null, null, null, assembly, null, null, null),
+            digest);
 
     // The detail view of a finding whose failure modes Cloud matched, did not see, and could not sign.
     private static ReportEnvelope DetailCloud()

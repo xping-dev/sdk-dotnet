@@ -48,6 +48,11 @@ internal sealed partial class FakeCloud
     public bool RunsHaveMore { get; set; }
 
     /// <summary>
+    /// Gets or sets how many tests a suite-health page holds at most, below the asked page size.
+    /// </summary>
+    public int HealthPageSize { get; set; } = 500;
+
+    /// <summary>
     /// Makes every answer to <paramref name="path"/> wait for <paramref name="until"/> after the
     /// request was recorded, as a slow Cloud would.
     /// </summary>
@@ -237,7 +242,7 @@ internal sealed partial class FakeCloud
         lock (_gate)
         {
             for (int i = 0; i < count; i++)
-                _faults.Enqueue(new Fault(path, status, title, Drop: false, "Injected fault.", Problem: true, retryAfter));
+                _faults.Add(new Fault(path, status, title, Drop: false, "Injected fault.", Problem: true, retryAfter));
         }
     }
 
@@ -319,6 +324,7 @@ internal sealed partial class FakeCloud
                     ? new Reply(200, project.ToJsonString())
                     : NotFound(),
                 ["v1", "projects", var key, "tests", "digest"] => Digest(key, body),
+                ["v1", "projects", var key, "tests", "health"] => Health(key, query),
                 ["v1", "projects", var key, "tests", var fingerprint, "runs"] => Runs(key, fingerprint, query),
                 _ => NotFound()
             };
@@ -368,6 +374,47 @@ internal sealed partial class FakeCloud
             ["retentionDays"] = 365,
             ["tests"] = new JsonArray([.. tests.Select(t => (JsonNode)DigestOf(projectKey, t!))]),
             ["sessions"] = new JsonArray([.. sessionKeys.Select(k => (JsonNode)SessionOf(k!.GetValue<string>()))])
+        };
+
+        return new Reply(200, answer.ToJsonString());
+    }
+
+    /// <summary>
+    /// Contract §6.5: every test of the project whose verdict is unhealthy, ordered by fingerprint,
+    /// a page at a time. The cursor is the index of the page's first test.
+    /// </summary>
+    private Reply Health(string projectKey, NameValueCollection query)
+    {
+        if (!int.TryParse(query["pageSize"] ?? "500", CultureInfo.InvariantCulture, out int pageSize) || pageSize is < 1 or > 500)
+            return Problem(400, "Validation.PageSize", "Between 1 and 500.");
+
+        string[] sessionKeys = query.GetValues("sessionKeys") ?? [];
+        if (sessionKeys.Length > 5)
+            return Problem(400, "Validation.SessionKeys", "At most 5 session keys.");
+
+        if (!HasProject(projectKey))
+            return NotFound();
+
+        int start = query["cursor"] is { } cursor ? int.Parse(cursor, CultureInfo.InvariantCulture) : 0;
+        int size = Math.Min(pageSize, HealthPageSize);
+
+        List<JsonObject> unhealthy =
+        [
+            .. _tests
+                .Where(t => t.Key.Project == projectKey && (string?)t.Value["verdict"] is "known-flaky" or "broken" or "unstable")
+                .OrderBy(t => t.Key.Fingerprint, StringComparer.Ordinal)
+                .Select(t => t.Value)
+        ];
+
+        var answer = new JsonObject
+        {
+            ["computedAt"] = _time.GetUtcNow().ToString("O", CultureInfo.InvariantCulture),
+            ["signatureAlgorithm"] = SignatureAlgorithm,
+            ["retentionDays"] = 365,
+            ["totalTests"] = _tests.Keys.Count(t => t.Project == projectKey),
+            ["tests"] = new JsonArray([.. unhealthy.Skip(start).Take(size).Select(t => t.DeepClone())]),
+            ["sessions"] = new JsonArray([.. sessionKeys.Select(k => (JsonNode)SessionOf(k))]),
+            ["next"] = start + size < unhealthy.Count ? (start + size).ToString(CultureInfo.InvariantCulture) : null
         };
 
         return new Reply(200, answer.ToJsonString());

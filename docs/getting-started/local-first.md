@@ -254,7 +254,9 @@ xping login
 ```
 
 `xping report` then adds Xping Cloud's confidence score to the rows it already prints, labelled so
-it is never mistaken for a local number. Offline, it prints the local report as before. See
+it is never mistaken for a local number, and lists the tests Cloud calls known flaky, broken or
+unstable that passed here under `FLAGGED IN CLOUD`. Neither changes the local counts or the exit
+code. Offline, it prints the local report as before. See
 [Cloud data](../cli/command-reference.md#cloud-data).
 
 To keep the SDK from uploading even with credentials present, set the mode explicitly:
