@@ -73,10 +73,11 @@ public sealed class CloudRenderingTests
     [InlineData("throttled", "rate-limited", "login", "cloud: throttled (rate-limited)")]
     public void TheReasonLineSitsAboveTheFenceOnce(string status, string reason, string credential, string expected)
     {
+        // Without the health, whose token line is tested on its own below.
         ReportEnvelope local = Get("latest-run");
         ReportEnvelope envelope = local with
         {
-            Context = local.Context! with { Cloud = CloudContext(local, status, reason, credential) }
+            Context = local.Context! with { Cloud = CloudContext(local, status, reason, credential) with { Health = CloudHealthDto.NotAttempted } }
         };
 
         string[] lines = Lines(Render(envelope, Unicode));
@@ -84,6 +85,51 @@ public sealed class CloudRenderingTests
 
         Assert.Equal(expected, Assert.Single(lines, l => l.StartsWith("cloud: ", StringComparison.Ordinal)));
         Assert.True(Array.IndexOf(lines, expected) < fence);
+    }
+
+    /// <summary>
+    /// Cloud-data Amendment 8E: the health's verdicts sit under the counts, above the reason line,
+    /// and above the fence.
+    /// </summary>
+    [Fact]
+    public void TheHealthsVerdictsSitBelowTheCountsAndAboveTheReasonLine()
+    {
+        ReportEnvelope local = Get("latest-run");
+        CloudContextDto context = CloudContext(local, "partial", "timeout");
+        ReportEnvelope envelope = local with
+        {
+            Context = local.Context! with
+            {
+                Cloud = context with { Health = context.Health with { Verdicts = new CloudVerdictCountsDto(2, 1, 0, 0) } }
+            }
+        };
+
+        string[] lines = Lines(Render(envelope, Unicode));
+        int token = Array.IndexOf(lines, "cloud: 2 broken · 1 known flaky");
+
+        Assert.True(token > 0);
+        Assert.Equal("cloud: partial, 9 of 14 tests answered (timeout)", lines[token + 1]);
+        Assert.True(token + 1 < Array.IndexOf(lines, Fence));
+    }
+
+    [Fact]
+    public void ASelectionHasNoHealthToken()
+    {
+        // Health the renderer would print on a full report: the page, not the fixture, keeps it off.
+        ReportEnvelope selection = Get("detail-cloud");
+        CloudContextDto context = CloudContext(selection, "ok", "none");
+        ReportEnvelope envelope = selection with
+        {
+            Context = selection.Context! with
+            {
+                Cloud = context with
+                {
+                    Health = CloudHealthDto.Unanswered("ok", "none") with { Verdicts = new CloudVerdictCountsDto(2, 1, 0, 0) }
+                }
+            }
+        };
+
+        Assert.DoesNotContain("cloud: 2 broken · 1 known flaky", Lines(Render(envelope, Unicode)));
     }
 
     [Fact]

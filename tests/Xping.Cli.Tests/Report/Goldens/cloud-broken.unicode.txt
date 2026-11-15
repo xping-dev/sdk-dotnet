@@ -1,5 +1,6 @@
 Xping · SampleApp.XUnit · 20 runs · 2026-09-05 09:00 → 16:21 · main@eab9867 · cloud
 16 tests · 10 healthy · 6 flagged
+cloud: 2 broken · 1 unstable
 
 ```
 LATEST RUN  16:21 · eab9867                               2 new failures
@@ -60,6 +61,11 @@ NEEDS ATTENTION (5 high)                               most severe first
     local: flaky in 20 runs here
     failed 6 of 20 executions (30%) in 6 of 20 runs, 1 failure mode
     evidence high | -env-cluster | f_445c562e | .../SampleTests.cs:83
+
+FLAGGED IN CLOUD
+────────────────────────────────────────────────────────────────────────
+
+    Also flagged in Cloud: 3 tests shown above.
 ```
 
 rates: the marker on each finding says which runs its percentage was

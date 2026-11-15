@@ -89,7 +89,7 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
         JsonElement finding = Finding(json, FindingFingerprint);
         Assert.Equal(0.62, finding.GetProperty("cloud").GetProperty("confidence").GetProperty("score").GetDouble());
         Assert.Equal("moderately-reliable", finding.GetProperty("cloud").GetProperty("confidence").GetProperty("category").GetString());
-        Assert.Equal("1.31", json.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.32", json.GetProperty("schemaVersion").GetString());
         JsonElement session = Assert.Single(cloud.GetProperty("sessions").EnumerateArray());
         Assert.Equal(("complete", true), (session.GetProperty("state").GetString(), session.GetProperty("scored").GetBoolean()));
         Assert.Empty(text.Error);
@@ -468,20 +468,89 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Cloud-data Amendment 6A: the overview's numbers are its assemblies' local headers, so it asks
-    /// Cloud nothing even when signed in.
+    /// Cloud-data Amendment 8C: the overview asks each bound project its suite health and nothing
+    /// else, and the exit code stays the local analysis's.
     /// </summary>
     [Fact]
-    public void Report_Overview_AsksCloudNothing()
+    public void Report_Overview_AsksOnlyTheHealth()
     {
         Seed(assembly: "Other.Tests");
         Seed(startOrdinal: 8);
+        _host.Cloud.AddTest(Project, "fp-Stable1");
+        CliResult local = Report("--json", "--fail-on", "low");
         _host.SignIn();
 
-        CliResult result = Report("--json");
+        CliResult result = Report("--json", "--fail-on", "low");
 
-        Assert.Equal("overview", result.Json().GetProperty("scope").GetString());
+        JsonElement json = result.Json();
+        Assert.Equal("overview", json.GetProperty("scope").GetString());
+        Assert.Equal(local.Code, result.Code);
+        Assert.DoesNotContain(_host.Cloud.GatewayRequests, r => r.Path == DigestPath);
+        Assert.Single(_host.Cloud.GatewayRequests, r => r.Path == HealthPath);
+
+        JsonElement bound = OverviewCloud(json, Assembly);
+        Assert.Equal(("ok", Project), (bound.GetProperty("status").GetString(), bound.GetProperty("projectKey").GetString()));
+        Assert.Equal("ok", bound.GetProperty("health").GetProperty("state").GetString());
+        Assert.Equal(3, bound.GetProperty("health").GetProperty("unhealthyTests").GetInt32());
+
+        // No project is named after it, so it has no health to read.
+        JsonElement unbound = OverviewCloud(json, "Other.Tests");
+        Assert.Equal("no-project", unbound.GetProperty("status").GetString());
+        Assert.Equal("not-attempted", unbound.GetProperty("health").GetProperty("state").GetString());
+    }
+
+    /// <summary>
+    /// Cloud-data Amendment 8G: an overview row's verdicts are its assembly's report's, counted from
+    /// the same rows, whatever the report's targets.
+    /// </summary>
+    [Fact]
+    public void Report_Overview_CountsTheVerdictsItsAssemblysReportCounts()
+    {
+        Seed(assembly: "Other.Tests");
+        Seed(startOrdinal: 8);
+        _host.Cloud.AddTest(Project, "fp-Stable1", test => test["verdict"] = "broken");
+        _host.SignIn();
+
+        JsonElement overview = OverviewCloud(Report("--json").Json(), Assembly).GetProperty("health");
+        JsonElement report = Report("--json", "--assembly", Assembly).Json().GetProperty("context").GetProperty("cloud").GetProperty("health");
+
+        Assert.True(JsonElement.DeepEquals(report.GetProperty("verdicts"), overview.GetProperty("verdicts")));
+        Assert.Equal(report.GetProperty("unhealthyTests").GetInt32(), overview.GetProperty("unhealthyTests").GetInt32());
+        Assert.Equal(1, overview.GetProperty("verdicts").GetProperty("broken").GetInt32());
+    }
+
+    /// <summary>
+    /// Cloud-data Amendment 8E, 8F: the overview row prints the Cloud line its report's header prints.
+    /// </summary>
+    [Fact]
+    public void Report_Overview_TextRowRepeatsItsReportsCloudLine()
+    {
+        Seed(assembly: "Other.Tests");
+        Seed(startOrdinal: 8);
+        _host.Cloud.AddTest(Project, "fp-Stable1", test => test["verdict"] = "broken");
+        _host.SignIn();
+
+        string[] overview = ReportText.Lines(Report("--ascii", "--no-color").Output);
+        string[] report = ReportText.Lines(Report("--ascii", "--no-color", "--assembly", Assembly).Output);
+
+        string header = Assert.Single(report, l => l.StartsWith("cloud: ", StringComparison.Ordinal) && l.Contains("broken", StringComparison.Ordinal));
+        int row = Array.FindIndex(overview, l => l.StartsWith(Assembly + " ", StringComparison.Ordinal));
+        Assert.Equal("  " + header, overview[row + 2]);
+        int other = Array.FindIndex(overview, l => l.StartsWith("Other.Tests ", StringComparison.Ordinal));
+        Assert.Equal("  cloud: no project in this workspace for Other.Tests - pass --project", overview[other + 2]);
+        Assert.Equal("         <key>", overview[other + 3]);
+    }
+
+    [Fact]
+    public void Report_Overview_SignedOutAsksNothing()
+    {
+        Seed(assembly: "Other.Tests");
+        Seed(startOrdinal: 8);
+
+        JsonElement json = Report("--json").Json();
+
         Assert.Empty(_host.Cloud.GatewayRequests);
+        Assert.Equal("not-attempted", OverviewCloud(json, Assembly).GetProperty("status").GetString());
     }
 
     [Fact]
@@ -724,6 +793,9 @@ public sealed class ReportEnrichmentTests : IAsyncDisposable
     private string[] ReportArgs(params string[] args) => ["report", "--directory", _root, .. args];
 
     private CliResult Report(params string[] args) => _host.Run(ReportArgs(args));
+
+    private static JsonElement OverviewCloud(JsonElement overview, string assembly) =>
+        overview.GetProperty("assemblies").EnumerateArray().Single(a => a.GetProperty("assembly").GetString() == assembly).GetProperty("cloud");
 
     private static JsonElement ProjectRow(JsonElement report) =>
         report.GetProperty("context").GetProperty("cloud").GetProperty("projects")[0];

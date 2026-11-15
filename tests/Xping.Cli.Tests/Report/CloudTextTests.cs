@@ -359,4 +359,29 @@ public sealed class CloudTextTests
 
     private static string? Value(CloudDigestDto digest, string label) =>
         Pairs(digest).FirstOrDefault(pair => pair.Label == label).Value;
+
+    [Theory]
+    [InlineData("ok", 1, 2, 3, 4, "1 broken · 2 known flaky · 3 unstable · 4 flagged")]
+    [InlineData("ok", 0, 2, 0, 0, "2 known flaky")]
+    [InlineData("ok", 0, 0, 0, 0, "no test flagged")]
+    [InlineData("partial", 1, 0, 0, 0, "1 broken (partial)")]
+    [InlineData("unavailable", 0, 0, 0, 0, null)]
+    [InlineData("not-attempted", 0, 0, 0, 0, null)]
+    public void TheHealthTokenCountsEachVerdictAndDropsTheZeros(
+        string state, int broken, int knownFlaky, int unstable, int flagged, string? expected)
+    {
+        Assert.Equal(expected, Text.HealthToken(state, new CloudVerdictCountsDto(broken, knownFlaky, unstable, flagged)));
+    }
+
+    [Fact]
+    public void ARowReasonIsPrintableWhateverTheStoreRecorded()
+    {
+        var cloud = new OverviewCloudDto("no-project", "not-found", null, CloudHealthSummaryDto.Of(CloudHealthDto.NotAttempted));
+
+        string reason = Text.RowReason("Sh\u001b[2Jop.Tests", cloud)!;
+
+        Assert.StartsWith("no project in this workspace for Sh", reason, StringComparison.Ordinal);
+        Assert.DoesNotContain("\u001b", reason, StringComparison.Ordinal);
+    }
+
 }

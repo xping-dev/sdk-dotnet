@@ -133,6 +133,26 @@ stay local. Implemented in phases P1 (client, enricher, JSON) and P2 (text, docs
 | H | §9, §1.3 | Unchanged, restated: the health never changes `summary`, `--fail-on` or the exit code. A test listed under `FLAGGED IN CLOUD` stays in `healthy`, which means "no local finding" (report-format D4). `--format summary` and the overview never enrich | §9 |
 | I | — | Contract A6 (dashboard #516) adds the `context.cloud.health` row to §7.4, the health's effect on `partial` to §8.1, and `MaxHealthPages` to §7.3 | — |
 
+### Amendment 8 — from #347: the Cloud token
+
+Amendment 6A held Cloud data out of the overview until both views could print the same token. The
+suite health (Amendment 7) gives one: Cloud's verdicts over the window's tests of one assembly, read
+per project, with no digest. The header of an assembly's report and that assembly's overview row
+print it, counted by the same code from the same rows. Contract R2, §7.6 and §8.3 stand: the
+token lives in `context.cloud`, and `summary`, `--fail-on` and the exit code stay local.
+Implemented in phases P1 (enricher, JSON) and P2 (text, docs), each a PR into
+`feat/347-cloud-token`.
+
+| # | Was | Now | Changed |
+|---|---|---|---|
+| A | — | **The token** counts the health rows Amendment 7D keeps (the window's tests of that assembly, before the shown-elsewhere split), by Cloud's verdict: `broken`, `known-flaky`, `unstable`, and `flagged` for any other value or none. The four counts sum to `unhealthyTests`. One helper, `CloudVerdictCountsDto.From`, counts them on both paths. The digest plays no part, so the token does not depend on the report's targets, `--top` or `--all` | Amendment 7D |
+| B | §6.2: `context.cloud.health` | `CloudHealthDto` gains `verdicts` after `unhealthyTests`: `{ broken, knownFlaky, unstable, flagged }`, all zero when the health is `not-attempted` or `unavailable`. Schema `1.32` | §6.2, Amendment 7E |
+| C | Amendment 6A: the overview never enriches. Amendment 7H: `--format summary` and the overview never enrich | The overview in text and JSON enriches once, for every assembly whose window opened: `CloudEnricher.EnrichOverviewAsync`. One budget (§3.2), one credential, no digest targets: the plan is `TargetPlanner.PlanHealth`, session keys only. Each assembly is bound as §11.2 binds it and asked its health (Amendment 7B, 7C), and assemblies bound to one project share one read. The kept rows of each assembly are filtered by that assembly's own window (`SubjectFor`), as its own report filters them. `--format summary` still never enriches, over one assembly or the overview | Amendment 6A, Amendment 7H |
+| D | Amendment 6B: `AssemblyOverviewDto` is `{assembly, window, summary, unavailable, command}` | It gains `cloud`, last: `{ status, reason, projectKey, health }`. `status` and `reason` are that assembly's project row (§3.4, Amendment 7F), with no digest in it. `health` is `CloudHealthSummaryDto(state, reason, totalTests, unhealthyTests, verdicts)`: Amendment 7E without the listed tests. `cloud` is null when the row is `unavailable`. With no credential, every row is `not-attempted` | Amendment 6B |
+| E | §7.5: the header token is `· cloud` or `· cloud (partial)` | Unchanged. Below the counts, above the reason line (§7.6), the header gains a dim line `cloud: {counts}` when the health is `ok` or `partial`: `2 broken · 1 known flaky · 1 unstable · 1 flagged`, zero counts dropped, in that order. `cloud: no test flagged` when the health is `ok` and nothing is kept. ` (partial)` is appended when the health is `partial`. Nothing when it is `not-attempted` or `unavailable`: the reason line says why. `--id` and `--test` do not ask the health, so they print no token. Built by `CloudText.HealthToken` | §7.5 |
+| F | — | **Overview row.** A third line, dim, indented as the second: the token of E when the row's health is `ok` or `partial`, else `cloud: ` and `CloudText.RowReason` of the row's `status` and `reason`: the §7.6 words, with "this workspace" for the workspace and no API-key variant of `forbidden`, since a row carries neither (`login required · run xping login`, `not in this workspace: project {key} · pass --project <key>`, `no project in this workspace for {assembly} · pass --project <key>`); the stderr hint carries the rest. Nothing when the row is `not-attempted` or `cloud` is null. When every row Cloud was asked about prints the same reason and none a token (a credential refused or timed out), the line is printed once, under `Xping · N assemblies`, and not on the rows. A row the enrichment did not ask about (no project row, no health of its own) is `not-attempted`, whatever the others answered. The hints are written once for the overview (§11). The invitation banner stays the assembly report's | `cli-report-format-spec.md` Amendment 6C |
+| G | — | The overview's exit code is unchanged by Cloud (§9). `ExitCodeIndependenceTests` covers it. A regression test builds an overview and each assembly's report over one store and one fake Cloud and asserts the same `verdicts` for each assembly | §17.1 |
+
 ---
 
 ## 1. Purpose, scope, traceability
