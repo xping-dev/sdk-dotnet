@@ -43,8 +43,7 @@ public class BatchProcessingBenchmarks
             Enabled = true,
             ApiKey = "bench-test-key",
             ProjectId = "bench-project",
-            BatchSize = 10,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 10
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -75,8 +74,7 @@ public class BatchProcessingBenchmarks
             Enabled = true,
             ApiKey = "bench-test-key",
             ProjectId = "bench-project",
-            BatchSize = 50,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 50
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -108,8 +106,7 @@ public class BatchProcessingBenchmarks
             Enabled = true,
             ApiKey = "bench-test-key",
             ProjectId = "bench-project",
-            BatchSize = 100,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 100
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -141,8 +138,7 @@ public class BatchProcessingBenchmarks
             Enabled = true,
             ApiKey = "bench-test-key",
             ProjectId = "bench-project",
-            BatchSize = 500,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 500
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -180,8 +176,7 @@ public class BatchProcessingBenchmarks
             Enabled = true,
             ApiKey = "bench-test-key",
             ProjectId = "bench-project",
-            BatchSize = 10,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 10
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -216,8 +211,7 @@ public class BatchProcessingBenchmarks
             Enabled = true,
             ApiKey = "bench-test-key",
             ProjectId = "bench-project",
-            BatchSize = 25, // Will trigger BufferFull after 25 tests
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 25 // Will trigger BufferFull after 25 tests
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -250,8 +244,7 @@ public class BatchProcessingBenchmarks
             Enabled = true,
             ApiKey = "bench-test-key",
             ProjectId = "bench-project",
-            BatchSize = 50,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 50
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));

@@ -38,14 +38,12 @@ public class CollectorBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        // Configure with no automatic flushing for pure measurement
         _config = new XpingConfiguration
         {
             Enabled = true,
             ApiKey = "bench-test-key",
             ProjectId = "bench-project",
-            BatchSize = 10000, // Large batch to avoid flushing during benchmark
-            FlushInterval = TimeSpan.Zero // Disable automatic flushing
+            BatchSize = 1000
         };
 
         _collector = new TestExecutionCollector(Options.Create(_config));

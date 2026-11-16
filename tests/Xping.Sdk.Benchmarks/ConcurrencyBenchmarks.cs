@@ -44,8 +44,7 @@ public class ConcurrencyBenchmarks
             Enabled = true,
             ApiKey = "concurrency-test-key",
             ProjectId = "concurrency-project",
-            BatchSize = 50,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 50
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -82,8 +81,7 @@ public class ConcurrencyBenchmarks
             Enabled = true,
             ApiKey = "concurrency-test-key",
             ProjectId = "concurrency-project",
-            BatchSize = 100,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 100
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -127,8 +125,7 @@ public class ConcurrencyBenchmarks
             Enabled = true,
             ApiKey = "concurrency-test-key",
             ProjectId = "concurrency-project",
-            BatchSize = 200,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 200
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -165,8 +162,7 @@ public class ConcurrencyBenchmarks
             Enabled = true,
             ApiKey = "concurrency-test-key",
             ProjectId = "concurrency-project",
-            BatchSize = 200,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 200
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -203,8 +199,7 @@ public class ConcurrencyBenchmarks
             Enabled = true,
             ApiKey = "concurrency-test-key",
             ProjectId = "concurrency-project",
-            BatchSize = 50,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 50
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -247,8 +242,7 @@ public class ConcurrencyBenchmarks
             Enabled = true,
             ApiKey = "concurrency-test-key",
             ProjectId = "concurrency-project",
-            BatchSize = 100,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 100
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -295,8 +289,7 @@ public class ConcurrencyBenchmarks
             Enabled = true,
             ApiKey = "concurrency-test-key",
             ProjectId = "concurrency-project",
-            BatchSize = 50,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 50
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));

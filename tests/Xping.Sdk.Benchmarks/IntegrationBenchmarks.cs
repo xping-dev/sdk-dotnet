@@ -41,8 +41,7 @@ public class IntegrationBenchmarks
             Enabled = true,
             ApiKey = "bench-test-key",
             ProjectId = "bench-project",
-            BatchSize = 10000,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 1000
         };
 
         _collector = new TestExecutionCollector(Options.Create(_config));

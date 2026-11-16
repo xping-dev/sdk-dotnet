@@ -32,6 +32,8 @@ internal static class Program
 {
     public static void Main(string[] args)
     {
+        ClearXpingEnvironment();
+
         var config = DefaultConfig.Instance
             .AddDiagnoser(MemoryDiagnoser.Default)
             .AddDiagnoser(ThreadingDiagnoser.Default)
@@ -41,5 +43,23 @@ internal static class Program
             .WithOption(ConfigOptions.DisableOptimizationsValidator, true);
 
         BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
+    }
+
+    /// <summary>
+    /// Removes every <c>XPING_*</c> variable from this process.
+    /// </summary>
+    /// <remarks>
+    /// <c>XPING_*</c> wins over the configuration a benchmark passes to <c>Initialize</c>, so a shell
+    /// with <c>XPING_APIKEY</c> set would switch the adapter benchmarks to Cloud mode and upload
+    /// synthetic sessions under the real key. BenchmarkDotNet's child processes inherit this
+    /// process's environment, so clearing it here covers them too.
+    /// </remarks>
+    private static void ClearXpingEnvironment()
+    {
+        foreach (string name in Environment.GetEnvironmentVariables().Keys.Cast<string>())
+        {
+            if (name.StartsWith("XPING_", StringComparison.OrdinalIgnoreCase))
+                Environment.SetEnvironmentVariable(name, null);
+        }
     }
 }

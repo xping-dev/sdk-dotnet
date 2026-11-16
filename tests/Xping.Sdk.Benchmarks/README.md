@@ -36,6 +36,12 @@ dotnet run -c Release --filter *CollectorBenchmarks.RecordSingleTest*
 dotnet run -c Release --profiler EP
 ```
 
+### Isolation
+
+Benchmarks never upload and never touch your local history. `Program.Main` clears every `XPING_*`
+variable before BenchmarkDotNet starts, and the adapter benchmarks run in `LocalOnly` mode against
+a temporary store that is deleted afterwards.
+
 ## Benchmark Results
 
 Results are exported to `BenchmarkDotNet.Artifacts/` in multiple formats:
@@ -53,7 +59,7 @@ Key metrics to monitor:
 
 ## Performance Targets
 
-Based on the SDK implementation plan, we aim to meet these targets:
+Targets the SDK aims to meet:
 
 | Metric | Target | Status |
 |--------|--------|--------|
@@ -67,17 +73,22 @@ Based on the SDK implementation plan, we aim to meet these targets:
 
 ### Core Benchmarks
 - `CollectorBenchmarks` - TestExecutionCollector performance
+- `BatchProcessingBenchmarks` - recording and draining at different batch sizes
+- `ConcurrencyBenchmarks` - recording and draining from many threads
+- `MemoryPressureBenchmarks` - large suites and large test payloads
 - `UploadBenchmarks` - API client and upload performance
 - `ConfigurationBenchmarks` - Configuration loading and validation
+- `EnvironmentDetectionBenchmarks` - CI and environment detection
 
 ### Integration Benchmarks
 - `IntegrationBenchmarks` - End-to-end test lifecycle
+- `AdapterIntegrationBenchmarks` - adapter-shaped recording patterns
 - `StressTestBenchmarks` - High volume and sustained load
 
 ### Adapter Benchmarks
-- `NUnitAdapterBenchmarks` - NUnit adapter overhead
-- `XUnitAdapterBenchmarks` - xUnit adapter overhead
-- `MSTestAdapterBenchmarks` - MSTest adapter overhead
+- `RealNUnitAdapterBenchmarks` - NUnit `XpingContext` overhead
+- `RealXUnitAdapterBenchmarks` - xUnit `XpingContext` overhead
+- `RealMSTestAdapterBenchmarks` - MSTest `XpingContext` overhead
 
 ### Local Store Benchmarks
 - `LocalStoreBenchmarks` - session write and read
@@ -96,14 +107,11 @@ Based on the SDK implementation plan, we aim to meet these targets:
 setup for the old lookup; the new one holds a single run, about 1/50 of one assembly's history.
 The lookup still deserializes every run once; what changes is how many are held at once.
 
-## CI/CD Integration
+## Comparing Runs
 
-Benchmarks run automatically on:
-- PRs labeled with `performance`
-- Release branches
-- Weekly scheduled runs
-
-Performance regression alerts are posted to PRs if significant degradation is detected (>20%).
+No CI workflow runs the benchmarks, and no baseline is committed: numbers depend on the machine.
+To check a change, run the affected benchmarks on `main` and on your branch, on the same machine,
+and compare the two reports in `BenchmarkDotNet.Artifacts/`.
 
 ## Troubleshooting
 
@@ -132,5 +140,4 @@ When adding new benchmarks:
 ## References
 
 - [BenchmarkDotNet Documentation](https://benchmarkdotnet.org/)
-- [Xping SDK Implementation Plan](../../SDK-Implementation-Plan.md)
-- [Performance Testing Guidelines](../../docs/performance/guidelines.md)
+- [Performance overview](../../docs/performance/overview.md)

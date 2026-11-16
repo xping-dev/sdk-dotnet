@@ -163,8 +163,8 @@ While Xping has minimal overhead, track performance over time:
 cd tests/Xping.Sdk.Benchmarks
 dotnet run -c Release -- --filter '*Collector*'
 
-# Compare with baseline
-# (Results stored in results/baseline/)
+# Compare with an earlier run on the same machine
+# (reports are in BenchmarkDotNet.Artifacts/)
 ```
 
 **Watch for:**
