@@ -323,6 +323,14 @@ internal sealed class JsonSessionStore : ILocalSessionStore
                     cleared++;
             }
 
+            // Clearing everything clears what killed or failed writes left behind as well. A scoped
+            // clear leaves them: a temp file names no assembly until it is moved into place.
+            if (assembly == null)
+            {
+                foreach (string file in Directory.GetFiles(directory, SessionFileName.TempSearchPattern))
+                    StoreRetention.TryDelete(new FileInfo(file), _logger);
+            }
+
             return cleared;
         }
         catch (Exception ex) when (StoreRetention.IsStorageFailure(ex))
@@ -394,8 +402,24 @@ internal sealed class JsonSessionStore : ILocalSessionStore
 
         // Write to a temporary file and move into place, so a crash mid-write cannot leave a
         // half-written file under a name the reader will trust.
-        string tempPath = path + ".tmp";
+        string tempPath = path + SessionFileName.TempSuffix;
 
+        try
+        {
+            WriteThenMove(tempPath, path, session, options);
+        }
+        catch (Exception ex) when (StoreRetention.IsStorageFailure(ex))
+        {
+            // A caught failure (a full disk, a locked destination) must not leave its temp file behind.
+            // Retention only runs after a write succeeds, so on a full disk nothing else would ever
+            // remove it, and every failed run would add another.
+            TryDeleteTemp(tempPath);
+            throw;
+        }
+    }
+
+    private static void WriteThenMove(string tempPath, string path, TestSession session, JsonSerializerOptions options)
+    {
         using (var file = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
         using (var gzip = new GZipStream(file, CompressionLevel.Optimal))
         using (var writer = new StreamWriter(gzip, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
@@ -418,6 +442,18 @@ internal sealed class JsonSessionStore : ILocalSessionStore
             File.Replace(tempPath, path, destinationBackupFileName: null);
         else
             File.Move(tempPath, path);
+    }
+
+    private static void TryDeleteTemp(string tempPath)
+    {
+        try
+        {
+            File.Delete(tempPath);
+        }
+        catch (Exception ex) when (StoreRetention.IsStorageFailure(ex))
+        {
+            // Left for the retention sweep, which removes orphaned temp files once they are old.
+        }
     }
 
     /// <summary>

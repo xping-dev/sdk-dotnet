@@ -374,6 +374,18 @@ public sealed class XpingContextSingletonTests
             () => singleton.Start(context => context, report: null, retryNextRun: false));
     }
 
+    [Fact]
+    public void Start_HostFailsToBuildWithXpingStrictModeFalse_OverridesEveryOtherSource()
+    {
+        var singleton = CreateSingleton();
+        singleton.Initialize(new XpingConfiguration { StrictMode = true });
+        _environment.Setup(e => e.GetVariable("Xping__StrictMode")).Returns("true");
+        _environment.Setup(e => e.GetVariable("XPING_STRICTMODE")).Returns("false");
+        _failingBuilds = 1;
+
+        Assert.Null(singleton.Start(context => context, report: null, retryNextRun: false));
+    }
+
     /// <summary>
     /// NUnit and MSTest start from every test, on parallel workers: callers that fail together must
     /// still report it once.

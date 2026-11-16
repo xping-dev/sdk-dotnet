@@ -334,19 +334,20 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     }
 
     /// <summary>
-    /// Returns <see langword="true"/> when strict mode is enabled via either the <c>XPING_STRICTMODE</c>
-    /// environment variable or the <c>Xping:StrictMode</c> configuration key
-    /// (e.g. from appsettings.json or the <c>Xping__StrictMode</c> environment variable).
+    /// Returns whether strict mode is enabled: <c>XPING_STRICTMODE</c> when it is set, otherwise the
+    /// <c>Xping:StrictMode</c> configuration key (e.g. from appsettings.json or the
+    /// <c>Xping__StrictMode</c> environment variable).
     /// Read directly rather than from <c>IOptions&lt;XpingConfiguration&gt;</c>, which is unavailable when
     /// validation fails and does not bind <c>Xping:StrictMode</c> for a configuration supplied as an
     /// instance.
     /// </summary>
     private static bool IsStrictModeEnabled(IServiceProvider services)
     {
-        // 1. Check XPING_STRICTMODE env var (PostConfigure-applied legacy format).
+        // 1. XPING_STRICTMODE decides when set, either way: XPING_* wins on every path, as
+        //    PostConfigure applies it.
         string? envValue = System.Environment.GetEnvironmentVariable("XPING_STRICTMODE");
-        if (bool.TryParse(envValue, out bool strictFromEnv) && strictFromEnv)
-            return true;
+        if (bool.TryParse(envValue, out bool strictFromEnv))
+            return strictFromEnv;
 
         // 2. Check Xping:StrictMode in IConfiguration (appsettings.json, Xping__StrictMode env var, etc.).
         //    Reading IConfiguration does not trigger options validation, so this is safe even after

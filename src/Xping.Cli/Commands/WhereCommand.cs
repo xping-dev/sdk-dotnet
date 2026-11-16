@@ -51,8 +51,12 @@ internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, Conso
             return 0;
         }
 
-        var files = new DirectoryInfo(sessionsDirectory).GetFiles("session-*.json.gz");
-        long bytes = files.Sum(f => f.Length);
+        var sessions = new DirectoryInfo(sessionsDirectory);
+        var files = sessions.GetFiles("session-*.json.gz");
+
+        // Temp files left by interrupted writes are not runs, but retention counts them toward the
+        // size limit, so the size shown here does too.
+        long bytes = files.Sum(f => f.Length) + sessions.GetFiles("session-*.json.gz.tmp").Sum(f => f.Length);
 
         output.WriteLine(string.Format(
             CultureInfo.InvariantCulture,

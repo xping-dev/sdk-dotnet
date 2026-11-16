@@ -44,8 +44,7 @@ public class MemoryPressureBenchmarks
             Enabled = true,
             ApiKey = "memory-test-key",
             ProjectId = "memory-project",
-            BatchSize = 1000,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 1000
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -82,8 +81,7 @@ public class MemoryPressureBenchmarks
             Enabled = true,
             ApiKey = "memory-test-key",
             ProjectId = "memory-project",
-            BatchSize = 2500,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 1000
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -98,7 +96,7 @@ public class MemoryPressureBenchmarks
                 .WithEndTime(DateTime.UtcNow)
                 .Build());
 
-            if (i % 2500 == 2499)
+            if (i % 1000 == 999)
             {
                 _ = collector.Drain();
             }
@@ -119,8 +117,7 @@ public class MemoryPressureBenchmarks
             Enabled = true,
             ApiKey = "memory-test-key",
             ProjectId = "memory-project",
-            BatchSize = 100,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 100
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -189,8 +186,7 @@ public class MemoryPressureBenchmarks
             Enabled = true,
             ApiKey = "memory-test-key",
             ProjectId = "memory-project",
-            BatchSize = 200,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 200
         };
 
         for (int cycle = 0; cycle < 50; cycle++)
@@ -225,8 +221,7 @@ public class MemoryPressureBenchmarks
             Enabled = true,
             ApiKey = "memory-test-key",
             ProjectId = "memory-project",
-            BatchSize = 500,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 500
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -258,8 +253,7 @@ public class MemoryPressureBenchmarks
             Enabled = true,
             ApiKey = "memory-test-key",
             ProjectId = "memory-project",
-            BatchSize = 200,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 200
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -310,8 +304,7 @@ public class MemoryPressureBenchmarks
             Enabled = true,
             ApiKey = "memory-test-key",
             ProjectId = "memory-project",
-            BatchSize = 500,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 500
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));

@@ -1263,6 +1263,8 @@ xping where [--directory <path>]
 
 The store location is discovered by walking up for a repository root, so this is the reliable way to answer "where is my data". It is also the first thing to run when a report looks wrong or empty.
 
+The size includes any temp files left by interrupted writes, because retention counts them toward the store's size limit.
+
 **Exit codes:** `0` success · `1` no store could be resolved.
 
 ---
@@ -1288,6 +1290,8 @@ Delete all 36 runs from /Users/you/src/my-repo/.xping? [y/N]
 ```
 
 `--assembly` is exact. A run recorded by a solution-wide `dotnet test` holds several test projects' history, and clearing one of them strips that project out and keeps the run — the other suites keep every run they had.
+
+Clearing everything also deletes temp files left by interrupted writes. `--assembly` leaves them, because a temp file names no assembly.
 
 When stdin is not interactive (a script, a CI step, a pipeline), `clear` **refuses** rather than assuming consent:
 

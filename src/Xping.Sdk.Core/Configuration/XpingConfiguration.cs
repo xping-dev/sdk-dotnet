@@ -96,7 +96,10 @@ public sealed class XpingConfiguration
     /// are deliberately not read: they state how the app under test should configure itself, which
     /// overlaps with but is not the same question, and a base image or shell profile setting one
     /// inconsistently would manufacture a split that looks legitimate. Teams that want that value can
-    /// pass it through explicitly with <c>XPING_ENVIRONMENT: ${{ env.ASPNETCORE_ENVIRONMENT }}</c>.
+    /// pass it through explicitly in the shell that runs the tests:
+    /// <c>XPING_ENVIRONMENT="$ASPNETCORE_ENVIRONMENT" dotnet test</c>. A workflow expression such as
+    /// GitHub Actions' <c>${{ env.ASPNETCORE_ENVIRONMENT }}</c> does not work: the <c>env</c> context
+    /// only sees variables declared in the workflow, not ones set by the runner image or a container.
     /// </para>
     /// </remarks>
     public string? Environment { get; set; }

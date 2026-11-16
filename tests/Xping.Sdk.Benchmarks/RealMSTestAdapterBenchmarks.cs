@@ -31,6 +31,10 @@ public class RealMSTestAdapterBenchmarks
 {
     private readonly Random _random = new();
 
+    // A store of its own, so the synthetic sessions never reach the developer's real history.
+    private readonly string _storePath =
+        Path.Combine(Path.GetTempPath(), "xping-bench-adapter", Guid.NewGuid().ToString("N"));
+
     [GlobalSetup]
     public void GlobalSetup()
     {
@@ -39,8 +43,8 @@ public class RealMSTestAdapterBenchmarks
         var config = new XpingConfiguration
         {
             Enabled = true,
-            ApiKey = "benchmark-key",
-            ProjectId = "benchmark-project",
+            Mode = XpingMode.LocalOnly,
+            LocalStorePath = _storePath,
             BatchSize = 100,
             FlushInterval = TimeSpan.FromSeconds(30)
         };
@@ -55,6 +59,15 @@ public class RealMSTestAdapterBenchmarks
         {
             await XpingContext.FinalizeAsync();
             await XpingContext.ShutdownAsync();
+        }
+
+        try
+        {
+            if (Directory.Exists(_storePath))
+                Directory.Delete(_storePath, recursive: true);
+        }
+        catch (IOException)
+        {
         }
     }
 

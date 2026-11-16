@@ -34,6 +34,12 @@ internal static class SessionFileName
     /// <summary>The pattern selecting session files in a directory.</summary>
     public const string SearchPattern = Prefix + "*" + Suffix;
 
+    /// <summary>The suffix a session file carries while it is being written.</summary>
+    public const string TempSuffix = ".tmp";
+
+    /// <summary>The pattern selecting in-progress, or orphaned, session writes in a directory.</summary>
+    public const string TempSearchPattern = SearchPattern + TempSuffix;
+
     // Keeps a name well inside path limits on Windows. A host running more test projects than this
     // at once is rare, and its sessions stay correct, just read rather than listed.
     private const int MaxTags = 8;

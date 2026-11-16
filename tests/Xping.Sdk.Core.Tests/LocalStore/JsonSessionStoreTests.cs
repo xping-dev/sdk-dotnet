@@ -436,6 +436,99 @@ public sealed class JsonSessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void RetentionDeletesATempFileAKilledWriteLeftBehind()
+    {
+        JsonSessionStore store = CreateStore();
+
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-2)));
+        string orphan = Assert.Single(Directory.GetFiles(SessionsDirectory)) + ".tmp";
+        File.WriteAllText(orphan, "leftover from a killed process");
+        File.SetLastWriteTimeUtc(orphan, DateTime.UtcNow - StoreRetention.OrphanedTempAge - TimeSpan.FromMinutes(1));
+
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-1)));
+
+        Assert.False(File.Exists(orphan));
+        Assert.Equal(2, store.ReadRecent(20).Sessions.Count);
+    }
+
+    [Fact]
+    public void AWriteThatFailsRemovesItsTempFile()
+    {
+        JsonSessionStore store = CreateStore();
+        TestSession session = SessionAssemblies.WithDerivedAssemblies(BuildSession(DateTime.UtcNow.AddHours(-1)));
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-2)));
+
+        // A directory where the session file should go makes the move into place fail.
+        string path = Path.Combine(
+            SessionsDirectory, SessionFileName.Build(session.StartedAt, session.SessionId, session.Assemblies));
+        Directory.CreateDirectory(path);
+
+        Assert.False(store.Write(session));
+        Assert.Empty(Directory.GetFiles(SessionsDirectory, SessionFileName.TempSearchPattern));
+    }
+
+    [Fact]
+    public void ClearingEverythingRemovesTempFilesAndCountsOnlyRuns()
+    {
+        JsonSessionStore store = CreateStore();
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-1)));
+        string orphan = Assert.Single(Directory.GetFiles(SessionsDirectory)) + ".tmp";
+        File.WriteAllText(orphan, "leftover from a killed process");
+
+        Assert.Equal(1, store.Delete());
+        Assert.Empty(Directory.GetFiles(SessionsDirectory));
+    }
+
+    [Fact]
+    public void AScopedClearLeavesTempFiles()
+    {
+        JsonSessionStore store = CreateStore();
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-1), assembly: "Alpha.Tests"));
+        string pending = Assert.Single(Directory.GetFiles(SessionsDirectory)) + ".tmp";
+        File.WriteAllText(pending, "names no assembly yet");
+
+        Assert.Equal(1, store.Delete("Alpha.Tests"));
+        Assert.True(File.Exists(pending));
+    }
+
+    [Fact]
+    public void RetentionLeavesATempFileThatMayStillBeAnotherHostsWriteInProgress()
+    {
+        JsonSessionStore store = CreateStore();
+
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-2)));
+        string pending = Assert.Single(Directory.GetFiles(SessionsDirectory)) + ".tmp";
+        File.WriteAllText(pending, "another host is still writing this");
+
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-1)));
+
+        Assert.True(File.Exists(pending));
+    }
+
+    [Fact]
+    public void RetentionCountsATempFileStillOnDiskTowardTheSizeLimit()
+    {
+        var baseTime = DateTime.UtcNow.AddHours(-3);
+        JsonSessionStore unbounded = CreateStore();
+        unbounded.Write(BuildSession(baseTime));
+        unbounded.Write(BuildSession(baseTime.AddMinutes(1)));
+
+        FileInfo[] files = new DirectoryInfo(SessionsDirectory).GetFiles();
+        long largest = files.Max(f => f.Length);
+
+        // Room for a third run, but not for a third run and the temp file; deleting one run makes
+        // room again. The half-run margins absorb the few bytes compressed sizes differ by.
+        JsonSessionStore bounded = CreateStore(new LocalStoreOptions { MaxBytes = files.Sum(f => f.Length) + (2 * largest) });
+        string pending = files[0].FullName + ".tmp";
+        File.WriteAllBytes(pending, new byte[largest + (largest / 2)]);
+
+        bounded.Write(BuildSession(baseTime.AddMinutes(2)));
+
+        Assert.Equal(2, bounded.ReadRecent(20).Sessions.Count);
+        Assert.True(File.Exists(pending));
+    }
+
+    [Fact]
     public void RetentionBySizeSparesEveryAssemblysReportWindowFirst()
     {
         // Beta's runs are the oldest in the store. Oldest-first size pruning would delete them all

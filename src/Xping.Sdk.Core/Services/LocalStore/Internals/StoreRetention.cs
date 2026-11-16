@@ -28,6 +28,11 @@ namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 /// </description></item>
 /// </list>
 /// <para>
+/// Before the passes, temp files a killed write left behind are swept once they are older than
+/// <see cref="OrphanedTempAge"/>. Younger ones may be another test host's write in progress, so they
+/// stay, but their bytes count toward MaxBytes.
+/// </para>
+/// <para>
 /// The newest file is never deleted. Every limit is evaluated after it has been written, so a short
 /// MaxAge, or a single file larger than MaxBytes, would otherwise delete the thing that was just
 /// recorded and leave the store empty.
@@ -35,6 +40,18 @@ namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 /// </remarks>
 internal static class StoreRetention
 {
+    /// <summary>
+    /// How old a temp file must be before it is treated as orphaned and deleted.
+    /// </summary>
+    /// <remarks>
+    /// A write takes well under a second, so anything this old was left by a process killed between
+    /// writing the temp file and moving it into place. The age compares the file's timestamp with
+    /// this host's clock, so on a network share whose clock is more than this far behind, another
+    /// host's write in progress could be taken for an orphan. Its move into place would then fail
+    /// and lose that run, which the writer already treats as a skipped write.
+    /// </remarks>
+    internal static readonly TimeSpan OrphanedTempAge = TimeSpan.FromMinutes(10);
+
     /// <summary>
     /// Deletes files until the age, count and size limits all hold.
     /// </summary>
@@ -55,6 +72,8 @@ internal static class StoreRetention
         Func<FileInfo, IReadOnlyList<string>> assembliesOf,
         ILogger logger)
     {
+        long pendingTempBytes = SweepOrphanedTemps(directory, logger);
+
         var files = Directory
             .GetFiles(directory, SessionFileName.SearchPattern)
             .Select(f => new FileInfo(f))
@@ -77,7 +96,7 @@ internal static class StoreRetention
 
         List<Ranked> ranked = ApplyCount(survivors, options.MaxRuns, assembliesOf, logger);
 
-        long remainingBytes = ranked.Sum(r => SafeLength(r.File));
+        long remainingBytes = pendingTempBytes + ranked.Sum(r => SafeLength(r.File));
 
         // Runs outside every window first, then — only if the store is still over — the windows
         // themselves, so MaxBytes stays a real limit even when the windows alone exceed it.
@@ -96,6 +115,29 @@ internal static class StoreRetention
                     remainingBytes -= length;
             }
         }
+    }
+
+    /// <summary>
+    /// Deletes temp files older than <see cref="OrphanedTempAge"/>.
+    /// </summary>
+    /// <param name="directory">The directory to sweep.</param>
+    /// <param name="logger">Diagnostics sink.</param>
+    /// <returns>The bytes held by the temp files still on disk.</returns>
+    private static long SweepOrphanedTemps(string directory, ILogger logger)
+    {
+        DateTime cutoff = DateTime.UtcNow - OrphanedTempAge;
+        long remaining = 0;
+
+        foreach (string path in Directory.GetFiles(directory, SessionFileName.TempSearchPattern))
+        {
+            var file = new FileInfo(path);
+            long length = SafeLength(file);
+
+            if (SafeLastWriteUtc(file) >= cutoff || !TryDelete(file, logger))
+                remaining += length;
+        }
+
+        return remaining;
     }
 
     /// <summary>

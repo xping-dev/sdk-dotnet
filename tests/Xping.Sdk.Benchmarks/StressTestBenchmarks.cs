@@ -43,8 +43,7 @@ public class StressTestBenchmarks
             Enabled = true,
             ApiKey = "stress-test-key",
             ProjectId = "stress-project",
-            BatchSize = 100,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 100
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -88,8 +87,7 @@ public class StressTestBenchmarks
             Enabled = true,
             ApiKey = "stress-test-key",
             ProjectId = "stress-project",
-            BatchSize = 500,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 500
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -126,8 +124,7 @@ public class StressTestBenchmarks
             Enabled = true,
             ApiKey = "stress-test-key",
             ProjectId = "stress-project",
-            BatchSize = 200,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 200
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -159,8 +156,7 @@ public class StressTestBenchmarks
             Enabled = true,
             ApiKey = "stress-test-key",
             ProjectId = "stress-project",
-            BatchSize = 150,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 150
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));
@@ -224,8 +220,7 @@ public class StressTestBenchmarks
             Enabled = true,
             ApiKey = "stress-test-key",
             ProjectId = "stress-project",
-            BatchSize = 100,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 100
         };
 
         // 10 cycles of 100 tests each
@@ -261,8 +256,7 @@ public class StressTestBenchmarks
             Enabled = true,
             ApiKey = "stress-test-key",
             ProjectId = "stress-project",
-            BatchSize = 300,
-            FlushInterval = TimeSpan.Zero
+            BatchSize = 300
         };
 
         using ITestExecutionCollector collector = new TestExecutionCollector(Options.Create(config));

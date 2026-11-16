@@ -101,38 +101,18 @@ High-volume scenarios:
 - Lock contention (poor concurrency)
 - High CPU usage (>10%)
 
-## Baseline Results
+## Comparing Runs
 
-Baseline performance results are stored in `tests/Xping.Sdk.Benchmarks/results/baseline/`.
+No baseline is committed and no CI workflow runs the benchmarks: the numbers depend on the
+machine. To check a change for a regression, run the affected benchmarks on `main` and on your
+branch, on the same machine, and compare the two reports in `BenchmarkDotNet.Artifacts/`:
 
-To establish a new baseline:
 ```bash
 cd tests/Xping.Sdk.Benchmarks
-dotnet run -c Release
-cp BenchmarkDotNet.Artifacts/results/* results/baseline/
+dotnet run -c Release -- --filter '*Collector*'
 ```
 
-## Performance Regression Detection
-
-### CI/CD Integration
-
-Benchmarks run automatically on PRs labeled with `performance`. Results are compared against the baseline, and comments are posted if regressions are detected.
-
-**Regression Thresholds:**
-- ⚠️ Warning: >10% slower than baseline
-- ❌ Failure: >20% slower than baseline
-- 💥 Critical: >50% slower than baseline
-
-### Manual Comparison
-
-Compare current results with baseline:
-```bash
-# Run benchmarks
-dotnet run -c Release
-
-# Compare with baseline (requires BenchmarkDotNet.Tool)
-dotnet benchmark compare baseline current --threshold 10%
-```
+Treat a mean more than 10% slower, or new Gen1/Gen2 collections, as worth investigating.
 
 ## Optimization Guidelines
 

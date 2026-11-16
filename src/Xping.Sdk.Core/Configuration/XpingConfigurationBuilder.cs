@@ -206,6 +206,42 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
+    /// Sets whether a local run records the git author name from <c>.git/config</c>.
+    /// </summary>
+    /// <param name="collect">Whether to record the local git author.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    /// <seealso cref="XpingConfiguration.CollectLocalGitAuthor"/>
+    public XpingConfigurationBuilder WithCollectLocalGitAuthor(bool collect)
+    {
+        _configuration.CollectLocalGitAuthor = collect;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets whether a CI run records the email address of the person behind the run.
+    /// </summary>
+    /// <param name="collect">Whether to record <c>CI.ActorEmail</c>.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    /// <seealso cref="XpingConfiguration.CollectCiActorEmail"/>
+    public XpingConfigurationBuilder WithCollectCiActorEmail(bool collect)
+    {
+        _configuration.CollectCiActorEmail = collect;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the directory the local session store is kept in.
+    /// </summary>
+    /// <param name="localStorePath">The store directory.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    /// <seealso cref="XpingConfiguration.LocalStorePath"/>
+    public XpingConfigurationBuilder WithLocalStorePath(string localStorePath)
+    {
+        _configuration.LocalStorePath = localStorePath;
+        return this;
+    }
+
+    /// <summary>
     /// Gets a value indicating whether strict mode is currently enabled on this builder.
     /// </summary>
     /// <value>
