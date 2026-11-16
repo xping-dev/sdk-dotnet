@@ -27,17 +27,18 @@ public static class CaptureStackTraceConfigurationResolver
         }
         catch (OptionsValidationException)
         {
+            // Same precedence as the options pipeline: XPING_* wins over the "Xping" section.
+            string? envValue = Environment.GetEnvironmentVariable("XPING_CAPTURESTACKTRACES");
+            if (bool.TryParse(envValue, out bool parsedEnvValue))
+            {
+                return parsedEnvValue;
+            }
+
             IConfiguration? configuration = services.GetService<IConfiguration>();
             bool? configuredValue = configuration?.GetSection("Xping").GetValue<bool?>("CaptureStackTraces");
             if (configuredValue.HasValue)
             {
                 return configuredValue.Value;
-            }
-
-            string? legacyEnvValue = Environment.GetEnvironmentVariable("XPING_CAPTURESTACKTRACES");
-            if (bool.TryParse(legacyEnvValue, out bool parsedLegacyValue))
-            {
-                return parsedLegacyValue;
             }
 
             return true;
