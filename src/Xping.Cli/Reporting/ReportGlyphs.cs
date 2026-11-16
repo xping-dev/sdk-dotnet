@@ -34,6 +34,7 @@ internal sealed class ReportGlyphs
         Down = "▼",             // ▼
         Up = "▲",               // ▲
         Dash = "—",             // —
+        Range = "–",            // –
         Ellipsis = "…",         // …
         Charset = TerminalCharset.Unicode
     };
@@ -55,6 +56,7 @@ internal sealed class ReportGlyphs
         Down = "v",
         Up = "^",
         Dash = "-",
+        Range = "-",
         Ellipsis = "...",
         Charset = TerminalCharset.Ascii
     };
@@ -100,6 +102,9 @@ internal sealed class ReportGlyphs
 
     /// <summary>Gets what stands in an empty column.</summary>
     public string Dash { get; private init; } = "-";
+
+    /// <summary>Gets the dash between the two ends of a range, as in <c>10–30%</c>.</summary>
+    public string Range { get; private init; } = "-";
 
     /// <summary>Gets what ends a shortened value.</summary>
     public string Ellipsis { get; private init; } = "...";

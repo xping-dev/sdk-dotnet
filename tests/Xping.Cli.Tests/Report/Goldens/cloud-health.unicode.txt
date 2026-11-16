@@ -11,7 +11,8 @@ FLAGGED IN CLOUD                                 3 with no local finding
                         not flaky in 14 d
 
     known flaky  CheckoutTests.Checkout_CompletesWithinTheServiceBudget
-                 cloud: confidence 0.41 (35 d) · flaky (timing, major)
+                 cloud: confidence 0.41 (35 d)
+                        flaky (cause: timing, major)
 
     unstable     InventoryTests.Reserve_ReleasesOnTimeout
                  cloud: confidence 0.81 (35 d) · not flaky in 14 d

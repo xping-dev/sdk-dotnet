@@ -20,7 +20,8 @@ CLOUD                                payments - fetched 2026-11-01 10:02
     verdict     known flaky
     evidence    adequate - ESS 34 - 34 canonical, 0 speculative, 2
                 untracked - 14 d window
-    flaky       flaky (timing, major) since 2026-10-02
+    flaky       flaky (cause: timing, major severity: fails about 30-50%
+                of runs) since 2026-10-02
     canonical   failed 4/10 - newest passed 2026-10-31 08:59
     signatures  ab12... InvalidOperationException - 36 runs - 6 machines
                 - 34 CI - since 2026-10-11 (seen here)
@@ -69,7 +70,7 @@ FINDINGS                                                      2 findings
 
 2.  MED   local masked by retry
     cloud: confidence 0.41 v0.12 - unreliable - 35 d
-    cloud: flaky (timing, major) since 2026-10-02
+    cloud: flaky (cause: timing, major) since 2026-10-02
     passed on retry 6 times in 6 of 20 runs, up to attempt 2
     evidence low | -env | f_a2b61c2f | .../CalculatorTests.cs:42
 ```

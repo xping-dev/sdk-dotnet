@@ -601,7 +601,7 @@ Every pair is prefixed `cloud` and names its window:
 | `cloud verdict` | `{verdict}` plus `(≠ local)` when `disagreesWithLocal` |
 | `cloud confidence` | `0.22 ▼0.61 · highly unreliable · 35 d window · computed 2026-10-31 09:00` |
 | `cloud evidence` | `adequate · ESS 34 · 34 canonical, 0 speculative, 2 untracked · 14 d window` |
-| `cloud flaky` | `not flaky · examined 2026-10-31 09:00 · 14 d window`, or `not examined in 14 d`, or `flaky (timing, major) since 2026-10-11` |
+| `cloud flaky` | `not flaky · examined 2026-10-31 09:00 · 14 d window`, or `not examined in 14 d`, or `flaky (cause: timing, major severity: fails about 30–50% of runs) since 2026-10-11`; one-line rows leave out the range (dashboard #505) |
 | `cloud canonical` | `failed 10/10 · 34 in a row since 2026-10-11 09:14 · newest failed 2026-10-31 08:59`, or `no canonical history` |
 | `cloud transition` | `reliability degraded reliable → highly unreliable at 2026-10-11 09:14` |
 | `cloud lifetime` | `1 812 runs · last 2026-10-31 08:59` |

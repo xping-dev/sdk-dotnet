@@ -271,7 +271,7 @@ internal sealed class CloudText(ReportGlyphs glyphs)
         // and the row has 48 columns. Any other examined state is said in full, so a known-flaky
         // row whose ledger now reads inconclusive says so.
         if (digest.Flaky is { State: "flaky" } flaky)
-            segments.Add(FlakyKind(flaky));
+            segments.Add(FlakyKind(flaky, ranges: false));
         else if (digest.Flaky is { State: not (null or "not-examined") } examined && FlakyPhrase(examined) is { } phrase)
             segments.Add(phrase);
 
@@ -524,7 +524,7 @@ internal sealed class CloudText(ReportGlyphs glyphs)
 
         return state switch
         {
-            "flaky" => FlakyNow(flaky),
+            "flaky" => FlakyNow(flaky, ranges: false),
             "not-flaky" => "not flaky" + within,
             "inconclusive" => "flaky inconclusive" + within,
             "not-examined" => "not examined for flakiness" + within,
@@ -532,17 +532,48 @@ internal sealed class CloudText(ReportGlyphs glyphs)
         };
     }
 
-    private string FlakyNow(CloudFlakyDto flaky)
+    private string FlakyNow(CloudFlakyDto flaky, bool ranges)
     {
-        string what = FlakyKind(flaky);
+        string what = FlakyKind(flaky, ranges);
         return flaky.Since is { } since ? $"{what} since {Date(since)}" : what;
     }
 
-    /// <summary><c>flaky (timing, major)</c>, or <c>flaky</c> when Cloud sent neither.</summary>
-    private string FlakyKind(CloudFlakyDto flaky)
+    /// <summary>
+    /// <c>flaky (cause: timing, major)</c>, or <c>flaky</c> when Cloud sent neither. With <paramref name="ranges"/>,
+    /// the severity names its band's failure rates as Cloud's PR comment does (dashboard #505):
+    /// <c>major severity: fails about 30–50% of runs</c>. One-line rows leave the range out to stay on one line.
+    /// </summary>
+    private string FlakyKind(CloudFlakyDto flaky, bool ranges)
     {
-        string[] kind = new[] { flaky.Category, flaky.Severity }.OfType<string>().Select(Words).ToArray();
+        string? severity = flaky.Severity is not { } value ? null : ranges ? SeverityText(value) : Words(value);
+        string[] kind = new[] { Cause(flaky.Category), severity }.OfType<string>().ToArray();
         return kind.Length > 0 ? $"flaky ({string.Join(", ", kind)})" : "flaky";
+    }
+
+    /// <summary><c>cause: timing</c>, or <c>cause not determined</c> when detection found no category.</summary>
+    private string? Cause(string? category) => category switch
+    {
+        null => null,
+        "unknown" => "cause not determined",
+        _ => "cause: " + Words(category)
+    };
+
+    /// <summary>
+    /// The severity with the failure rates of its band, the edges Cloud's flaky detection bands by. "About": Cloud
+    /// moves a severity only once the evidence is decisive, so the rate can sit a little outside its band. A severity
+    /// this build does not know keeps its bare name.
+    /// </summary>
+    private string SeverityText(string severity)
+    {
+        string? rate = severity switch
+        {
+            "minor" => "up to about 10%",
+            "moderate" => $"about 10{glyphs.Range}30%",
+            "major" => $"about 30{glyphs.Range}50%",
+            "critical" => "more than about 50%",
+            _ => null
+        };
+        return rate is null ? Words(severity) : $"{severity} severity: fails {rate} of runs";
     }
 
     private string? MatchPhrase(string match, CloudSignatureDto? signature) => match switch
@@ -650,7 +681,7 @@ internal sealed class CloudText(ReportGlyphs glyphs)
 
         IEnumerable<string?> parts = state switch
         {
-            "flaky" => [FlakyNow(flaky)],
+            "flaky" => [FlakyNow(flaky, ranges: true)],
             "not-flaky" => ["not flaky", examined, window is null ? null : window + " window"],
             "inconclusive" => ["inconclusive", examined, window is null ? null : window + " window"],
             "not-examined" => [window is null ? "not examined" : "not examined in " + window],
