@@ -1681,7 +1681,16 @@ Keep these out of the pages, except where a page needs to say "not available":
 
 ## 6. Phase plan
 
-Each phase is one PR into `main`, with conventional commit scope `docs:`.
+**Branching.** All docs work goes through one long-lived feature branch, `feat/docs-overhaul`, cut from `main` before P1.
+
+- Each phase gets its own branch off `feat/docs-overhaul` (for example, `feat/docs-overhaul-p1-ia`) and one PR **into `feat/docs-overhaul`**, not into `main`.
+- The `feat/` prefix matters: `ci.yml` runs PR checks only for PRs into `main` or `feat/**`.
+- After opening a phase PR, stop. Adrian reviews it and merges it. The next phase starts from the freshly pulled feature branch.
+- Commits use conventional commit scope `docs:`.
+- Before each phase starts, merge `main` into `feat/docs-overhaul`, so the phase sees the latest code (including the K items in §7.1).
+- When P1–P12 are all merged, `feat/docs-overhaul` merges into `main` in one PR.
+- Nothing reaches docs.xping.io before that final merge and the next release tag (S13).
+
 The rules in §8 apply to every phase. Each phase ends with these checks:
 
 - `docfx build docs/docfx.json` has 0 warnings.
@@ -1690,7 +1699,7 @@ The rules in §8 apply to every phase. Each phase ends with these checks:
 
 Each phase also re-reads the code it cites. This audit is a snapshot from 2026-11-16.
 
-The code changes in §7.1 (K1–K9) are separate PRs. Each one lands before the docs phase named in its "Before" column. A docs phase documents the code as it is on `main` when the phase starts.
+The code changes in §7.1 (K1–K9) are not part of `feat/docs-overhaul`. Each one is a normal PR into `main` (or into the dashboard repo, for K9). Each one lands before the docs phase named in its "Before" column. A docs phase documents the code as it is on `main` when the phase starts. Merging `main` into `feat/docs-overhaul` brings that code in.
 
 ### P1 — Information architecture and nav
 
@@ -2022,7 +2031,7 @@ Later phases follow these decisions. Code changes are listed in §7.1, and each 
 
 ### 7.1 Code changes the decisions require
 
-Each item is its own issue and PR, separate from the docs phases. The "Before" column names the docs phase that must wait for it.
+Each item is its own PR into `main`, separate from the docs phases and from `feat/docs-overhaul`. The "Before" column names the docs phase that must wait for it.
 Tracked in: K1–K8 → xping-dev/sdk-dotnet#369; K9 → xping-dev/dashboard#522. The six earlier code findings are in xping-dev/sdk-dotnet#368. Item 6 there (the Cloud Home page title) is fixed under dashboard#522.
 
 | # | Change | Repo | Before |
