@@ -285,10 +285,15 @@ internal sealed class XpingContextSingleton<TContext>
         return true;
     }
 
-    private bool IsStrictMode(XpingConfiguration? configuration) =>
-        configuration?.StrictMode == true ||
-        IsTrue(_environment.GetVariable("XPING_STRICTMODE")) ||
-        IsTrue(_environment.GetVariable("Xping__StrictMode"));
+    private bool IsStrictMode(XpingConfiguration? configuration)
+    {
+        // XPING_* wins on every path, so XPING_STRICTMODE=false switches off strict mode that code or
+        // Xping__StrictMode asked for.
+        if (bool.TryParse(_environment.GetVariable("XPING_STRICTMODE"), out bool fromEnvironment))
+            return fromEnvironment;
+
+        return configuration?.StrictMode == true || IsTrue(_environment.GetVariable("Xping__StrictMode"));
+    }
 
     private static bool IsTrue(string? value) => bool.TryParse(value, out bool parsed) && parsed;
 
