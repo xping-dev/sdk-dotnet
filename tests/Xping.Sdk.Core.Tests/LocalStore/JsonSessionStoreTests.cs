@@ -452,6 +452,22 @@ public sealed class JsonSessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void AWriteThatFailsRemovesItsTempFile()
+    {
+        JsonSessionStore store = CreateStore();
+        TestSession session = SessionAssemblies.WithDerivedAssemblies(BuildSession(DateTime.UtcNow.AddHours(-1)));
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-2)));
+
+        // A directory where the session file should go makes the move into place fail.
+        string path = Path.Combine(
+            SessionsDirectory, SessionFileName.Build(session.StartedAt, session.SessionId, session.Assemblies));
+        Directory.CreateDirectory(path);
+
+        Assert.False(store.Write(session));
+        Assert.Empty(Directory.GetFiles(SessionsDirectory, SessionFileName.TempSearchPattern));
+    }
+
+    [Fact]
     public void RetentionLeavesATempFileThatMayStillBeAnotherHostsWriteInProgress()
     {
         JsonSessionStore store = CreateStore();

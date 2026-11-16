@@ -45,8 +45,10 @@ internal static class StoreRetention
     /// </summary>
     /// <remarks>
     /// A write takes well under a second, so anything this old was left by a process killed between
-    /// writing the temp file and moving it into place. The margin covers a slow disk and clock skew
-    /// on a network share without letting a leftover live long.
+    /// writing the temp file and moving it into place. The age compares the file's timestamp with
+    /// this host's clock, so on a network share whose clock is more than this far behind, another
+    /// host's write in progress could be taken for an orphan. Its move into place would then fail
+    /// and lose that run, which the writer already treats as a skipped write.
     /// </remarks>
     internal static readonly TimeSpan OrphanedTempAge = TimeSpan.FromMinutes(10);
 
