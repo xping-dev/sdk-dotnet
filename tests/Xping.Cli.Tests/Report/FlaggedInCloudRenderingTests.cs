@@ -53,7 +53,18 @@ public sealed class FlaggedInCloudRenderingTests
         string[] fenced = Fenced(Render(WithHealth(Envelope(), Listing(KnownFlaky))));
 
         Assert.Equal("    known flaky  CheckoutTests.Checkout_Completes", fenced[3]);
-        Assert.Equal("                 cloud: confidence 0.41 (35 d) - flaky (timing, major)", fenced[4]);
+        // The labelled flaky phrase no longer fits the fence beside the score, so it takes the next line.
+        Assert.Equal("                 cloud: confidence 0.41 (35 d)", fenced[4]);
+        Assert.Equal("                        flaky (cause: timing, major)", fenced[5]);
+    }
+
+    [Fact]
+    public void AnUnknownCategoryReadsAsACauseNotDetermined()
+    {
+        CloudDigestDto digest = KnownFlaky.Digest with { Flaky = KnownFlaky.Digest.Flaky! with { Category = "unknown", Severity = "moderate" } };
+        string[] fenced = Fenced(Render(WithHealth(Envelope(), Listing(KnownFlaky with { Digest = digest }))));
+
+        Assert.Equal("                        flaky (cause not determined, moderate)", fenced[5]);
     }
 
     [Fact]
@@ -98,7 +109,7 @@ public sealed class FlaggedInCloudRenderingTests
         CloudHealthDto health = Listing(KnownFlaky) with { State = "partial", Reason = "budget" };
         string[] fenced = Fenced(Render(WithHealth(Envelope(), health)));
 
-        Assert.Equal(5, fenced.Length);
+        Assert.Equal(6, fenced.Length);
     }
 
     [Fact]
@@ -147,7 +158,7 @@ public sealed class FlaggedInCloudRenderingTests
         string[] fenced = Fenced(Render(WithHealth(Envelope(), Listing(KnownFlaky with { Digest = digest }))));
 
         Assert.Equal("    flagged      CheckoutTests.Checkout_Completes", fenced[3]);
-        Assert.Equal("                 cloud: confidence 0.41 - flaky (timing, major)", fenced[4]);
+        Assert.Equal("                 cloud: confidence 0.41 - flaky (cause: timing, major)", fenced[4]);
     }
 
     [Fact]

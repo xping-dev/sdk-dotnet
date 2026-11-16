@@ -197,7 +197,7 @@ public sealed class GoldenReportTests
         new[]
         {
             glyphs.Pass, glyphs.Fail, glyphs.Skip, glyphs.Warning, glyphs.Pending, glyphs.Separator, glyphs.Arrow,
-            glyphs.NotEqual, glyphs.Down, glyphs.Up, glyphs.Dash, glyphs.Ellipsis
+            glyphs.NotEqual, glyphs.Down, glyphs.Up, glyphs.Dash, glyphs.Range, glyphs.Ellipsis
         }
             .SelectMany(g => g)
             .Concat([glyphs.HorizontalRule, glyphs.HistoryPass, glyphs.HistoryFail]);
