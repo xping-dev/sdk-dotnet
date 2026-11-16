@@ -5,7 +5,7 @@ MSTest test framework adapter for Xping SDK. Automatically tracks MSTest test ex
 ## Features
 
 - **Automatic Test Tracking**: Inherit from `XpingTestBase` for automatic tracking
-- **Assembly-Level Initialization**: Simple setup with `XpingAssemblyInitialize`
+- **Assembly-Level Initialization**: Start and finalize the SDK from your own `[AssemblyInitialize]` / `[AssemblyCleanup]` class
 - **Rich Metadata Extraction**: Captures test categories, properties, and data rows
 - **Outcome Mapping**: Maps all MSTest outcomes to Xping test outcomes
 - **Data-driven test support**: Tracks each `[DataRow]` execution separately
@@ -140,7 +140,7 @@ public class MyTests : XpingTestBase
 
 ### Option 2: Assembly-Level Initialization
 
-Use `XpingAssemblyInitialize` for explicit SDK lifecycle management without inheriting from base class:
+Add an assembly setup class to your test project. MSTest runs `[AssemblyInitialize]` and `[AssemblyCleanup]` only from the test assembly itself, so the package cannot ship this class for you:
 
 ```csharp
 [TestClass]
@@ -343,9 +343,8 @@ XpingContext.RecordTest(execution);
 The MSTest adapter uses inheritance and attributes for test tracking:
 
 1. **XpingTestBase** - Optional base class with `[TestInitialize]` and `[TestCleanup]` methods
-2. **XpingAssemblyInitialize** - Static class with `[AssemblyInitialize]` and `[AssemblyCleanup]` for SDK lifecycle
-3. **XpingContext** - Global context managing SDK lifecycle and test recording
-4. **TestContext** - MSTest's context providing test metadata and outcome
+2. **XpingContext** - Global context managing SDK lifecycle and test recording
+3. **TestContext** - MSTest's context providing test metadata and outcome
 
 Test timing uses high-resolution `Stopwatch.GetTimestamp()` for accurate duration measurement.
 

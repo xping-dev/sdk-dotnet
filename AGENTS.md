@@ -32,7 +32,7 @@ Before calling a change done: build is clean and the affected test projects pass
 | `src/Xping.Sdk.NUnit` | netstandard2.0 | `[XpingTrack]` attribute + `XpingContext` |
 | `src/Xping.Sdk.XUnit` | netstandard2.0 | xUnit v2: `XpingTestFramework` (registered via `[assembly: TestFramework]`) |
 | `src/Xping.Sdk.XUnit.V3` | netstandard2.0 | xUnit v3: `XpingTestFramework` (`[assembly: TestFramework(typeof(...))]`) |
-| `src/Xping.Sdk.MSTest` | netstandard2.0 | `XpingAssemblyInitialize` + `XpingTestBase` (MSTest ≥ 3.8) |
+| `src/Xping.Sdk.MSTest` | netstandard2.0 | `XpingTestBase` + `XpingContext` (MSTest ≥ 3.8) |
 | `src/Xping.Sdk.Shared` | netstandard2.0 | Internal helpers and polyfills; not a public package |
 | `src/Xping.Cli` | net10.0 | `xping report / where / clear` (System.CommandLine) |
 | `tests/*` | net10.0 | xUnit tests per project, plus integration tests and benchmarks |
