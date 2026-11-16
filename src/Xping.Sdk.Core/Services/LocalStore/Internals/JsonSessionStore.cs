@@ -323,6 +323,14 @@ internal sealed class JsonSessionStore : ILocalSessionStore
                     cleared++;
             }
 
+            // Clearing everything clears what killed or failed writes left behind as well. A scoped
+            // clear leaves them: a temp file names no assembly until it is moved into place.
+            if (assembly == null)
+            {
+                foreach (string file in Directory.GetFiles(directory, SessionFileName.TempSearchPattern))
+                    StoreRetention.TryDelete(new FileInfo(file), _logger);
+            }
+
             return cleared;
         }
         catch (Exception ex) when (StoreRetention.IsStorageFailure(ex))

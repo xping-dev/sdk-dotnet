@@ -222,7 +222,8 @@ public interface ILocalSessionStore
     /// Deletes stored sessions.
     /// </summary>
     /// <param name="assembly">
-    /// When supplied, only this test assembly's history is deleted; otherwise every session is.
+    /// When supplied, only this test assembly's history is deleted; otherwise every session is, along
+    /// with any temp files that interrupted writes left behind.
     /// </param>
     /// <returns>The number of sessions whose history for that assembly was removed.</returns>
     /// <remarks>

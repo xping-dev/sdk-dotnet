@@ -468,6 +468,30 @@ public sealed class JsonSessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void ClearingEverythingRemovesTempFilesAndCountsOnlyRuns()
+    {
+        JsonSessionStore store = CreateStore();
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-1)));
+        string orphan = Assert.Single(Directory.GetFiles(SessionsDirectory)) + ".tmp";
+        File.WriteAllText(orphan, "leftover from a killed process");
+
+        Assert.Equal(1, store.Delete());
+        Assert.Empty(Directory.GetFiles(SessionsDirectory));
+    }
+
+    [Fact]
+    public void AScopedClearLeavesTempFiles()
+    {
+        JsonSessionStore store = CreateStore();
+        store.Write(BuildSession(DateTime.UtcNow.AddHours(-1), assembly: "Alpha.Tests"));
+        string pending = Assert.Single(Directory.GetFiles(SessionsDirectory)) + ".tmp";
+        File.WriteAllText(pending, "names no assembly yet");
+
+        Assert.Equal(1, store.Delete("Alpha.Tests"));
+        Assert.True(File.Exists(pending));
+    }
+
+    [Fact]
     public void RetentionLeavesATempFileThatMayStillBeAnotherHostsWriteInProgress()
     {
         JsonSessionStore store = CreateStore();
