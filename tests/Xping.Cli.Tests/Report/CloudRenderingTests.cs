@@ -355,6 +355,33 @@ public sealed class CloudRenderingTests
         Assert.Null(UnicodeText.ConfidenceLine(null));
     }
 
+    [Theory]
+    [InlineData("timing", "minor", "flaky (cause: timing, minor severity: fails up to about 10% of runs) since 2026-10-02")]
+    [InlineData("timing", "moderate", "flaky (cause: timing, moderate severity: fails about 10–30% of runs) since 2026-10-02")]
+    [InlineData("timing", "major", "flaky (cause: timing, major severity: fails about 30–50% of runs) since 2026-10-02")]
+    [InlineData("timing", "critical", "flaky (cause: timing, critical severity: fails more than about 50% of runs) since 2026-10-02")]
+    [InlineData("unknown", "moderate", "flaky (cause not determined, moderate severity: fails about 10–30% of runs) since 2026-10-02")]
+    [InlineData("external-dependency", "severe", "flaky (cause: external dependency, severe) since 2026-10-02")]
+    [InlineData(null, null, "flaky since 2026-10-02")]
+    public void TheTestDetailNamesTheFlakyCauseAndTheSeverityBandsRates(string? category, string? severity, string expected)
+    {
+        CloudDigestDto digest = CloudDigest("known-flaky", flaky: "flaky");
+        digest = digest with { Flaky = digest.Flaky! with { Category = category, Severity = severity } };
+
+        Assert.Equal(expected, FlakyPairOf(UnicodeText, digest));
+    }
+
+    [Fact]
+    public void AsciiDrawsTheSeverityRangeWithAHyphen()
+    {
+        Assert.Equal(
+            "flaky (cause: timing, major severity: fails about 30-50% of runs) since 2026-10-02",
+            FlakyPairOf(new CloudText(ReportGlyphs.Ascii), CloudDigest("known-flaky", flaky: "flaky")));
+    }
+
+    private static string? FlakyPairOf(CloudText text, CloudDigestDto digest) =>
+        text.Pairs(digest, "cloud ", null, fetched: false).Single(pair => pair.Label == "cloud flaky").Value;
+
     [Fact]
     public void AsciiUsesItsOwnGlyphsOnTheConfidenceLine()
     {
