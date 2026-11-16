@@ -13,7 +13,9 @@ namespace Xping.Sdk.Core.Services.LocalStore;
 /// Applied after each write in three passes: runs older than <see cref="MaxAge"/> go first, then
 /// each assembly is cut to its newest <see cref="MaxRuns"/>, then the oldest runs go until the store
 /// fits <see cref="MaxBytes"/>. The size pass takes runs outside every assembly's
-/// <see cref="ReportWindow"/> before any inside one. The newest run is never deleted.
+/// <see cref="ReportWindow"/> before any inside one. The newest run is never deleted. Temp files
+/// left by a killed write are deleted once they are ten minutes old, and count toward
+/// <see cref="MaxBytes"/> until then.
 /// </para>
 /// <para>
 /// The defaults keep well over one <see cref="ReportWindow"/> per assembly, so the report's default

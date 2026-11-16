@@ -394,7 +394,7 @@ internal sealed class JsonSessionStore : ILocalSessionStore
 
         // Write to a temporary file and move into place, so a crash mid-write cannot leave a
         // half-written file under a name the reader will trust.
-        string tempPath = path + ".tmp";
+        string tempPath = path + SessionFileName.TempSuffix;
 
         using (var file = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
         using (var gzip = new GZipStream(file, CompressionLevel.Optimal))
