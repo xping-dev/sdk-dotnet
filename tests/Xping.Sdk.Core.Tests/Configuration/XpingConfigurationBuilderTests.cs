@@ -44,7 +44,10 @@ public sealed class XpingConfigurationBuilderTests
             .WithEnableCompression(false)
             .WithMaxRetries(5)
             .WithRetryDelay(TimeSpan.FromSeconds(5))
-            .WithUploadTimeout(TimeSpan.FromMinutes(2));
+            .WithUploadTimeout(TimeSpan.FromMinutes(2))
+            .WithCollectLocalGitAuthor(true)
+            .WithCollectCiActorEmail(false)
+            .WithLocalStorePath("/tmp/xping-store");
 
         // Act
         var config = builder.Build();
@@ -63,6 +66,9 @@ public sealed class XpingConfigurationBuilderTests
         Assert.Equal(5, config.MaxRetries);
         Assert.Equal(TimeSpan.FromSeconds(5), config.RetryDelay);
         Assert.Equal(TimeSpan.FromMinutes(2), config.UploadTimeout);
+        Assert.True(config.CollectLocalGitAuthor);
+        Assert.False(config.CollectCiActorEmail);
+        Assert.Equal("/tmp/xping-store", config.LocalStorePath);
     }
 
     [Fact]
