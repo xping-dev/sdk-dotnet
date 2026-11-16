@@ -541,7 +541,7 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     /// <summary>
     /// <c>flaky (cause: timing, major)</c>, or <c>flaky</c> when Cloud sent neither. With <paramref name="ranges"/>,
     /// the severity names its band's failure rates as Cloud's PR comment does (dashboard #505):
-    /// <c>major severity: fails 30–50% of runs</c>. One-line rows leave the range out to stay on one line.
+    /// <c>major severity: fails about 30–50% of runs</c>. One-line rows leave the range out to stay on one line.
     /// </summary>
     private string FlakyKind(CloudFlakyDto flaky, bool ranges)
     {
@@ -559,17 +559,18 @@ internal sealed class CloudText(ReportGlyphs glyphs)
     };
 
     /// <summary>
-    /// The severity with the failure rates of its band, the edges Cloud's flaky detection bands by. A severity this
-    /// build does not know keeps its bare name.
+    /// The severity with the failure rates of its band, the edges Cloud's flaky detection bands by. "About": Cloud
+    /// moves a severity only once the evidence is decisive, so the rate can sit a little outside its band. A severity
+    /// this build does not know keeps its bare name.
     /// </summary>
     private string SeverityText(string severity)
     {
         string? rate = severity switch
         {
-            "minor" => "under 10%",
-            "moderate" => $"10{glyphs.Range}30%",
-            "major" => $"30{glyphs.Range}50%",
-            "critical" => "over 50%",
+            "minor" => "up to about 10%",
+            "moderate" => $"about 10{glyphs.Range}30%",
+            "major" => $"about 30{glyphs.Range}50%",
+            "critical" => "more than about 50%",
             _ => null
         };
         return rate is null ? Words(severity) : $"{severity} severity: fails {rate} of runs";
