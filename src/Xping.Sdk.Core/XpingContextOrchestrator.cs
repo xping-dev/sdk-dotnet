@@ -343,7 +343,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
     /// </summary>
     private static bool IsStrictModeEnabled(IServiceProvider services)
     {
-        // 1. Check XPING_STRICTMODE env var (PostConfigure-applied legacy format).
+        // 1. Check XPING_STRICTMODE first: XPING_* wins on every path, as PostConfigure applies it.
         string? envValue = System.Environment.GetEnvironmentVariable("XPING_STRICTMODE");
         if (bool.TryParse(envValue, out bool strictFromEnv) && strictFromEnv)
             return true;

@@ -53,9 +53,9 @@ public static class XpingServiceCollectionExtensions
     /// Adds Xping SDK with automatic configuration loading from multiple sources.
     /// Loads from appsettings.json, appsettings.{Environment}.json, and environment variables.
     ///
-    /// Supports TWO environment variable formats:
-    /// - Standard .NET: Xping__ApiKey, Xping__ProjectId (double underscore for section nesting)
-    /// - Legacy/Backward compatible: XPING_APIKEY, XPING_PROJECTID (uppercase with prefix)
+    /// Reads two environment variable forms:
+    /// - XPING_APIKEY, XPING_PROJECTID: the SDK's own variables, which win on every path
+    /// - Xping__ApiKey, Xping__ProjectId: standard .NET configuration binding of the "Xping" section
     ///
     /// Priority order (highest to lowest):
     /// 1. XPING_* environment variables (e.g., XPING_APIKEY)
@@ -72,13 +72,12 @@ public static class XpingServiceCollectionExtensions
     /// </param>
     /// <example>
     /// <code>
-    /// // Example usage with both environment variable formats:
-    /// // Standard .NET format:
-    /// //   export Xping__ApiKey="secret"
-    /// //   export Xping__BatchSize=100
-    /// // OR Legacy format (backward compatible):
+    /// // Either environment variable form works; XPING_* wins when both are set:
     /// //   export XPING_APIKEY="secret"
     /// //   export XPING_BATCHSIZE=100
+    /// // or, through .NET configuration binding:
+    /// //   export Xping__ApiKey="secret"
+    /// //   export Xping__BatchSize=100
     ///
     /// services.AddXping();
     /// </code>
@@ -94,9 +93,8 @@ public static class XpingServiceCollectionExtensions
 
     /// <summary>
     /// Adds Xping SDK with configuration binding from an existing IConfiguration.
-    /// Supports both environment variable formats:
-    /// - Standard .NET: Xping__ApiKey (double underscore for section nesting)
-    /// - Legacy format: XPING_APIKEY (uppercase with single underscore prefix)
+    /// XPING_* environment variables are applied on top of whatever the configuration holds, so they
+    /// win over its "Xping" section, including Xping__* variables bound into it.
     /// Priority: XPING_* (highest) > Xping__* > appsettings.{Environment}.json > appsettings.json (lowest)
     /// </summary>
     /// <param name="services">The service collection.</param>
@@ -292,7 +290,7 @@ public static class XpingServiceCollectionExtensions
                 .RequireNotNull()
                 .GetSection(key: ConfigurationSectionName));
 
-        // 2. Apply XPING_* environment variables as final override (backward compatibility)
+        // 2. XPING_* environment variables override everything bound above
         services.PostConfigure<XpingConfiguration>(options =>
         {
             BindEnvironmentVariablesWithPrefix(options, EnvironmentVariablePrefix);
@@ -597,9 +595,8 @@ public static class XpingServiceCollectionExtensions
 
     /// <summary>
     /// Builds an IConfiguration with proper source priority for Xping.
-    /// Supports both environment variable formats:
-    /// - Standard .NET: Xping__ApiKey (double underscore for nesting)
-    /// - Legacy format: XPING_APIKEY (applied via PostConfigure)
+    /// XPING_* variables are not part of it: they are applied afterwards via PostConfigure, which is
+    /// what makes them win.
     /// Priority: XPING_* (highest via PostConfigure) > Xping__* > appsettings.{Environment}.json > appsettings.json (lowest).
     /// </summary>
     private static IConfiguration BuildXpingConfiguration(string? basePath, string? environmentName)
