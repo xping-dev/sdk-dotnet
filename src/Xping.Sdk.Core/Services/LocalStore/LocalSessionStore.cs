@@ -13,9 +13,9 @@ namespace Xping.Sdk.Core.Services.LocalStore;
 /// Creates <see cref="ILocalSessionStore"/> instances over the on-disk local session store.
 /// </summary>
 /// <remarks>
-/// This is the supported entry point for reading full sessions from outside the SDK — the Xping CLI
-/// uses it as the substrate for local analysis. The concrete implementation stays internal so its
-/// file layout and retention behaviour can change without breaking callers.
+/// The Xping CLI reads full sessions through this for local analysis; the SDK itself only writes
+/// them, through DI. Going through the interface keeps the CLI off the file layout, which
+/// <see cref="JsonSessionStore"/> owns.
 /// </remarks>
 internal static class LocalSessionStore
 {

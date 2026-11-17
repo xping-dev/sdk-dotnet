@@ -12,7 +12,8 @@ namespace Microsoft.CodeAnalysis;
 /// <remarks>
 /// The CLI and the test projects see Core's internals and target net10.0, where the BCL already
 /// defines the attributes the <c>Polyfills/</c> folder supplies for netstandard2.0. Without this,
-/// both copies are visible to them and every use fails with CS0433.
+/// both copies are visible to them and every use fails with CS0433. It hides the polyfills from the
+/// netstandard2.0 adapters as well: an adapter that needs one adds its own copy.
 /// </remarks>
 [Embedded]
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Enum | AttributeTargets.Interface | AttributeTargets.Delegate, Inherited = false)]

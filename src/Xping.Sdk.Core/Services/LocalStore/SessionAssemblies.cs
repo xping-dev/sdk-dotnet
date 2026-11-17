@@ -29,7 +29,7 @@ namespace Xping.Sdk.Core.Services.LocalStore;
 /// three assemblies is one run of each, carrying only that assembly's executions.
 /// </para>
 /// </remarks>
-public static class SessionAssemblies
+internal static class SessionAssemblies
 {
     /// <summary>
     /// Returns the distinct test assemblies a session covers.

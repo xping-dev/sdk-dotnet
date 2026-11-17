@@ -18,7 +18,7 @@ namespace Xping.Sdk.Core.Services.LocalStore;
 /// upload payload; adding a field there to answer a purely local question would change the wire
 /// format for every connected project.
 /// </remarks>
-public static class LocalSessionProperties
+internal static class LocalSessionProperties
 {
     /// <summary>
     /// The property key holding the <see cref="XpingMode"/> the session was recorded under.

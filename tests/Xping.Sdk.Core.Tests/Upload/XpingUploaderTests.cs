@@ -69,7 +69,7 @@ public sealed class XpingUploaderTests
         });
         services.AddXpingSerialization();
         services.AddLogging();
-        services.AddXpingUploader();
+        services.AddXpingUploader(XpingMode.Cloud);
 
         // Replace the innermost HTTP handler. After PostConfigureAll runs, the pipeline is:
         //   [Polly retry/circuit-breaker DelegatingHandlers] → fakeHandler (PrimaryHandler)

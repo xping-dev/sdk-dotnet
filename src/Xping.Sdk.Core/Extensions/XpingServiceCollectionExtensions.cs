@@ -220,7 +220,6 @@ public static class XpingServiceCollectionExtensions
 
     /// <summary>
     /// Adds cross-cutting infrastructure services: logging, serialization, HTTP clients.
-    /// Use this for minimal setup or when composing services manually.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
@@ -275,7 +274,6 @@ public static class XpingServiceCollectionExtensions
     /// <summary>
     /// Adds Xping configuration from IConfiguration with validation.
     /// Binds from the "Xping" section and applies XPING_* environment variable overrides.
-    /// Use this when you have an existing IConfiguration and want to bind from appsettings.json.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configuration">The configuration containing the "Xping" section.</param>
@@ -309,7 +307,6 @@ public static class XpingServiceCollectionExtensions
     /// <summary>
     /// Adds Xping configuration from a pre-built instance, then applies the <c>XPING_*</c>
     /// environment variables on top.
-    /// Use this when you have a pre-configured XpingConfiguration object.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configuration">The pre-built configuration instance.</param>
@@ -378,7 +375,6 @@ public static class XpingServiceCollectionExtensions
 
     /// <summary>
     /// Adds test execution collection services (collectors, batching).
-    /// Use this when you need a test collection without upload capabilities.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
@@ -480,18 +476,8 @@ public static class XpingServiceCollectionExtensions
     #region Feature: Test Result Upload
 
     /// <summary>
-    /// Adds test result upload services (HTTP clients, uploaders, retry policies).
-    /// Use this when you need upload capabilities without a collection.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <returns>The service collection for chaining.</returns>
-    internal static IServiceCollection AddXpingUploader(this IServiceCollection services)
-    {
-        return services.AddXpingUploader(XpingMode.Cloud);
-    }
-
-    /// <summary>
-    /// Adds test result upload services for the given operating mode.
+    /// Adds test result upload services (HTTP clients, uploaders, retry policies) for the given
+    /// operating mode.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="mode">The resolved operating mode.</param>

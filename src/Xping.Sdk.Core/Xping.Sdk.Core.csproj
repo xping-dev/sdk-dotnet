@@ -46,6 +46,10 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Xping.Sdk.NUnit.Tests</_Parameter1>
     </AssemblyAttribute>
+    <!-- Moq builds its proxies in this assembly; Core.Tests mocks the internal ILocalSessionStore. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>DynamicProxyGenAssembly2</_Parameter1>
+    </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Xping.Sdk.MSTest</_Parameter1>
     </AssemblyAttribute>
