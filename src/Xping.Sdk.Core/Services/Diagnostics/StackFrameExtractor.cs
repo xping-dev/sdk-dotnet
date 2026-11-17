@@ -37,7 +37,7 @@ public sealed record FrameExtraction(IReadOnlyList<string> Frames, bool Degraded
 /// suite into one cause.
 /// </para>
 /// </remarks>
-public static class StackFrameExtractor
+internal static class StackFrameExtractor
 {
     /// <summary>
     /// The most frames a failure is grouped by (5).

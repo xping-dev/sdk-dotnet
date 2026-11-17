@@ -47,7 +47,7 @@ namespace Xping.Sdk.Core.Services.Diagnostics;
 /// to disturb one.
 /// </para>
 /// </remarks>
-public static class SourceLocationLookup
+internal static class SourceLocationLookup
 {
     // The root a deterministic build rewrites source paths to when ContinuousIntegrationBuild is set
     // and no SourceRoot maps the path. What follows it is already repository-relative.

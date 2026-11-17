@@ -25,7 +25,7 @@ namespace Xping.Sdk.Core.Services.Diagnostics;
 /// grouping on; this one looks for one specific member and keeps the trace's order intact.
 /// </para>
 /// </remarks>
-public static class StackFrameLookup
+internal static class StackFrameLookup
 {
     private static readonly char[] _lineSeparators = ['\r', '\n'];
 

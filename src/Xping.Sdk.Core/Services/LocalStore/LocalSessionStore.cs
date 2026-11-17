@@ -17,7 +17,7 @@ namespace Xping.Sdk.Core.Services.LocalStore;
 /// uses it as the substrate for local analysis. The concrete implementation stays internal so its
 /// file layout and retention behaviour can change without breaking callers.
 /// </remarks>
-public static class LocalSessionStore
+internal static class LocalSessionStore
 {
     /// <summary>
     /// Creates a store over the given location, or the default one for the current repository.

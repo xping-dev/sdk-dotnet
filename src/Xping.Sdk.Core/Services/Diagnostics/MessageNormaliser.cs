@@ -34,7 +34,7 @@ namespace Xping.Sdk.Core.Services.Diagnostics;
 /// ones.
 /// </para>
 /// </remarks>
-public static class MessageNormaliser
+internal static class MessageNormaliser
 {
     /// <summary>
     /// The most characters of a message that are normalised (4096).

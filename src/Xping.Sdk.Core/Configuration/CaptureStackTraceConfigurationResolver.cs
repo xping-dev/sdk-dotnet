@@ -12,7 +12,7 @@ namespace Xping.Sdk.Core.Configuration;
 /// <summary>
 /// Resolves the CaptureStackTraces setting from options or raw configuration in failure paths.
 /// </summary>
-public static class CaptureStackTraceConfigurationResolver
+internal static class CaptureStackTraceConfigurationResolver
 {
     /// <summary>
     /// Resolves the effective CaptureStackTraces value without propagating options validation failures.

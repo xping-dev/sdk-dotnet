@@ -224,7 +224,7 @@ public static class XpingServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddXpingInfrastructure(this IServiceCollection services)
+    internal static IServiceCollection AddXpingInfrastructure(this IServiceCollection services)
     {
         // Configure Serilog with a simple console output.
         // Debug: full exception with stack trace. Release: clean single-line output with exception type and message.
@@ -261,7 +261,7 @@ public static class XpingServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to which the Xping serializer is added.</param>
     /// <returns>The modified service collection.</returns>
-    public static IServiceCollection AddXpingSerialization(this IServiceCollection services)
+    internal static IServiceCollection AddXpingSerialization(this IServiceCollection services)
     {
         // Register JSON serializer with API options (compact, camelCase)
         services.TryAddSingleton<IXpingSerializer>(_ => new XpingJsonSerializer(XpingSerializerOptions.ApiOptions));
@@ -280,7 +280,7 @@ public static class XpingServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="configuration">The configuration containing the "Xping" section.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddXpingConfigurationFromConfiguration(
+    internal static IServiceCollection AddXpingConfigurationFromConfiguration(
         this IServiceCollection services,
         IConfiguration configuration)
     {
@@ -314,7 +314,7 @@ public static class XpingServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="configuration">The pre-built configuration instance.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddXpingConfigurationFromInstance(
+    internal static IServiceCollection AddXpingConfigurationFromInstance(
         this IServiceCollection services,
         XpingConfiguration configuration)
     {
@@ -360,7 +360,7 @@ public static class XpingServiceCollectionExtensions
     /// Takes no mode. Detection reads the runtime, the environment block and the local clock, which
     /// cost the same and mean the same whether or not a session will be uploaded.
     /// </remarks>
-    public static IServiceCollection AddXpingEnvironment(this IServiceCollection services)
+    internal static IServiceCollection AddXpingEnvironment(this IServiceCollection services)
     {
         // The detector logs configuration warnings. AddLogging only adds what's missing, so a host that
         // already configured logging (AddXpingInfrastructure) keeps its providers.
@@ -382,7 +382,7 @@ public static class XpingServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddXpingCollectors(this IServiceCollection services)
+    internal static IServiceCollection AddXpingCollectors(this IServiceCollection services)
     {
         // Register a test execution collector for batching
         services.AddSingleton<ITestExecutionCollector, TestExecutionCollector>();
@@ -408,7 +408,7 @@ public static class XpingServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddXpingPullRequest(this IServiceCollection services)
+    internal static IServiceCollection AddXpingPullRequest(this IServiceCollection services)
     {
         services.TryAddSingleton<IEnvironmentVariableProvider, SystemEnvironmentVariableProvider>();
         services.AddXpingSerialization();
@@ -432,7 +432,7 @@ public static class XpingServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddXpingStatistics(this IServiceCollection services)
+    internal static IServiceCollection AddXpingStatistics(this IServiceCollection services)
     {
         services.AddSingleton<IRunningStatisticsAccumulator, RunningStatisticsAccumulator>();
         return services;
@@ -460,7 +460,7 @@ public static class XpingServiceCollectionExtensions
     /// and no need to wrestle the test runner for the terminal.
     /// </para>
     /// </remarks>
-    public static IServiceCollection AddXpingLocalStore(this IServiceCollection services, XpingMode mode)
+    internal static IServiceCollection AddXpingLocalStore(this IServiceCollection services, XpingMode mode)
     {
         if (mode == XpingMode.Disabled)
             return services;
@@ -485,7 +485,7 @@ public static class XpingServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddXpingUploader(this IServiceCollection services)
+    internal static IServiceCollection AddXpingUploader(this IServiceCollection services)
     {
         return services.AddXpingUploader(XpingMode.Cloud);
     }
@@ -501,7 +501,7 @@ public static class XpingServiceCollectionExtensions
     /// retry pipeline, and circuit breaker are never registered. Nothing is uploaded, so constructing
     /// them would cost startup time and would dereference a null API key while setting request headers.
     /// </remarks>
-    public static IServiceCollection AddXpingUploader(this IServiceCollection services, XpingMode mode)
+    internal static IServiceCollection AddXpingUploader(this IServiceCollection services, XpingMode mode)
     {
         if (mode != XpingMode.Cloud)
         {
