@@ -60,7 +60,7 @@ public abstract class XpingTestBase
     [TestInitialize]
     public void XpingTestInitialize()
     {
-        // Initializes the context too, when XpingAssemblyInitialize is not in the test project.
+        // Initializes the context too, when the test project has no [AssemblyInitialize] that does it.
         try
         {
             _services ??= XpingContext.StartBaseServices(message => TestContext?.WriteLine(message));

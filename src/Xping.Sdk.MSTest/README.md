@@ -5,7 +5,6 @@ MSTest test framework adapter for Xping SDK. Automatically tracks MSTest test ex
 ## Features
 
 - **Automatic Test Tracking**: Inherit from `XpingTestBase` for automatic tracking
-- **Assembly-Level Initialization**: Simple setup with `XpingAssemblyInitialize`
 - **Rich Metadata Extraction**: Captures test categories, properties, and data rows
 - **Outcome Mapping**: Maps all MSTest outcomes to Xping test outcomes
 - **Data-driven test support**: Tracks each `[DataRow]` execution separately
@@ -27,7 +26,38 @@ see [Troubleshooting](#session-finalized-by-the-process-exit-safety-net).
 
 ## Quick Start
 
-### 1. Inherit from XpingTestBase
+### 1. Add an assembly setup class
+
+The setup class starts the SDK before the first test and finalizes the session after the last one,
+which is when results are written and uploaded. MSTest runs `[AssemblyInitialize]` and
+`[AssemblyCleanup]` only from the test assembly itself, so the class goes in your test project; the
+package cannot ship it for you. Add it once per test project:
+
+```csharp
+[TestClass]
+public static class XpingSetup
+{
+    [AssemblyInitialize]
+    public static void AssemblyInit(TestContext context)
+    {
+        XpingContext.Initialize();
+    }
+
+    [AssemblyCleanup]
+    public static async Task AssemblyCleanup()
+    {
+        await XpingContext.FinalizeAndShutdownAsync();
+    }
+}
+```
+
+Without it, `XpingTestBase` still starts the SDK, and the
+[process-exit safety net](#session-finalized-by-the-process-exit-safety-net) finalizes the session.
+Local history is still written, but on vstest the upload to Xping Cloud usually does not complete.
+
+### 2. Inherit from XpingTestBase
+
+Every test class that should be tracked inherits from `XpingTestBase`:
 
 ```csharp
 [TestClass]
@@ -53,13 +83,13 @@ public class CalculatorTests : XpingTestBase
 }
 ```
 
-### 2. Run Tests
+### 3. Run Tests
 
 ```bash
 dotnet test
 ```
 
-All test executions are automatically tracked and uploaded to Xping!
+Every test in a class that inherits `XpingTestBase` is recorded. Results go to the local store, and to Xping Cloud when an API key is set.
 
 ## Running on Microsoft.Testing.Platform
 
@@ -113,70 +143,6 @@ Or use environment variables:
 - `XPING_API_ENDPOINT`
 - `XPING_ENVIRONMENT`
 - `XPING_DEFAULTBRANCH` (optional: the default branch Xping Cloud uses for CI runs; replaces the one GitHub Actions and GitLab CI report)
-
-## Usage Patterns
-
-### Option 1: Base Class (Recommended)
-
-Inherit from `XpingTestBase` for automatic tracking of all test methods:
-
-```csharp
-[TestClass]
-public class MyTests : XpingTestBase
-{
-    [TestMethod]
-    public void TestMethod()
-    {
-        // Test implementation
-        // Automatically tracked!
-    }
-}
-```
-
-**Advantages:**
-- Zero configuration per test
-- Automatic tracking of all test methods in the class
-- Simplest approach for most scenarios
-
-### Option 2: Assembly-Level Initialization
-
-Use `XpingAssemblyInitialize` for explicit SDK lifecycle management without inheriting from base class:
-
-```csharp
-[TestClass]
-public static class TestSetup
-{
-    [AssemblyInitialize]
-    public static void AssemblyInit(TestContext context)
-    {
-        XpingContext.Initialize();
-    }
-
-    [AssemblyCleanup]
-    public static async Task AssemblyCleanup()
-    {
-        await XpingContext.FinalizeAndShutdownAsync();
-    }
-}
-
-[TestClass]
-public class MyTests
-{
-    public TestContext? TestContext { get; set; }
-    
-    [TestMethod]
-    public void TestMethod()
-    {
-        // Manually record test if needed
-        // More control, but requires manual tracking
-    }
-}
-```
-
-**Advantages:**
-- More control over SDK lifecycle
-- Can be combined with custom base classes
-- Useful for advanced scenarios
 
 ## Metadata Extraction
 
@@ -342,8 +308,8 @@ XpingContext.RecordTest(execution);
 
 The MSTest adapter uses inheritance and attributes for test tracking:
 
-1. **XpingTestBase** - Optional base class with `[TestInitialize]` and `[TestCleanup]` methods
-2. **XpingAssemblyInitialize** - Static class with `[AssemblyInitialize]` and `[AssemblyCleanup]` for SDK lifecycle
+1. **XpingTestBase** - Base class with `[TestInitialize]` and `[TestCleanup]` methods that record each test
+2. **Your assembly setup class** - `[AssemblyInitialize]` and `[AssemblyCleanup]` that start the SDK and finalize the session
 3. **XpingContext** - Global context managing SDK lifecycle and test recording
 4. **TestContext** - MSTest's context providing test metadata and outcome
 
@@ -396,7 +362,7 @@ If no configuration is found, the adapter will:
 If the log shows `Process exiting with session ... still active`, no `[AssemblyCleanup]` finalized the
 session and the SDK did it from an `AppDomain.ProcessExit` handler instead. MSTest only runs assembly
 hooks declared in the test assembly itself, so make sure your test project declares one that calls
-`XpingContext.FinalizeAndShutdownAsync()` (see [Option 2](#option-2-assembly-level-initialization)), and
+`XpingContext.FinalizeAndShutdownAsync()` (see [Add an assembly setup class](#1-add-an-assembly-setup-class)), and
 that nothing in it throws before that call. (MSTest 3.7.x also skipped the hook under method-level
 parallelization; this package requires 3.8 or later, where that is fixed.)
 
@@ -445,9 +411,9 @@ See the complete sample project at `samples/SampleApp.MSTest` for working exampl
 
 | Feature | MSTest | NUnit | xUnit |
 |---------|--------|-------|-------|
-| Setup | Base class | Attribute | AssemblyInfo |
+| Setup | Base class + assembly setup class | Attribute | AssemblyInfo |
 | Tracking | Automatic (base class) | Opt-in (attribute) | Automatic (all tests) |
-| Configuration | Inherit once | Per fixture/test | One-time |
+| Configuration | Inherit per class | Per fixture/test | One-time |
 | Data Tests | DataRow | TestCase | Theory |
 | Overhead | Minimal | Minimal | Minimal |
 
