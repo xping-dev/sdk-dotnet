@@ -12,6 +12,7 @@ namespace System.Runtime.CompilerServices;
 /// The C# compiler emits a reference to this type for every 'init' setter; the CLR only requires
 /// the type to be resolvable — it imposes no runtime behaviour of its own.
 /// </summary>
+[Microsoft.CodeAnalysis.Embedded]
 internal static class IsExternalInit { }
 
 #endif

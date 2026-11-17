@@ -16,7 +16,7 @@ namespace Xping.Sdk.Core.Services.LocalStore;
 /// indistinguishable from a store that is half empty, and the difference matters: the first is a
 /// problem to investigate, the second is a normal new project.
 /// </remarks>
-public sealed class LocalSessionReadResult
+internal sealed class LocalSessionReadResult
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="LocalSessionReadResult"/> class.
@@ -52,7 +52,7 @@ public sealed class LocalSessionReadResult
 /// <summary>
 /// One stored file, read: the session it holds, or nothing when it could not be read.
 /// </summary>
-public sealed class LocalSessionFile
+internal sealed class LocalSessionFile
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="LocalSessionFile"/> class.
@@ -70,7 +70,7 @@ public sealed class LocalSessionFile
 /// <summary>
 /// One test assembly's history in the local store.
 /// </summary>
-public sealed class LocalStoreAssembly
+internal sealed class LocalStoreAssembly
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="LocalStoreAssembly"/> class.
@@ -98,7 +98,7 @@ public sealed class LocalStoreAssembly
 /// <summary>
 /// What the local store holds, by assembly, read without loading any session.
 /// </summary>
-public sealed class LocalStoreSummary
+internal sealed class LocalStoreSummary
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="LocalStoreSummary"/> class.
@@ -140,7 +140,7 @@ public sealed class LocalStoreSummary
 /// because an observability side-channel could not write is never an acceptable trade.
 /// </para>
 /// </remarks>
-public interface ILocalSessionStore
+internal interface ILocalSessionStore
 {
     /// <summary>
     /// Gets a value indicating whether the store resolved to a usable location.

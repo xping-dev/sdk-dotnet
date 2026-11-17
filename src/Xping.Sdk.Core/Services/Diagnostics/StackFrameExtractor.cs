@@ -16,7 +16,7 @@ namespace Xping.Sdk.Core.Services.Diagnostics;
 /// Whether the frames are worse than intended: framework frames used because no user frame was
 /// found, or no frames at all.
 /// </param>
-public sealed record FrameExtraction(IReadOnlyList<string> Frames, bool Degraded)
+internal sealed record FrameExtraction(IReadOnlyList<string> Frames, bool Degraded)
 {
     /// <summary>Gets the result for a failure that carried no usable stack trace.</summary>
     public static FrameExtraction None { get; } = new([], true);
@@ -37,7 +37,7 @@ public sealed record FrameExtraction(IReadOnlyList<string> Frames, bool Degraded
 /// suite into one cause.
 /// </para>
 /// </remarks>
-public static class StackFrameExtractor
+internal static class StackFrameExtractor
 {
     /// <summary>
     /// The most frames a failure is grouped by (5).

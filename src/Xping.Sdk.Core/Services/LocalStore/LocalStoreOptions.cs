@@ -22,7 +22,7 @@ namespace Xping.Sdk.Core.Services.LocalStore;
 /// window fills and <c>--runs</c>, <c>--since</c> and <c>--test</c> have history beyond it.
 /// </para>
 /// </remarks>
-public sealed class LocalStoreOptions
+internal sealed class LocalStoreOptions
 {
     /// <summary>
     /// Gets or sets the maximum number of runs to retain for each test assembly. Defaults to 50.

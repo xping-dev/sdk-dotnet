@@ -14,7 +14,7 @@ namespace Xping.Sdk.Core.Services.LocalStore;
 /// cover. Retention that kept fewer runs, or a shorter span, than the report reads would leave the
 /// default window permanently short, and nothing would say so.
 /// </remarks>
-public static class ReportWindow
+internal static class ReportWindow
 {
     /// <summary>
     /// Runs in the default window (20).

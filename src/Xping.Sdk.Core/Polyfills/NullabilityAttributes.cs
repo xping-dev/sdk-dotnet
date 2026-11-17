@@ -12,6 +12,7 @@ namespace System.Diagnostics.CodeAnalysis;
 /// The C# nullable-analysis compiler honours this attribute at compile time;
 /// no runtime behaviour is associated with it.
 /// </summary>
+[Microsoft.CodeAnalysis.Embedded]
 [AttributeUsage(AttributeTargets.Parameter, Inherited = false)]
 internal sealed class NotNullWhenAttribute(bool returnValue) : Attribute
 {
