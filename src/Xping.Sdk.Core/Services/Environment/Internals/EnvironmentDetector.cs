@@ -877,7 +877,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
 
     // CI.Actor is who Xping Cloud counts as a committer. CI.ActorId and CI.ActorEmail only help it link
     // that committer to a member, so they are never sent without an actor, and the email - personal
-    // data that counting doesn't need - only while CollectCiActorEmail allows it.
+    // data that counting doesn't need - only when CollectCiActorEmail opts in.
     private void AddActor(Dictionary<string, string> properties, string? actor, string? id, string? email)
     {
         if (string.IsNullOrWhiteSpace(actor))

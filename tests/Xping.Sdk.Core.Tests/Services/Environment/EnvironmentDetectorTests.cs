@@ -414,23 +414,23 @@ public sealed class EnvironmentDetectorTests
         _env[actorVariable] = "janedev";
         _env[emailVariable] = "jane@example.com";
 
-        IEnvironmentDetector detector = CreateDetector();
+        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectCiActorEmail = true });
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
         Assert.Equal("jane@example.com", info.CustomProperties["CI.ActorEmail"]);
     }
 
-    // The email is personal data that counting doesn't need, so turning collection off must keep it out
+    // The email is personal data that counting doesn't need, so it stays out unless the user opts in,
     // while the committer is still counted.
     [Fact]
-    public async Task ActorEmailIsNotSentWhenCollectionIsOff()
+    public async Task ActorEmailIsNotSentByDefault()
     {
         _env["GITLAB_CI"] = "true";
         _env["GITLAB_USER_LOGIN"] = "janedev";
         _env["GITLAB_USER_EMAIL"] = "jane@example.com";
 
-        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectCiActorEmail = false });
+        IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 

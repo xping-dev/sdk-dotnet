@@ -80,7 +80,7 @@ there is a PR context, otherwise `CI.Actor`. `CI.Actor` is the person the platfo
 run. On most platforms that is who triggered it; on Jenkins it is the PR's author, and on AppVeyor
 the author of the commit being built. `CI.ActorId` and `CI.ActorEmail` are sent alongside where the
 platform has them; Xping Cloud only uses them to link a committer to a workspace member, never to
-count one.
+count one. `CI.ActorEmail` is sent only when you opt in (see below).
 
 | Platform | `CI.Actor` | `CI.ActorId` | `CI.ActorEmail` |
 |---|---|---|---|
@@ -99,9 +99,11 @@ TeamCity or Travis build) adds no committer. Local runs never do: they send no `
 [`CollectLocalGitAuthor`](../configuration/configuration-reference.md#collectlocalgitauthor) is on,
 is not counted.
 
-`CI.ActorEmail` is an email address. Set
-[`CollectCiActorEmail`](../configuration/configuration-reference.md#collectciactoremail) to `false`
-to keep it out of the local store and uploads; `CI.Actor` is still sent.
+`CI.ActorEmail` is an email address, so it is off by default. Set
+[`CollectCiActorEmail`](../configuration/configuration-reference.md#collectciactoremail) to `true`
+to record it. Without it, Xping Cloud cannot link a committer to a workspace member automatically on
+Azure Pipelines, GitLab, Jenkins or AppVeyor; an Owner or Admin links them by hand. GitHub Actions is
+not affected.
 
 ---
 

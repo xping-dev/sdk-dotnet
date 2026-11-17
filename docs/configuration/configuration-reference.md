@@ -58,7 +58,7 @@ If you configure in code and want `appsettings.json` or `Xping__*` honoured as w
 | `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | Timeout per upload attempt |
 | `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
 | `CollectLocalGitAuthor` | bool | `false` | `XPING_COLLECTLOCALGITAUTHOR` | Include git author name in local-run metadata (opt-in to avoid PII collection) |
-| `CollectCiActorEmail` | bool | `true` | `XPING_COLLECTCIACTOREMAIL` | Record the CI actor's email address as `CI.ActorEmail` |
+| `CollectCiActorEmail` | bool | `false` | `XPING_COLLECTCIACTOREMAIL` | Record the CI actor's email address as `CI.ActorEmail` |
 | `DefaultBranch` | string | *(none)* | `XPING_DEFAULTBRANCH` | The branch Xping Cloud treats as the default branch for this pipeline's CI runs. Replaces the value the platform reports |
 | `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
 | `LocalStorePath` | string | repository root | `XPING_LOCAL_STORE` | Overrides the [local store](local-store.md) location |
@@ -817,17 +817,19 @@ XpingContext.Initialize(config);
 ### CollectCiActorEmail
 
 **Type:** `bool`  
-**Default:** `true`  
+**Default:** `false`  
 **Environment Variable:** `XPING_COLLECTCIACTOREMAIL`
 
-On a CI run, controls whether the SDK records the email address the platform gives for the person
+On a CI run, set this to `true` to record the email address the platform gives for the person
 behind the run as the `CI.ActorEmail` custom property. It is read from `BUILD_REQUESTEDFOREMAIL`
 (Azure Pipelines), `GITLAB_USER_EMAIL` (GitLab), `CHANGE_AUTHOR_EMAIL` or `ghprbPullAuthorEmail`
 (Jenkins) and `APPVEYOR_REPO_COMMIT_AUTHOR_EMAIL` (AppVeyor).
 
-Xping Cloud uses the email only to link a committer to a workspace member automatically; it never
-counts committers by it. Set this to `false` to keep email addresses out of the local store and
-uploads. Committers are still counted from `CI.Actor`, and are then linked to members by hand. See
+It is off by default because an email address is personal data. Xping Cloud uses it only to link a
+committer to a workspace member automatically; it never counts committers by it. With it off,
+committers are still counted from `CI.Actor`. On Azure Pipelines, GitLab, Jenkins and AppVeyor an
+Owner or Admin then links them to members by hand. GitHub Actions links by actor id and login, so it
+is not affected. See
 [Who Is Behind the Run](../getting-started/ci-cd-setup.md#who-is-behind-the-run).
 
 **This setting has no effect on:**
@@ -839,13 +841,13 @@ uploads. Committers are still counted from `CI.Actor`, and are then linked to me
 ```json
 {
   "Xping": {
-    "CollectCiActorEmail": false
+    "CollectCiActorEmail": true
   }
 }
 ```
 
 ```bash
-export XPING_COLLECTCIACTOREMAIL="false"
+export XPING_COLLECTCIACTOREMAIL="true"
 ```
 
 ```csharp

@@ -723,14 +723,14 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
     {
         using var _key = WithEnv("XPING_APIKEY", "k");
         using var _proj = WithEnv("XPING_PROJECTID", "p");
-        using var _ = WithEnv("XPING_COLLECTCIACTOREMAIL", "false");
+        using var _ = WithEnv("XPING_COLLECTCIACTOREMAIL", "true");
 
         var services = new ServiceCollection();
         services.AddXpingConfigurationFromConfiguration(InMemoryXpingConfig());
         var bound = services.BuildServiceProvider()
             .GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
-        Assert.False(bound.CollectCiActorEmail);
+        Assert.True(bound.CollectCiActorEmail);
     }
 
     // ---------------------------------------------------------------------------
