@@ -414,23 +414,23 @@ public sealed class EnvironmentDetectorTests
         _env[actorVariable] = "janedev";
         _env[emailVariable] = "jane@example.com";
 
-        IEnvironmentDetector detector = CreateDetector();
+        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectCiActorEmail = true });
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
         Assert.Equal("jane@example.com", info.CustomProperties["CI.ActorEmail"]);
     }
 
-    // The email is personal data that counting doesn't need, so turning collection off must keep it out
+    // The email is personal data that counting doesn't need, so it stays out unless the user opts in,
     // while the committer is still counted.
     [Fact]
-    public async Task ActorEmailIsNotSentWhenCollectionIsOff()
+    public async Task ActorEmailIsNotSentByDefault()
     {
         _env["GITLAB_CI"] = "true";
         _env["GITLAB_USER_LOGIN"] = "janedev";
         _env["GITLAB_USER_EMAIL"] = "jane@example.com";
 
-        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectCiActorEmail = false });
+        IEnvironmentDetector detector = CreateDetector();
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
@@ -438,14 +438,15 @@ public sealed class EnvironmentDetectorTests
         Assert.DoesNotContain("CI.ActorEmail", info.CustomProperties.Keys);
     }
 
-    // A link hint with nothing to link it to would only be personal data on its own.
+    // A link hint with nothing to link it to would only be personal data on its own. Collection is on,
+    // so only the missing actor can keep the email out.
     [Fact]
     public async Task ActorHintsAreNotSentWithoutAnActor()
     {
         _env["GITLAB_CI"] = "true";
         _env["GITLAB_USER_EMAIL"] = "jane@example.com";
 
-        IEnvironmentDetector detector = CreateDetector();
+        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectCiActorEmail = true });
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
@@ -466,7 +467,8 @@ public sealed class EnvironmentDetectorTests
         _env["BUILD_REQUESTEDFOR"] = requestedFor;
         _env["BUILD_REQUESTEDFOREMAIL"] = "build@example.com";
 
-        IEnvironmentDetector detector = CreateDetector();
+        // Collection is on, so only the service-identity check can keep the email out.
+        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectCiActorEmail = true });
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 

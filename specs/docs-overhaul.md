@@ -538,7 +538,7 @@ Binding: `src/Xping.Sdk.Core/Extensions/XpingServiceCollectionExtensions.cs`. `X
 | `UploadTimeout` | `XPING_UPLOADTIMEOUT` | 30s | 1s..1 day; whole upload capped at 2× (`TotalUploadTimeout`, `client.Timeout`, L526) | ✅ |
 | `EnablePullRequestDetection` | `XPING_ENABLEPULLREQUESTDETECTION` | true | — | ✅ |
 | `CollectLocalGitAuthor` | `XPING_COLLECTLOCALGITAUTHOR` | false | — | ✅ |
-| `CollectCiActorEmail` | `XPING_COLLECTCIACTOREMAIL` | true | — | ✅ |
+| `CollectCiActorEmail` | `XPING_COLLECTCIACTOREMAIL` | true → **false** since K3 (S3) | — | ✅ |
 | `DefaultBranch` | `XPING_DEFAULTBRANCH` | null | none (blank → unset) | ✅ |
 | `StrictMode` | `XPING_STRICTMODE` | false | — | ✅ |
 | `LocalStorePath` | `XPING_LOCAL_STORE` (irregular name, not `XPING_LOCALSTOREPATH`) | null | none (blank → unset) | ✅ |

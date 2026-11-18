@@ -46,7 +46,7 @@ public sealed class XpingConfigurationBuilderTests
             .WithRetryDelay(TimeSpan.FromSeconds(5))
             .WithUploadTimeout(TimeSpan.FromMinutes(2))
             .WithCollectLocalGitAuthor(true)
-            .WithCollectCiActorEmail(false)
+            .WithCollectCiActorEmail(true)
             .WithLocalStorePath("/tmp/xping-store");
 
         // Act
@@ -67,7 +67,7 @@ public sealed class XpingConfigurationBuilderTests
         Assert.Equal(TimeSpan.FromSeconds(5), config.RetryDelay);
         Assert.Equal(TimeSpan.FromMinutes(2), config.UploadTimeout);
         Assert.True(config.CollectLocalGitAuthor);
-        Assert.False(config.CollectCiActorEmail);
+        Assert.True(config.CollectCiActorEmail);
         Assert.Equal("/tmp/xping-store", config.LocalStorePath);
     }
 
