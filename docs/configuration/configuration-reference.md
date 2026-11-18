@@ -853,7 +853,7 @@ export XPING_COLLECTCIACTOREMAIL="true"
 ```csharp
 var config = new XpingConfiguration
 {
-    CollectCiActorEmail = false
+    CollectCiActorEmail = true
 };
 XpingContext.Initialize(config);
 ```
@@ -1037,7 +1037,7 @@ The SDK reads `XPING_LOCAL_STORE` once, when it initializes; changing it during 
     "UploadTimeout": "00:00:30",
     "EnablePullRequestDetection": true,
     "CollectLocalGitAuthor": false,
-    "CollectCiActorEmail": true
+    "CollectCiActorEmail": false
   }
 }
 ```

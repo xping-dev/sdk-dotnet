@@ -246,7 +246,7 @@ Xping automatically captures:
 - `BUILD_REPOSITORY_NAME` - Repository name
 - `SYSTEM_COLLECTIONURI` (Azure Repos) / `BUILD_REPOSITORY_URI` (other providers) - Normalized into
   `CI.ServerUrl`, the same server the PR context records
-- `BUILD_REQUESTEDFOR` / `BUILD_REQUESTEDFOREMAIL` - Normalized into `CI.Actor` / `CI.ActorEmail`, except on scheduled builds (see [Who Is Behind the Run](#who-is-behind-the-run))
+- `BUILD_REQUESTEDFOR` / `BUILD_REQUESTEDFOREMAIL` - Normalized into `CI.Actor` / `CI.ActorEmail` (the email only with `CollectCiActorEmail` on), except on scheduled builds (see [Who Is Behind the Run](#who-is-behind-the-run))
 
 On a pull request build, Xping also records the PR context (number, branches, head commit) for
 repositories in Azure Repos or on GitHub:
@@ -323,7 +323,7 @@ Xping automatically captures:
 - `CI_DEFAULT_BRANCH` - Normalized into `CI.DefaultBranch` unless `XPING_DEFAULTBRANCH` is set (see [Setting the Default Branch](#setting-the-default-branch))
 - `CI_PROJECT_PATH` - Repository path
 - `CI_SERVER_URL` - Normalized into `CI.ServerUrl`
-- `GITLAB_USER_LOGIN` / `GITLAB_USER_EMAIL` - Normalized into `CI.Actor` / `CI.ActorEmail` (see [Who Is Behind the Run](#who-is-behind-the-run))
+- `GITLAB_USER_LOGIN` / `GITLAB_USER_EMAIL` - Normalized into `CI.Actor` / `CI.ActorEmail` (the email only with `CollectCiActorEmail` on; see [Who Is Behind the Run](#who-is-behind-the-run))
 
 In a merge request pipeline, on gitlab.com or a self-managed instance, Xping also records the MR
 context (number, branches, head commit). The MR context comes from:
@@ -422,7 +422,7 @@ Xping automatically captures:
   remotes are kept as is)
 - `JOB_NAME` - Job name
 - `CHANGE_AUTHOR` / `CHANGE_AUTHOR_EMAIL` (Branch Source) or `ghprbPullAuthorLogin` / `ghprbPullAuthorEmail` (GHPRB) -
-  Normalized into `CI.Actor` / `CI.ActorEmail` on PR builds;
+  Normalized into `CI.Actor` / `CI.ActorEmail` (the email only with `CollectCiActorEmail` on) on PR builds;
   a push build sends no actor (see [Who Is Behind the Run](#who-is-behind-the-run))
 
 ---

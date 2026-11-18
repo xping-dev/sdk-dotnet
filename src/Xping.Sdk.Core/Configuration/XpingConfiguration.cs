@@ -167,7 +167,8 @@ public sealed class XpingConfiguration
     /// Gets or sets a value indicating whether a CI run records the email address its platform gives for
     /// the person behind the run, as the <c>CI.ActorEmail</c> environment property.
     /// Disabled by default: it is personal data, and Xping Cloud uses it only to link a committer to a
-    /// workspace member on platforms that give no actor id. <c>CI.Actor</c> is sent either way.
+    /// workspace member automatically on Azure Pipelines, GitLab, Jenkins and AppVeyor. It never counts
+    /// committers by it. <c>CI.Actor</c> is sent either way.
     /// </summary>
     public bool CollectCiActorEmail { get; set; }
 

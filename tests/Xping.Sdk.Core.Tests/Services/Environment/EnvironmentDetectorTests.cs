@@ -438,14 +438,15 @@ public sealed class EnvironmentDetectorTests
         Assert.DoesNotContain("CI.ActorEmail", info.CustomProperties.Keys);
     }
 
-    // A link hint with nothing to link it to would only be personal data on its own.
+    // A link hint with nothing to link it to would only be personal data on its own. Collection is on,
+    // so only the missing actor can keep the email out.
     [Fact]
     public async Task ActorHintsAreNotSentWithoutAnActor()
     {
         _env["GITLAB_CI"] = "true";
         _env["GITLAB_USER_EMAIL"] = "jane@example.com";
 
-        IEnvironmentDetector detector = CreateDetector();
+        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectCiActorEmail = true });
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
@@ -466,7 +467,8 @@ public sealed class EnvironmentDetectorTests
         _env["BUILD_REQUESTEDFOR"] = requestedFor;
         _env["BUILD_REQUESTEDFOREMAIL"] = "build@example.com";
 
-        IEnvironmentDetector detector = CreateDetector();
+        // Collection is on, so only the service-identity check can keep the email out.
+        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectCiActorEmail = true });
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
