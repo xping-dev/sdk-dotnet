@@ -36,11 +36,11 @@ public sealed class EvidenceLevelResolverTests
     public void TheBandsFitInsideTheDefaultWindow()
     {
         // The reason the local figures are not Cloud's 15 and 40. Both boundaries have to be
-        // reachable in a window the CLI can actually resolve, or High is a level nothing ever gets
+        // reachable in a window the CLI can actually resolve, or Robust is a level nothing ever gets
         // and the scale quietly loses its top.
         Assert.True(
             LocalAnalysisConstants.EvidenceRobustSessions < LocalAnalysisConstants.DefaultWindowSessions,
-            "High evidence must be reachable inside the default window");
+            "Robust evidence must be reachable inside the default window");
 
         Assert.True(
             LocalAnalysisConstants.EvidenceAdequateSessions <

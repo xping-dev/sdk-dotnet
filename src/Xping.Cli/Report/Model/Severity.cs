@@ -55,7 +55,10 @@ internal enum EvidenceLevel
     /// <summary>Fewer than <see cref="LocalAnalysisConstants.EvidenceAdequateSessions"/> sessions.</summary>
     Sparse,
 
-    /// <summary>Between the adequate and robust session thresholds, inclusive.</summary>
+    /// <summary>
+    /// From <see cref="LocalAnalysisConstants.EvidenceAdequateSessions"/> to
+    /// <see cref="LocalAnalysisConstants.EvidenceRobustSessions"/> sessions, both included.
+    /// </summary>
     Adequate,
 
     /// <summary>More than <see cref="LocalAnalysisConstants.EvidenceRobustSessions"/> sessions.</summary>

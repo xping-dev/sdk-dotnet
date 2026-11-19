@@ -191,7 +191,7 @@ The section is absent when the newest run was clean. On a store holding a single
 
 ### The population marker
 
-**The evidence level counts the runs behind the finding, not the runs behind the test.** `evidence adequate` means the claim was computed from somewhere between 8 and 15 independent runs — a `time-sensitive` split reads only the runs whose machine recorded a clock, and a `slower` finding only the runs whose durations could be normalised. So one test can carry two findings at two different levels, and that is the two claims resting on different amounts of data rather than an inconsistency. The exact number is `evidenceSessions` in the JSON. Whether a finding is shown at all is a separate bar, and that one does read the test's whole history in the window.
+**The evidence level counts the runs behind the finding, not the runs behind the test.** `evidence adequate` means the claim was computed from somewhere between 8 and 15 independent runs — a `time-sensitive` split reads only the runs whose machine recorded a clock, and a `slower` finding only the runs whose durations could be normalised. So one test can carry two findings at two different levels, and that is the two claims resting on different amounts of data rather than an inconsistency. The exact number is `evidenceSessions` in the JSON. Xping Cloud uses the same three words on its own scale (`sparse` below an effective sample size of 15, `robust` from 40), so `evidence robust` here and `cloud evidence adequate` in a finding's detail can both be right: the local scale fits a 20-run window, Cloud's a long history. Whether a finding is shown at all is a separate bar, and that one does read the test's whole history in the window.
 
 The marker between the evidence level and the finding id — `all runs`, `-env`, `-env-cluster` or `-partial` — says **which runs went into the denominator** of that finding's rate. Every finding carries one, including the ones that set nothing aside, so that "we counted everything" and "this build did not say" never read alike.
 
@@ -1124,7 +1124,7 @@ names, and `tests` is `healthy` plus `flagged` plus `failedLatestRun`:
 
 ```json
 {
-  "schemaVersion": "1.32",
+  "schemaVersion": "1.33",
   "scope": "assembly",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": {

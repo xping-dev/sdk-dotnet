@@ -207,7 +207,7 @@ None of the above changes in this spec.
 HIGH  always failing   ... which throws an exception is properly tracked
       failed 20 of 20 executions (100%), one failure mode:
       System.InvalidOperationException
-      evidence robust | -env-cluster | f_c7b87f12 | .../SampleTests.cs:66
+      evidence high | -env-cluster | f_c7b87f12 | .../SampleTests.cs:66
 ```
 
 The subject is not a test identity. Three causes, all in `TextReportRenderer`:
