@@ -6,6 +6,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Cli.Auth;
 using Xping.Cli.Hosting;
+using Xping.Cli.Report;
 using Xping.Cli.Services;
 using Xping.Sdk.Core.Models;
 using Xping.Sdk.Core.Services.LocalStore;
@@ -157,7 +158,7 @@ public sealed class AuthCommandShellTests
             services => services.AddSingleton<ILocalSessionStoreFactory>(
                 new ThrowingStoreFactory($"rejected key {apiKey} with Authorization: Bearer abc")));
 
-        Assert.Equal(1, code);
+        Assert.Equal(ExitCodes.Crashed, code);
         Assert.Empty(output);
         Assert.Equal("xping: rejected key [redacted] with Authorization: [redacted]" + Environment.NewLine, error);
     }
@@ -170,7 +171,7 @@ public sealed class AuthCommandShellTests
             services => services.AddSingleton<ILocalSessionStoreFactory>(
                 new ThrowingStoreFactory("failed with refresh_token=abc")));
 
-        Assert.Equal(1, code);
+        Assert.Equal(ExitCodes.Crashed, code);
         Assert.Contains($"{nameof(ThrowingStoreFactory)}.{nameof(ThrowingStoreFactory.Create)}", error, StringComparison.Ordinal);
         Assert.DoesNotContain("refresh_token=abc", error, StringComparison.Ordinal);
     }
