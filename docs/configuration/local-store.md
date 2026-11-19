@@ -15,7 +15,7 @@ The store is resolved in this order:
 
 1. The `XPING_LOCAL_STORE` environment variable, or the `LocalStorePath` configuration setting, if set.
 2. A `.xping` folder at your **repository root** — the nearest ancestor of the test assembly containing `.git`, `*.sln`, or `*.slnx`.
-3. A per-repository folder under your local application data, when no repository root is found or the root is not writable.
+3. A folder under your local application data (`Xping/stores/<key>`), when no repository root is found or the root is not writable. The key comes from the repository root when there is one, else from the nearest folder holding a `.csproj`, `.fsproj` or `.vbproj`. That way `xping report` and `xping where` find the same folder the tests wrote to, as long as you run them inside the repository or, without one, from the test project's folder.
 
 To see where it resolved to:
 
