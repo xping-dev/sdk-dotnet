@@ -305,7 +305,6 @@ public sealed class XpingContextTests : IAsyncLifetime
             Mock.Of<IExecutionTracker>(),
             Mock.Of<IRetryDetector<ITest>>(),
             Mock.Of<ITestIdentityGenerator>(),
-            captureStackTraces: false,
             assemblyName: "Xping.Sdk.XUnit.Tests");
 
         sink.OnMessage(Mock.Of<ITestAssemblyFinished>());
@@ -375,7 +374,6 @@ public sealed class XpingContextTests : IAsyncLifetime
             Mock.Of<IExecutionTracker>(),
             Mock.Of<IRetryDetector<ITest>>(),
             Mock.Of<ITestIdentityGenerator>(),
-            captureStackTraces: false,
             assemblyName: "Xping.Sdk.XUnit.Tests");
     }
 

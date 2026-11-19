@@ -114,7 +114,6 @@ public sealed class TestCaseCensusTests
             Mock.Of<IExecutionTracker>(),
             Mock.Of<IRetryDetector<ITest>>(),
             Mock.Of<ITestIdentityGenerator>(),
-            captureStackTraces: false,
             accumulator,
             census);
 

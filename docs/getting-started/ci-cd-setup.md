@@ -647,7 +647,7 @@ Create environment-specific configurations:
     "Enabled": true,
     "BatchSize": 500,
     "FlushInterval": "00:01:00",
-    "CaptureStackTraces": true
+    "UploadStackTraces": false
   }
 }
 ```

@@ -14,7 +14,7 @@ This directory contains sample configuration files for the Xping SDK.
     "FlushInterval": "00:00:30",
     "Environment": "Staging",
     "Enabled": true,
-    "CaptureStackTraces": true,
+    "UploadStackTraces": false,
     "EnableCompression": true,
     "EnableOfflineQueue": true,
     "MaxRetries": 3,
@@ -110,8 +110,8 @@ creating one project per test project. Set it to pin every assembly in the run t
 - **Enabled** (bool): Enable/disable the SDK
   - Default: `true`
   
-- **CaptureStackTraces** (bool): Capture stack traces for failed tests
-  - Default: `true`
+- **UploadStackTraces** (bool): Upload failed tests' stack traces to Xping Cloud
+  - Default: `false`
   
 - **EnableCompression** (bool): Enable compression for uploads
   - Default: `true`

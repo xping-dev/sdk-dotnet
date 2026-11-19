@@ -228,7 +228,6 @@ public sealed class XpingRetryTestCaseTests : IAsyncLifetime
             tracker,
             new XUnitRetryDetector(),
             identity,
-            captureStackTraces: true,
             assemblyName: "Xping.Sdk.XUnit.Tests");
 
         return (sink, tracker, identity);

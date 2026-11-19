@@ -129,8 +129,7 @@ public sealed class XpingTestBaseSourceLocationTests
             [
                 executionTracker.Object,
                 new Mock<IRetryDetector<TestContext>>().Object,
-                identityGenerator.Object,
-                true
+                identityGenerator.Object
             ],
             culture: null)!;
 

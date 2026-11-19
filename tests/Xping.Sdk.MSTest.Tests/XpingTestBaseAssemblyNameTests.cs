@@ -125,7 +125,7 @@ public sealed class XpingTestBaseAssemblyNameTests
             typeof(XpingBaseServices),
             BindingFlags.Instance | BindingFlags.NonPublic,
             binder: null,
-            args: [executionTracker.Object, retryDetector.Object, identityGenerator.Object, true],
+            args: [executionTracker.Object, retryDetector.Object, identityGenerator.Object],
             culture: null)!;
 
         MethodInfo method = typeof(XpingTestBase).GetMethod(

@@ -274,9 +274,9 @@ fixture finding a `[OneTimeSetUp]` would have.
 **Reason**: `ResultState.Site` is `Test` for every test-level result, including one whose `[SetUp]`
 threw. The states that carry a site — `SetUpFailure`, `SetUpError`, `TearDownError` — are recorded on
 the enclosing *suite*, which the adapter never sees. Xping therefore matches the stack trace against
-the fixture's own lifecycle methods. A failure with no stack trace cannot be placed, which is why
-disabling `CaptureStackTraces` does not remove the site (it is resolved first) but a framework that
-supplies no trace leaves it `Unknown`.
+the fixture's own lifecycle methods. A failure with no stack trace cannot be placed, so a framework
+that supplies no trace leaves it `Unknown`. `UploadStackTraces` does not change the site: it is
+resolved from the trace before the upload leaves the trace out.
 
 ### MSTest: A Throwing `[TestCleanup]` Discards The Whole Record
 

@@ -41,7 +41,6 @@ internal sealed class XpingMessageSink : IMessageSink
     private readonly IExecutionTracker _executionTracker;
     private readonly IRetryDetector<IXunitTestCase> _retryDetector;
     private readonly ITestIdentityGenerator _identityGenerator;
-    private readonly bool _captureStackTraces;
     private readonly string _assemblyName;
     private readonly Action<TestExecution> _record;
     private readonly Func<Task<XpingNetworkException?>> _endSession;
@@ -69,7 +68,6 @@ internal sealed class XpingMessageSink : IMessageSink
         IExecutionTracker executionTracker,
         IRetryDetector<IXunitTestCase> retryDetector,
         ITestIdentityGenerator identityGenerator,
-        bool captureStackTraces,
         string assemblyName)
         : this(
             innerSink,
@@ -77,7 +75,6 @@ internal sealed class XpingMessageSink : IMessageSink
             executionTracker,
             retryDetector,
             identityGenerator,
-            captureStackTraces,
             assemblyName,
             XpingContext.RecordTest,
             XpingContext.FinalizeAndShutdownAsync,
@@ -93,7 +90,6 @@ internal sealed class XpingMessageSink : IMessageSink
     /// <param name="executionTracker">Tracks concurrency and suite position.</param>
     /// <param name="retryDetector">Reads retry attributes.</param>
     /// <param name="identityGenerator">Generates stable test identities.</param>
-    /// <param name="captureStackTraces">Whether stack traces are kept.</param>
     /// <param name="assemblyName">The simple name of the test assembly.</param>
     /// <param name="record">Records a finished execution.</param>
     /// <param name="endSession">Ends the session, returning the strict-mode error to fail the run on.</param>
@@ -104,7 +100,6 @@ internal sealed class XpingMessageSink : IMessageSink
         IExecutionTracker executionTracker,
         IRetryDetector<IXunitTestCase> retryDetector,
         ITestIdentityGenerator identityGenerator,
-        bool captureStackTraces,
         string assemblyName,
         Action<TestExecution> record,
         Func<Task<XpingNetworkException?>> endSession,
@@ -114,7 +109,6 @@ internal sealed class XpingMessageSink : IMessageSink
         _executionTracker = executionTracker.RequireNotNull();
         _retryDetector = retryDetector.RequireNotNull();
         _identityGenerator = identityGenerator.RequireNotNull();
-        _captureStackTraces = captureStackTraces;
         _assemblyName = assemblyName.RequireNotNull();
         _record = record.RequireNotNull();
         _endSession = endSession.RequireNotNull();
@@ -361,13 +355,10 @@ internal sealed class XpingMessageSink : IMessageSink
             ? detector.DetectRetryMetadata(testCase, outcome, known)
             : _retryDetector.DetectRetryMetadata(testCase, outcome);
 
-        (string? configuredStackTrace, bool stackTraceOmitted) = ResolveStackTrace(outcome, stackTrace, _captureStackTraces);
         (TimeSpan? timeoutBudget, TimeoutBudgetSource? timeoutBudgetSource) = testCase.Timeout > 0
             ? (TimeSpan.FromMilliseconds(testCase.Timeout), TimeoutBudgetSource.Declared)
             : ((TimeSpan?)null, (TimeoutBudgetSource?)null);
 
-        // Resolved from the raw trace, before ResolveStackTrace nulls it for a user who opted out of
-        // capture. The site is a classification rather than the trace itself, so it survives that.
         (FailureSite? failureSite, string? failureSiteMember) = ResolveFailureSite(
             outcome, testClassName, testMethodName, exceptionType, errorMessage, stackTrace);
 
@@ -388,10 +379,9 @@ internal sealed class XpingMessageSink : IMessageSink
             .WithStartTime(data.StartTime)
             .WithEndTime(endTime)
             .WithMetadata(metadata)
-            .WithException(exceptionType, errorMessage, configuredStackTrace)
+            .WithException(exceptionType, errorMessage, stackTrace)
             .WithErrorMessageHash(_identityGenerator.GenerateErrorMessageHash(errorMessage))
-            .WithStackTraceHash(_identityGenerator.GenerateStackTraceHash(configuredStackTrace))
-            .WithStackTraceOmitted(stackTraceOmitted)
+            .WithStackTraceHash(_identityGenerator.GenerateStackTraceHash(stackTrace))
             .WithTimeoutBudget(timeoutBudget, timeoutBudgetSource)
             .WithFailureSite(failureSite, failureSiteMember)
             .WithTestOrchestrationRecord(orchestrationRecord)
@@ -665,19 +655,6 @@ internal sealed class XpingMessageSink : IMessageSink
         }
 
         return (FailureSite.FixtureSetup, StackFrameLookup.Shorten(type + ConstructorSuffix));
-    }
-
-    private static (string? stackTrace, bool stackTraceOmitted) ResolveStackTrace(
-        TestOutcome outcome,
-        string? stackTrace,
-        bool captureStackTraces)
-    {
-        string? normalizedStackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace;
-
-        if (!captureStackTraces)
-            return (null, outcome.IsFailure() && normalizedStackTrace != null);
-
-        return (normalizedStackTrace, false);
     }
 
     private static TestMetadata ExtractMetadata(

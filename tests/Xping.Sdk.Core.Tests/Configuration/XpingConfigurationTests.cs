@@ -25,7 +25,7 @@ public sealed class XpingConfigurationTests
         Assert.Null(config.Environment);
         Assert.Equal("Default", config.ResolvedEnvironment);
         Assert.True(config.Enabled);
-        Assert.True(config.CaptureStackTraces);
+        Assert.False(config.UploadStackTraces);
         Assert.True(config.EnableCompression);
         Assert.Equal(3, config.MaxRetries);
         Assert.Equal(TimeSpan.FromSeconds(2), config.RetryDelay);
@@ -487,7 +487,7 @@ public sealed class XpingConfigurationTests
             FlushInterval = TimeSpan.FromMinutes(1),
             Environment = "Production",
             Enabled = false,
-            CaptureStackTraces = false,
+            UploadStackTraces = true,
             EnableCompression = false,
             MaxRetries = 5,
             RetryDelay = TimeSpan.FromSeconds(5),
@@ -502,7 +502,7 @@ public sealed class XpingConfigurationTests
         Assert.Equal(TimeSpan.FromMinutes(1), config.FlushInterval);
         Assert.Equal("Production", config.Environment);
         Assert.False(config.Enabled);
-        Assert.False(config.CaptureStackTraces);
+        Assert.True(config.UploadStackTraces);
         Assert.False(config.EnableCompression);
         Assert.Equal(5, config.MaxRetries);
         Assert.Equal(TimeSpan.FromSeconds(5), config.RetryDelay);

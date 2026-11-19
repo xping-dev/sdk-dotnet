@@ -1350,7 +1350,7 @@ public sealed class FailureModeProviderTests
     }
 
     [Fact]
-    public void AFailureWhoseStackTraceWasOmittedIsStillClassified()
+    public void AFailureWithoutAStackTraceIsStillClassified()
     {
         TestSession[] sessions = Runs(
             total: 10,
@@ -1359,8 +1359,7 @@ public sealed class FailureModeProviderTests
                 n,
                 TestOutcome.Failed,
                 exceptionType: "System.TimeoutException",
-                errorMessage: "the operation timed out",
-                stackTraceOmitted: true));
+                errorMessage: "the operation timed out"));
 
         var evidence = Assert.IsType<AlwaysFailingEvidence>(
             Single(Analyze(sessions), FindingKind.AlwaysFailing).Evidence);

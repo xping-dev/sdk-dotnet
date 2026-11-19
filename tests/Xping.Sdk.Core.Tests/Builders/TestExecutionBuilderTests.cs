@@ -206,20 +206,22 @@ public sealed class TestExecutionBuilderTests
         Assert.Equal("def456", execution.StackTraceHash);
     }
 
-    [Fact]
-    public void WithStackTraceOmitted_WhenSetToTrue_SetsPropertyToTrue()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void WithException_RecordsABlankTraceAsNoTrace(string? stackTrace)
     {
-        // Arrange & Act
         var execution = new TestExecutionBuilder()
-            .WithStackTraceOmitted(true)
+            .WithException("System.Exception", "boom", stackTrace)
             .Build();
 
-        // Assert
-        Assert.True(execution.StackTraceOmitted);
+        Assert.Null(execution.StackTrace);
     }
 
+    // Only the copy made for an upload is marked (TestExecution.WithoutStackTrace).
     [Fact]
-    public void WithStackTraceOmitted_WhenNotCalled_DefaultsToFalse()
+    public void ABuiltExecutionIsNeverMarkedOmitted()
     {
         // Arrange & Act
         var execution = new TestExecutionBuilder().Build();
@@ -346,20 +348,6 @@ public sealed class TestExecutionBuilderTests
 
         // Assert
         Assert.Same(builder, returned);
-    }
-
-    [Fact]
-    public void Reset_AfterSettingStackTraceOmitted_ClearsToFalse()
-    {
-        // Arrange
-        var builder = new TestExecutionBuilder()
-            .WithStackTraceOmitted(true);
-
-        // Act
-        var execution = builder.Reset().Build();
-
-        // Assert
-        Assert.False(execution.StackTraceOmitted);
     }
 
     // ---------------------------------------------------------------------------

@@ -51,7 +51,7 @@ If you configure in code and want `appsettings.json` or `Xping__*` honoured as w
 | `FlushInterval` | TimeSpan | `30s` | `XPING_FLUSHINTERVAL` | Auto-flush interval |
 | `Environment` | string | `Default` | `XPING_ENVIRONMENT` | The deployed environment the tests target |
 | `Enabled` | bool | `true` | `XPING_ENABLED` | SDK enabled/disabled |
-| `CaptureStackTraces` | bool | `true` | `XPING_CAPTURESTACKTRACES` | Include stack traces |
+| `UploadStackTraces` | bool | `false` | `XPING_UPLOADSTACKTRACES` | Upload failed tests' stack traces to Xping Cloud |
 | `EnableCompression` | bool | `true` | `XPING_ENABLECOMPRESSION` | Compress uploads |
 | `MaxRetries` | int | `3` | `XPING_MAXRETRIES` | Upload retry attempts |
 | `RetryDelay` | TimeSpan | `2s` | `XPING_RETRYDELAY` | Delay between retries |
@@ -661,39 +661,32 @@ XpingContext.Initialize(config);
 
 ---
 
-### CaptureStackTraces
+### UploadStackTraces
 
 **Type:** `bool`  
-**Default:** `true`  
-**Environment Variable:** `XPING_CAPTURESTACKTRACES`
+**Default:** `false`  
+**Environment Variable:** `XPING_UPLOADSTACKTRACES`
 
-Include full stack traces for failed tests in uploaded data. Stack traces help diagnose test failures but increase payload size.
+Whether failed tests' stack traces are sent to Xping Cloud. Off by default, because a stack trace can contain source paths, file names and details of your code.
 
-**Trade-offs:**
-- **Enabled:** Better debugging, larger payloads, slightly higher overhead
-- **Disabled:** Smaller payloads, faster uploads, less diagnostic info
-
-**When to disable:**
-- Very large test suites with frequent failures
-- Network bandwidth concerns
-- Privacy/security requirements (stack traces may contain sensitive paths)
-
-> When `CaptureStackTraces` is set to `false`, the uploaded payload for failed tests will include
-> `stackTraceOmitted: true`. This allows Xping Cloud to distinguish between a test
-> that had no stack trace and one where the user explicitly disabled stack trace collection.
+What happens either way:
+- **The local store always keeps the full stack trace.** It stays on your machine, and `xping report` needs it to group failures.
+- **The upload always carries a stack trace hash.** It is built from the method signatures of up to five of your own frames, with no file paths or line numbers. Xping Cloud uses it to group failures that share a cause.
+- **With `false` (the default),** a failed test with a trace is uploaded with `stackTraceOmitted: true` and no stack trace text. Xping Cloud can tell this apart from a failure that had no trace.
+- **With `true`,** the stack trace text is uploaded too. Xping Cloud features that read it, such as failure frames on pull requests and AI failure summaries, need it.
 
 **Example:**
 
 ```json
 {
   "Xping": {
-    "CaptureStackTraces": false
+    "UploadStackTraces": true
   }
 }
 ```
 
 ```bash
-export XPING_CAPTURESTACKTRACES="false"
+export XPING_UPLOADSTACKTRACES="true"
 ```
 
 ---
@@ -1067,7 +1060,7 @@ The SDK reads `XPING_LOCAL_STORE` once, when it initializes; changing it during 
     "FlushInterval": "00:00:30",
     "Environment": "Production",
     "Enabled": true,
-    "CaptureStackTraces": true,
+    "UploadStackTraces": false,
     "EnableCompression": true,
     "MaxRetries": 3,
     "RetryDelay": "00:00:02",

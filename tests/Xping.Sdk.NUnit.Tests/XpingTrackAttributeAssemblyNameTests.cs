@@ -122,8 +122,7 @@ public sealed class XpingTrackAttributeAssemblyNameTests
             [
                 executionTracker.Object,
                 new Mock<IRetryDetector<ITest>>().Object,
-                identityGenerator.Object,
-                true
+                identityGenerator.Object
             ],
             culture: null)!;
 

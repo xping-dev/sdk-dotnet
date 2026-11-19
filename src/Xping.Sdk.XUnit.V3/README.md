@@ -41,7 +41,7 @@ Each session records which runner it ran on (`Xping.Runner`) and `Xping.TestFram
 - Outcome: passed, failed, skipped (including `Assert.Skip` at run time), and timeout for a test that
   overran its `[Fact(Timeout = …)]`, with the declared budget
 - Duration, start and end time, from xUnit's own messages
-- Failure message, exception type and stack trace (see `CaptureStackTraces`), and where in the
+- Failure message, exception type and stack trace (uploaded only with `UploadStackTraces`), and where in the
   lifecycle the test failed: a fixture of any scope, the constructor, `InitializeAsync`, the body, or
   `Dispose`
 - Traits: `Category` as categories, the first `Description` as the description, the rest as tags

@@ -203,14 +203,13 @@ public sealed class XpingMessageSinkTests
         Assert.Equal(TimeSpan.Zero, Assert.Single(recorded).Duration);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void AFailedTest_KeepsItsTraceOnlyWhenTracesAreCaptured(bool captureStackTraces)
+    // The trace is left out of the upload, not out of the recording: the local store keeps it.
+    [Fact]
+    public void AFailedTest_AlwaysKeepsItsTraceAndHash()
     {
         var recorded = new List<TestExecution>();
         XpingMessageSink sink = CreateSink(
-            Collecting([]), [TestCase("case", nameof(OutcomeTests.Throws))], record: recorded.Add, captureStackTraces: captureStackTraces);
+            Collecting([]), [TestCase("case", nameof(OutcomeTests.Throws))], record: recorded.Add);
 
         string?[] exceptionTypes = ["System.InvalidOperationException"];
         string?[] messages = ["boom"];
@@ -228,8 +227,9 @@ public sealed class XpingMessageSinkTests
         TestExecution execution = Assert.Single(recorded);
         Assert.Equal(TestOutcome.Failed, execution.Outcome);
         Assert.Equal("boom", execution.ErrorMessage);
-        Assert.Equal(captureStackTraces, execution.StackTrace != null);
-        Assert.Equal(!captureStackTraces, execution.StackTraceOmitted);
+        Assert.NotNull(execution.StackTrace);
+        Assert.NotNull(execution.StackTraceHash);
+        Assert.False(execution.StackTraceOmitted);
         Assert.Equal(FailureSite.TestBody, execution.Site);
     }
 
@@ -584,15 +584,13 @@ public sealed class XpingMessageSinkTests
         Func<Task<XpingNetworkException?>>? endSession = null,
         Action<XpingNetworkException>? failRun = null,
         IExecutionTracker? tracker = null,
-        IRetryDetector<IXunitTestCase>? retryDetector = null,
-        bool captureStackTraces = true) =>
+        IRetryDetector<IXunitTestCase>? retryDetector = null) =>
         new(
             inner,
             testCases ?? [],
             tracker ?? Mock.Of<IExecutionTracker>(),
             retryDetector ?? Mock.Of<IRetryDetector<IXunitTestCase>>(),
             new TestIdentityGenerator(),
-            captureStackTraces,
             assemblyName: "Probe",
             record ?? (_ => { }),
             endSession ?? (() => Task.FromResult<XpingNetworkException?>(null)),

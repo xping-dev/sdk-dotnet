@@ -26,9 +26,6 @@ internal sealed class XpingExecutorServices
     /// <summary>Gets the test identity generator.</summary>
     public ITestIdentityGenerator IdentityGenerator { get; }
 
-    /// <summary>Gets a value indicating whether stack traces should be captured.</summary>
-    public bool CaptureStackTraces { get; }
-
     /// <summary>Gets the statistics accumulator the executor reports discovered and selected test cases to.</summary>
     public IRunningStatisticsAccumulator StatisticsAccumulator { get; }
 
@@ -36,13 +33,11 @@ internal sealed class XpingExecutorServices
         IExecutionTracker executionTracker,
         IRetryDetector<ITest> retryDetector,
         ITestIdentityGenerator identityGenerator,
-        bool captureStackTraces,
         IRunningStatisticsAccumulator statisticsAccumulator)
     {
         ExecutionTracker = executionTracker;
         RetryDetector = retryDetector;
         IdentityGenerator = identityGenerator;
-        CaptureStackTraces = captureStackTraces;
         StatisticsAccumulator = statisticsAccumulator;
     }
 }

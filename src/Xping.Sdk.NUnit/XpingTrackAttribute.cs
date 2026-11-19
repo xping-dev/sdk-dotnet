@@ -263,12 +263,7 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
 
         var errorMessage = result.Message ?? string.Empty;
         string? stackTrace = string.IsNullOrWhiteSpace(result.StackTrace) ? null : result.StackTrace;
-        (string? configuredStackTrace, bool stackTraceOmitted) =
-            ResolveStackTrace(outcome, stackTrace, services.CaptureStackTraces);
 
-        // Resolved from the raw trace rather than the configured one: ResolveStackTrace nulls it when
-        // the user opted out of capture, and the site is a classification rather than the trace itself,
-        // so it survives that choice.
         (FailureSite? failureSite, string? failureSiteMember) =
             ResolveFailureSite(outcome, test, errorMessage, stackTrace);
 
@@ -291,10 +286,9 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
             .WithStartTime(startTime)
             .WithEndTime(endTime)
             .WithMetadata(metadata)
-            .WithException(ResolveExceptionType(outcome, result.Outcome, result.Message), errorMessage, configuredStackTrace)
+            .WithException(ResolveExceptionType(outcome, result.Outcome, result.Message), errorMessage, stackTrace)
             .WithErrorMessageHash(services.IdentityGenerator.GenerateErrorMessageHash(errorMessage))
-            .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(configuredStackTrace))
-            .WithStackTraceOmitted(stackTraceOmitted)
+            .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(stackTrace))
             .WithTimeoutBudget(timeoutBudget, timeoutBudgetSource)
             .WithFailureSite(failureSite, failureSiteMember)
             .WithTestOrchestrationRecord(orchestrationRecord)
@@ -487,22 +481,6 @@ public sealed class XpingTrackAttribute : Attribute, ITestAction
         }
 
         return null;
-    }
-
-    private static (string? stackTrace, bool stackTraceOmitted) ResolveStackTrace(
-        TestOutcome outcome,
-        string? stackTrace,
-        bool captureStackTraces)
-    {
-        bool stackTraceAvailable = !string.IsNullOrEmpty(stackTrace);
-        bool stackTraceOmitted = !captureStackTraces && outcome.IsFailure() && stackTraceAvailable;
-
-        if (!captureStackTraces)
-        {
-            return (null, stackTraceOmitted);
-        }
-
-        return (stackTrace, false);
     }
 
     /// <summary>

@@ -66,6 +66,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
 
     private readonly bool _isHealthy;
     private readonly XpingMode _mode;
+    private readonly bool _uploadStackTraces;
     private readonly ILocalSessionStore? _localSessionStore;
 
     // Every execution drained during this session. Accumulated at drain time rather than in
@@ -210,6 +211,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             _statisticsAccumulator = services.GetRequiredService<IRunningStatisticsAccumulator>();
 
             _mode = configuration.ResolveMode();
+            _uploadStackTraces = configuration.UploadStackTraces;
             _isHealthy = _mode != XpingMode.Disabled;
             _projectPin = configuration.ProjectPin;
 
@@ -996,12 +998,15 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         _lastEnvironmentInfo = environmentInfo;
         AccumulateLocalExecutions(executions);
 
+        // The local store keeps the full trace; only the upload loses it unless the user opted in. No
+        // copy in the modes that never upload.
+        bool stripTraces = !_uploadStackTraces && _mode == XpingMode.Cloud;
         builder
             .WithSessionId(SessionId)
             .WithStartedAt(StartedAt)
             .WithEndedAt(DateTime.UtcNow)
             .WithEnvironmentInfo(environmentInfo)
-            .AddExecutions(executions)
+            .AddExecutions(stripTraces ? executions.Select(e => e.WithoutStackTrace()) : executions)
             .WithAssemblies(_sessionAssemblies)
             .WithSessionState(sessionState)
             .WithPullRequestContext(_pullRequestContext);

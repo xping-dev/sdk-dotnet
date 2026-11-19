@@ -25,7 +25,6 @@ internal sealed class XpingTestFrameworkExecutor(
     IExecutionTracker executionTracker,
     IRetryDetector<ITest> retryDetector,
     ITestIdentityGenerator identityGenerator,
-    bool captureStackTraces,
     IRunningStatisticsAccumulator statisticsAccumulator,
     TestCaseCensus census) : XunitTestFrameworkExecutor(
         assemblyName,
@@ -59,7 +58,6 @@ internal sealed class XpingTestFrameworkExecutor(
             executionTracker,
             retryDetector,
             identityGenerator,
-            captureStackTraces,
             _assemblyName);
 
         // Retry libraries discard the messages of the attempts they retry, so those attempts are

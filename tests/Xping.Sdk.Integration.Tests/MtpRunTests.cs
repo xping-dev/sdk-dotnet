@@ -66,7 +66,11 @@ public sealed class MtpRunTests : IDisposable
         failed.GetProperty("outcome").GetString().Should().Be("failed");
         failed.GetProperty("exceptionType").GetString().Should().Be(typeof(InvalidOperationException).FullName);
         failed.GetProperty("errorMessage").GetString().Should().Contain("This is a test exception for tracking purposes.");
-        failed.GetProperty("stackTrace").GetString().Should().Contain(throwing);
+
+        // UploadStackTraces is off by default: the text stays home, the hash and the marker go.
+        (failed.TryGetProperty("stackTrace", out JsonElement trace) ? trace.GetString() : null).Should().BeNull();
+        failed.GetProperty("stackTraceOmitted").GetBoolean().Should().BeTrue();
+        failed.GetProperty("stackTraceHash").GetString().Should().NotBeNullOrEmpty();
 
         if (timingOut is not null)
         {
@@ -81,6 +85,11 @@ public sealed class MtpRunTests : IDisposable
             "the session is finalized. Output:\n{0}", output);
 
         StoredExecutionNames().Should().BeEquivalentTo(tests, "Output:\n{0}", output);
+
+        // The trace the upload left out is kept locally, where xping report groups failures by it.
+        _runner.ReadStoredSession().GetProperty("executions").EnumerateArray()
+            .Single(execution => MethodName(execution) == throwing)
+            .GetProperty("stackTrace").GetString().Should().Contain(throwing);
     }
 
     // On vstest the safety net rarely gets its upload out: the test host is killed 100 ms after the run

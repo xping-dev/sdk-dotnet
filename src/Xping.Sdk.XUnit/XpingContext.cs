@@ -143,7 +143,6 @@ public sealed class XpingContext : XpingContextOrchestrator
             executionTracker: Services.GetRequiredService<IExecutionTracker>(),
             retryDetector: Services.GetRequiredService<IRetryDetector<ITest>>(),
             identityGenerator: Services.GetRequiredService<ITestIdentityGenerator>(),
-            captureStackTraces: CaptureStackTraceConfigurationResolver.ResolveCaptureStackTraces(Services),
             statisticsAccumulator: Services.GetRequiredService<IRunningStatisticsAccumulator>());
     }
 }

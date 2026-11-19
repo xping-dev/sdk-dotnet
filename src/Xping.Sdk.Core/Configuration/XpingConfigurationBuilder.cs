@@ -152,13 +152,13 @@ public sealed class XpingConfigurationBuilder
     }
 
     /// <summary>
-    /// Sets whether to capture stack traces for failed tests.
+    /// Sets whether failed tests' stack traces are uploaded to Xping Cloud.
     /// </summary>
-    /// <param name="captureStackTraces">Whether to capture stack traces.</param>
+    /// <param name="uploadStackTraces">Whether to upload stack traces.</param>
     /// <returns>The builder instance for method chaining.</returns>
-    public XpingConfigurationBuilder WithCaptureStackTraces(bool captureStackTraces)
+    public XpingConfigurationBuilder WithUploadStackTraces(bool uploadStackTraces)
     {
-        _configuration.CaptureStackTraces = captureStackTraces;
+        _configuration.UploadStackTraces = uploadStackTraces;
         return this;
     }
 
