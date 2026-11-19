@@ -1991,6 +1991,7 @@ Later phases follow these decisions. Code changes are listed in §7.1, and each 
 | S11 | Supported runtimes | State the current support: **.NET Framework 4.6.2+ and .NET 8+**. This follows from `Microsoft.Extensions.* 10.0.x` (`src/Xping.Sdk.Core/Xping.Sdk.Core.csproj:57-64`) on `netstandard2.0`. The quickstarts' ".NET Framework 4.6.1+ / .NET Core 2.0+ / .NET 5+" (line 20 in each) is wrong. The CLI is a `net10.0` tool and needs the .NET 10 runtime. |
 | S12 | MSTest ≥ 3.8 | **A docs statement is enough.** No package or build change. |
 | S13 | Docs deploy | **No change.** Docs deploy from release tags only. Do not touch `release.yml`. P12's PR build only checks the docs. It does not deploy them. |
+| S14 | Stack traces sent to Cloud | **Don't upload raw stack text by default.** A customer review raised it. `CaptureStackTraces` (default `true`, and it also dropped traces from the local store) becomes `UploadStackTraces`, default `false`, env `XPING_UPLOADSTACKTRACES`. The upload always carries `StackTraceHash` (method signatures only, no paths or lines), so Cloud's failure-pattern grouping keeps working. `StackTraceOmitted` is set on the uploaded copy when the trace is left out. The local store always keeps the full trace, which the CLI's failure modes need. Opting in brings back the Cloud features that read the raw trace (PR failure frames, AI summaries). (K10) |
 
 **CLI**
 
@@ -2032,7 +2033,7 @@ Later phases follow these decisions. Code changes are listed in §7.1, and each 
 ### 7.1 Code changes the decisions require
 
 Each item is its own PR into `main`, separate from the docs phases and from `feat/docs-overhaul`. The "Before" column names the docs phase that must wait for it.
-Tracked in: K1–K8 → xping-dev/sdk-dotnet#369; K9 → xping-dev/dashboard#522. The six earlier code findings are in xping-dev/sdk-dotnet#368. Item 6 there (the Cloud Home page title) is fixed under dashboard#522.
+Tracked in: K1–K8 and K10 → xping-dev/sdk-dotnet#369; K9 → xping-dev/dashboard#522. The six earlier code findings are in xping-dev/sdk-dotnet#368. Item 6 there (the Cloud Home page title) is fixed under dashboard#522.
 
 | # | Change | Repo | Before |
 |---|---|---|---|
@@ -2045,6 +2046,7 @@ Tracked in: K1–K8 → xping-dev/sdk-dotnet#369; K9 → xping-dev/dashboard#522
 | K7 | Reword the `--last` / `--json` comments as conveniences. | sdk-dotnet | P6 |
 | K8 | CLI local evidence labels: `low/moderate/high` → `sparse/adequate/robust`, in text, `--json`, the specs and the samples. | sdk-dotnet | P6 |
 | K9 | Mark `docs/decisions/confidence-score-vs-flaky-detection.md` superseded. Point it to `docs/analytics/xping-confidence-scoring.md` and `FlakyDetectionEligibility.cs`. | dashboard | P7 |
+| K10 | Replace `CaptureStackTraces` with `UploadStackTraces` (default `false`, S14). Adapters always record the trace and its hash; the orchestrator strips the raw trace from the upload copy unless the option is on. Delete `CaptureStackTraceConfigurationResolver`. Update the config reference, local-store privacy notes, samples and READMEs. | sdk-dotnet | P4, P5 |
 
 No open questions remain from Phase 0. If a later phase finds a new decision it cannot settle from the code, it adds the question here before it writes the page.
 
