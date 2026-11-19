@@ -487,11 +487,11 @@ FINDINGS                                                      2 findings
 
 1.  HIGH  flaky
     failed 6 of 12 executions (50%) in 6 of 20 runs, 1 failure mode
-    evidence low | f_8f042eab | .../CalculatorTests.cs:42
+    evidence sparse | f_8f042eab | .../CalculatorTests.cs:42
 
 2.  MED   masked by retry
     passed on retry 6 times in 6 of 20 runs, up to attempt 2
-    evidence low | f_a2b61c2f | .../CalculatorTests.cs:42
+    evidence sparse | f_a2b61c2f | .../CalculatorTests.cs:42
 ```
 
 2 findings about this test · all: xping report --all --assembly SampleApp.MSTest --runs 20

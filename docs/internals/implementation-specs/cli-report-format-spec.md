@@ -490,7 +490,7 @@ row 1 (its D7), not a details line per finding and not a template.
 One dim line per finding, joined by `" | "`:
 
 ```
-evidence high | -env-cluster | f_c7b87f12 | .../SampleTests.cs:66
+evidence robust | -env-cluster | f_c7b87f12 | .../SampleTests.cs:66
 ```
 
 **The only change is the indent**, which moves from `Indent` (6) to `ContinuationIndent` (4),
@@ -581,13 +581,13 @@ NEEDS ATTENTION (5 high)                               most severe first
     SampleTests.ExceptionTest_ThrowsOnMissingDependency
     failed 20 of 20 executions (100%), one failure mode:
     System.InvalidOperationException
-    evidence high | -env-cluster | f_c7b87f12 | .../SampleTests.cs:66
+    evidence robust | -env-cluster | f_c7b87f12 | .../SampleTests.cs:66
 
 2.  HIGH  timing out
     SampleTests.TimeoutTest_UnresponsiveDependency_AwaitsForever
     timed out 20 of 20 executions (100%) in 20 of 20 runs, killed at its
     500ms limit
-    evidence high | -env-cluster | f_3ea537e4 | .../SampleTests.cs:43
+    evidence robust | -env-cluster | f_3ea537e4 | .../SampleTests.cs:43
 
 3.  HIGH  broken fixture
     UnprovisionedDatabase..ctor (3 tests)
@@ -596,17 +596,17 @@ NEEDS ATTENTION (5 high)                               most severe first
       FixtureTests.ThirdTestNeedingTheDatabase
     UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20
     runs
-    evidence high | all runs | f_7c905f05
+    evidence robust | all runs | f_7c905f05
 
 4.  HIGH  unstable timing
     SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState
     p50 73ms, ranging 18ms to 129ms, dispersion 0.73 over 20 executions
-    evidence high | -env | f_66c10ec3 | .../SampleTests.cs:83
+    evidence robust | -env | f_66c10ec3 | .../SampleTests.cs:83
 
 5.  HIGH  flaky                                          same test as #4
     SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState
     failed 6 of 20 executions (30%) in 6 of 20 runs, 1 failure mode
-    evidence high | -env-cluster | f_445c562e | .../SampleTests.cs:83
+    evidence robust | -env-cluster | f_445c562e | .../SampleTests.cs:83
 ```
 
 The block from the heading through the last trailer is fenced. The legend and, when the report was

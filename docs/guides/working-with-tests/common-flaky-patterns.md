@@ -189,7 +189,7 @@ public void ScheduleEvent_CreatesEventForToday()
     SchedulerTests.ScheduleEvent_CreatesEventForToday
     failed 100% in 00:00-06:00 local against 0% in the rest of the day,
     gap 100 pts across 4 days
-    evidence moderate | -env | f_3b0e91c4 | .../SchedulerTests.cs:18
+    evidence adequate | -env | f_3b0e91c4 | .../SchedulerTests.cs:18
 ```
 
 The finding says *when*, never *why*. It is capped at medium severity for that reason: a clock
@@ -293,7 +293,7 @@ public async Task Checkout_CompletesWithinTheServiceBudget()
     CheckoutTests.Checkout_CompletesWithinTheServiceBudget
     attempts to pass 1 -> 3 (+2) over 3 runs against 14 before, 2.4s
     spent retrying
-    evidence moderate | -env | f_5da7c018 | .../CheckoutTests.cs:27
+    evidence adequate | -env | f_5da7c018 | .../CheckoutTests.cs:27
 ```
 
 And once the retry budget stops covering it:
@@ -304,7 +304,7 @@ And once the retry budget stops covering it:
     CheckoutTests.Checkout_CompletesWithinTheServiceBudget
     gave up after 3 attempts in 7 of 8 retried runs (87.5%), 41s spent
     retrying
-    evidence high | -env | f_9c14ab63 | .../CheckoutTests.cs:27
+    evidence robust | -env | f_9c14ab63 | .../CheckoutTests.cs:27
 ```
 
 The second block is the argument for deleting the retry attribute rather than raising it: the

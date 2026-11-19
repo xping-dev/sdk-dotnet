@@ -111,17 +111,17 @@ NEEDS ATTENTION (1 high, 1 medium, 1 low)              most severe first
 1.  HIGH  flaky
     SummaryTests.GenerateMonthlySummary
     failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
-    evidence moderate | -env-cluster | f_2a91c0de | ...ummaryTests.cs:88
+    evidence adequate | -env-cluster | f_2a91c0de | ...ummaryTests.cs:88
 
 2.  MED   slower
     FlowTests.CheckoutFlow_Completes
     3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock
-    evidence high | -env | f_8c04b71a | tests/Checkout/FlowTests.cs:214
+    evidence robust | -env | f_8c04b71a | .../Checkout/FlowTests.cs:214
 
 3.  LOW   stopped running
     LegacyImport.Roundtrip
     ran in 12 of 17 earlier runs, absent from the last 3
-    evidence moderate | -partial | f_1d77e3f5 | .../ImportTests.cs:41
+    evidence adequate | -partial | f_1d77e3f5 | .../ImportTests.cs:41
 ```
 
 rates: the marker on each finding says which runs its percentage was
@@ -150,7 +150,7 @@ A finding about a cluster — a broken fixture, a shared failure — names the c
       FixtureTests.ThirdTestNeedingTheDatabase
     UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20
     runs
-    evidence high | all runs | f_7c905f05
+    evidence robust | all runs | f_7c905f05
 ```
 
 The `-env-cluster`, `-env`, `-partial` and `all runs` markers in each finding's last line say which runs that finding's rate was counted out of — see [The population marker](#the-population-marker) below, because two rates are comparable only where their markers agree.
@@ -191,7 +191,7 @@ The section is absent when the newest run was clean. On a store holding a single
 
 ### The population marker
 
-**The evidence level counts the runs behind the finding, not the runs behind the test.** `evidence moderate` means the claim was computed from somewhere between 8 and 15 independent runs — a `time-sensitive` split reads only the runs whose machine recorded a clock, and a `slower` finding only the runs whose durations could be normalised. So one test can carry two findings at two different levels, and that is the two claims resting on different amounts of data rather than an inconsistency. The exact number is `evidenceSessions` in the JSON. Whether a finding is shown at all is a separate bar, and that one does read the test's whole history in the window.
+**The evidence level counts the runs behind the finding, not the runs behind the test.** `evidence adequate` means the claim was computed from somewhere between 8 and 15 independent runs — a `time-sensitive` split reads only the runs whose machine recorded a clock, and a `slower` finding only the runs whose durations could be normalised. So one test can carry two findings at two different levels, and that is the two claims resting on different amounts of data rather than an inconsistency. The exact number is `evidenceSessions` in the JSON. Xping Cloud uses the same three words on its own scale (`sparse` below an effective sample size of 15, `robust` from 40), so `evidence robust` here and `cloud evidence adequate` in a finding's detail can both be right: the local scale fits a 20-run window, Cloud's a long history. Whether a finding is shown at all is a separate bar, and that one does read the test's whole history in the window.
 
 The marker between the evidence level and the finding id — `all runs`, `-env`, `-env-cluster` or `-partial` — says **which runs went into the denominator** of that finding's rate. Every finding carries one, including the ones that set nothing aside, so that "we counted everything" and "this build did not say" never read alike.
 
@@ -400,7 +400,7 @@ FINDING                                                       row 5 of 5
 5.  HIGH  flaky                                          same test as #4
     SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState
     failed 6 of 20 executions (30%) in 6 of 20 runs, 1 failure mode
-    evidence high | -env-cluster | f_445c562e | .../SampleTests.cs:83
+    evidence robust | -env-cluster | f_445c562e | .../SampleTests.cs:83
 
     test      SampleApp.XUnit.SampleTests.
               FlakyTest_EnvironmentState_FailsBasedOnSystemState
@@ -528,7 +528,7 @@ FINDING                                                       row 1 of 1
 1.  HIGH  flaky
     CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
     failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode
-    evidence low | -env-cluster | f_1491bf4c | .../CalculatorTests.cs:57
+    evidence sparse | -env-cluster | f_1491bf4c | ...lculatorTests.cs:57
 
     test      SampleApp.MSTest.CalculatorTests.
               FlakyTest_RaceCondition_FailsIntermittently
@@ -665,11 +665,11 @@ FINDINGS                                                      2 findings
 
 1.  HIGH  flaky
     failed 6 of 12 executions (50%) in 6 of 20 runs, 1 failure mode
-    evidence low | -env-cluster | f_8f042eab | .../CalculatorTests.cs:42
+    evidence sparse | -env-cluster | f_8f042eab | ...lculatorTests.cs:42
 
 2.  MED   masked by retry
     passed on retry 6 times in 6 of 20 runs, up to attempt 2
-    evidence low | -env | f_a2b61c2f | .../CalculatorTests.cs:42
+    evidence sparse | -env | f_a2b61c2f | .../CalculatorTests.cs:42
 ```
 
 rates: the marker on each finding says which runs its percentage was
@@ -759,7 +759,7 @@ FINDINGS                                                       1 finding
 
 1.  HIGH  flaky
     failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode
-    evidence low | -env-cluster | f_1491bf4c | .../CalculatorTests.cs:57
+    evidence sparse | -env-cluster | f_1491bf4c | ...lculatorTests.cs:57
     repro  run 6 times: at 4 of 9 runs failing (44.4%), 6 runs show a
            failure 95% of the time
 ```
@@ -828,7 +828,7 @@ The last segment of a finding's trailer is where the test is declared:
 
 <!-- xping:sample docs-source-location trailer -->
 ```
-    evidence high | -env | f_2a91c0de | tests/Billing/SummaryTests.cs:88
+    evidence robust | -env | f_2a91c0de | .../Billing/SummaryTests.cs:88
 ```
 
 It is the file and the line the test's body starts on, made relative to the repository root, and it
@@ -1124,7 +1124,7 @@ names, and `tests` is `healthy` plus `flagged` plus `failedLatestRun`:
 
 ```json
 {
-  "schemaVersion": "1.32",
+  "schemaVersion": "1.33",
   "scope": "assembly",
   "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
   "context": {
@@ -1194,7 +1194,7 @@ names, and `tests` is `healthy` plus `flagged` plus `failedLatestRun`:
       "id": "f_2a91c0de",
       "kind": "Flaky",
       "severity": "high",
-      "evidenceLevel": "moderate",
+      "evidenceLevel": "adequate",
       "evidenceSessions": 12,
       "population": "excludesEnvironmentalAndClustered",
       "subject": { "type": "test", "fullyQualifiedName": "…", "shortName": "SummaryTests.GenerateMonthlySummary",

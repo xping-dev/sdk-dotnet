@@ -9,7 +9,7 @@ FINDING                                                       row 1 of 1
 1.  HIGH  flaky
     SampleTests.Refund?[31m?Caf??Total
     failed 5 of 20 executions (25%) in 5 of 20 runs, 1 failure mode
-    evidence high | -env-cluster | f_b0290552 | SampleTests.cs:10
+    evidence robust | -env-cluster | f_b0290552 | SampleTests.cs:10
 
     test      MyApp.Tests.SampleTests.Refund?[31m?Caf??Total
     assembly  MyApp.Tests

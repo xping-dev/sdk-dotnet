@@ -326,7 +326,7 @@ public sealed class CloudRenderingTests
     {
         string report = Render(Get("cloud-broken"), Unicode);
 
-        Assert.Contains("    evidence high | -env-cluster | f_c7b87f12 | .../SampleTests.cs:66", report, StringComparison.Ordinal);
+        Assert.Contains("    evidence robust | -env-cluster | f_c7b87f12 | .../SampleTests.cs:66", report, StringComparison.Ordinal);
         Assert.DoesNotContain(Lines(report), l => l.Contains(" | confidence", StringComparison.Ordinal));
     }
 

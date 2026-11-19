@@ -81,7 +81,7 @@ FINDINGS                                                       1 finding
 
 1.  HIGH  flaky
     failed 11 of 20 executions (55%) in 11 of 20 runs, 7 failure modes
-    evidence high | -env-cluster | f_16b97583 | SampleTests.cs:10
+    evidence robust | -env-cluster | f_16b97583 | SampleTests.cs:10
 ```
 
 rates: the marker on each finding says which runs its percentage was

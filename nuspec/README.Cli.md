@@ -42,13 +42,13 @@ NEEDS ATTENTION (2 high)                               most severe first
 1.  HIGH  flaky
     SampleTests.FlakyTest_PassesOnRetry
     failed 9 of 18 executions (50%) in 9 of 9 runs, 1 failure mode
-    evidence moderate | -env-cluster | f_2b84a621 | ...SampleTests.cs:96
+    evidence adequate | -env-cluster | f_2b84a621 | ...SampleTests.cs:96
 
 2.  HIGH  always failing
     SampleTests.ThrowingTestIsTracked
     failed 9 of 9 executions (100%), one failure mode:
     System.InvalidOperationException
-    evidence low | -env-cluster | f_c1774d82 | .../SampleTests.cs:65
+    evidence sparse | -env-cluster | f_c1774d82 | .../SampleTests.cs:65
 ```
 
 rates: the marker on each finding says which runs its percentage was

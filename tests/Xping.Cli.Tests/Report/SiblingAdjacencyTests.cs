@@ -192,7 +192,7 @@ public sealed class SiblingAdjacencyTests
             id,
             FindingKind.Flaky,
             Severity.High,
-            EvidenceLevel.Moderate,
+            EvidenceLevel.Adequate,
             10,
             subject,
             new StubEvidence(),

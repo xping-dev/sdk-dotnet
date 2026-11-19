@@ -120,8 +120,10 @@ internal sealed record ReportEnvelope(
     /// unhealthy, read once per project, whether or not the local analysis named them.
     /// 1.32 is where <c>context.cloud.health</c> gained <c>verdicts</c>, its unhealthy tests by
     /// Cloud's verdict, and each overview row gained <c>cloud</c>: the same counts for its assembly.
+    /// 1.33 is where a finding's <c>evidenceLevel</c> became <c>sparse</c>, <c>adequate</c> or
+    /// <c>robust</c>, Cloud's words, in place of <c>low</c>, <c>moderate</c> or <c>high</c>.
     /// </remarks>
-    public const string CurrentSchemaVersion = "1.32";
+    public const string CurrentSchemaVersion = "1.33";
 }
 
 /// <summary>
@@ -356,7 +358,7 @@ internal sealed record NotMeasuredDto(int AwaitingRuns, int Unreadable);
 /// <param name="Id">Stable short identity.</param>
 /// <param name="Kind">What the finding claims.</param>
 /// <param name="Severity">How much attention it deserves.</param>
-/// <param name="EvidenceLevel">How much data it rests on.</param>
+/// <param name="EvidenceLevel">How much data it rests on: <c>sparse</c>, <c>adequate</c> or <c>robust</c>.</param>
 /// <param name="EvidenceSessions">
 /// Independent runs this finding was computed from — what <paramref name="EvidenceLevel"/> was
 /// banded from. Not the window's run count, and not the runs the test appeared in: a kind that

@@ -173,23 +173,23 @@ NEEDS ATTENTION (4 high)                               most severe first
 1.  HIGH  flaky
     SampleTests.FlakyTest_PassesOnRetry
     failed 9 of 18 executions (50%) in 9 of 9 runs, 1 failure mode
-    evidence moderate | -env-cluster | f_2b84a621 | ...SampleTests.cs:96
+    evidence adequate | -env-cluster | f_2b84a621 | ...SampleTests.cs:96
 
 2.  HIGH  masked by retry                                same test as #1
     SampleTests.FlakyTest_PassesOnRetry
     passed on retry 9 times in 9 of 9 runs, up to attempt 2
-    evidence moderate | -env | f_e98db1e6 | .../SampleTests.cs:96
+    evidence adequate | -env | f_e98db1e6 | .../SampleTests.cs:96
 
 3.  HIGH  always failing
     SampleTests.ThrowingTestIsTracked
     failed 9 of 9 executions (100%), one failure mode:
     System.InvalidOperationException
-    evidence low | -env-cluster | f_c1774d82 | .../SampleTests.cs:65
+    evidence sparse | -env-cluster | f_c1774d82 | .../SampleTests.cs:65
 
 4.  HIGH  flaky
     SampleTests.FlakyTest_RaceCondition_FailsIntermittently
     failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode
-    evidence low | -env-cluster | f_d24c5aa9 | .../SampleTests.cs:118
+    evidence sparse | -env-cluster | f_d24c5aa9 | .../SampleTests.cs:118
 ```
 
 rates: the marker on each finding says which runs its percentage was
@@ -232,7 +232,7 @@ knowing:
 
 1. **The agent hits a failing test.** Instead of rewriting the assertion on one red run, it asks
    Xping what this test's history looks like.
-2. **Xping answers with evidence.** Failed 34 of 34 runs, one failure signature, evidence high —
+2. **Xping answers with evidence.** Failed 34 of 34 runs, one failure signature, evidence robust —
    or failed 4 of 40, three signatures, only ever in parallel.
 3. **The agent acts on it.** A failure that consistent isn't flake, it's a bug, and the test was
    right to catch it. A single local failure against a long clean history is noise: run it again,

@@ -338,7 +338,7 @@ FINDING                                                       row 2 of 6
 2.  HIGH  flaky
     CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
     failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode
-    evidence low | f_1491bf4c | .../CalculatorTests.cs:57
+    evidence sparse | f_1491bf4c | .../CalculatorTests.cs:57
 
     test      SampleApp.MSTest.CalculatorTests.
               FlakyTest_RaceCondition_FailsIntermittently

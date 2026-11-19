@@ -43,7 +43,7 @@ public sealed class EnvelopeBuilderTests
             id,
             FindingKind.Flaky,
             severity,
-            EvidenceLevel.Moderate,
+            EvidenceLevel.Adequate,
             5,
             new FindingSubject.SingleTest(Reference(fingerprint)),
             new StubEvidence(),
@@ -54,7 +54,7 @@ public sealed class EnvelopeBuilderTests
             id,
             FindingKind.BrokenFixture,
             Severity.Medium,
-            EvidenceLevel.Moderate,
+            EvidenceLevel.Adequate,
             5,
             new FindingSubject.Group("g-1", [.. members.Select(Reference)]),
             new StubEvidence(),
@@ -199,7 +199,7 @@ public sealed class EnvelopeBuilderTests
         using JsonDocument document = JsonDocument.Parse(Json(Build(context, AnalysisResult.Empty, History(context))));
         JsonElement root = document.RootElement;
 
-        Assert.Equal("1.32", root.GetProperty("schemaVersion").GetString());
+        Assert.Equal("1.33", root.GetProperty("schemaVersion").GetString());
         Assert.Equal(
             ["schemaVersion", "scope", "window", "context", "summary", "latestRun", "selection", "test", "findings", "truncated"],
             root.EnumerateObject().Select(property => property.Name));

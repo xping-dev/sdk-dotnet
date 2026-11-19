@@ -11,7 +11,7 @@ NEEDS ATTENTION (1 medium)                             most severe first
     cloud: confidence 0.58 ▲0.04 · moderately reliable · 35 d · pending
     local: flaky in 20 runs here
     failed 4 of 20 executions (20%) in 4 of 20 runs, 1 failure mode
-    evidence moderate | -env-cluster | f_5da7c018 | ...eckoutTests.cs:27
+    evidence adequate | -env-cluster | f_5da7c018 | ...eckoutTests.cs:27
 
 FLAGGED IN CLOUD
 ────────────────────────────────────────────────────────────────────────

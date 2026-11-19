@@ -488,12 +488,12 @@ public sealed class ShareableOutputTests
                 "1.  HIGH  flaky",
                 "    CartTests.PlacesAnOrder",
                 "    failed 7 of 20",
-                "    evidence moderate | -env-cluster | f_2a91",
+                "    evidence adequate | -env-cluster | f_2a91",
                 "",
                 "2.  LOW   stopped running",
                 "    CartTests.Settles",
                 "    ran in 12 of 17 earlier runs",
-                "    evidence moderate | -partial | f_2a91"
+                "    evidence adequate | -partial | f_2a91"
             ],
             Rows(report));
     }
@@ -689,7 +689,7 @@ public sealed class ShareableOutputTests
                 // 69 columns, so it wraps at the budget the name and the trailer share.
                 "    UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20",
                 "    runs",
-                "    evidence moderate | all runs | f_2a91"
+                "    evidence adequate | all runs | f_2a91"
             ],
             Rows(report));
     }
@@ -884,13 +884,13 @@ public sealed class ShareableOutputTests
         // the file and line are what a reader opens, and the elision cuts at a directory boundary so
         // what survives still reads as a path.
         string trailer = Trailer(Render(Envelope(
-            FindingWith("moderate", "tests/Billing/SummaryTests.cs", 88))));
+            FindingWith("adequate", "tests/Billing/SummaryTests.cs", 88))));
 
         Assert.Contains("-env-cluster", trailer, StringComparison.Ordinal);
         Assert.EndsWith(".../SummaryTests.cs:88", trailer, StringComparison.Ordinal);
 
         // And the head is never what gets cut: "evidence …" is the first thing read.
-        Assert.StartsWith("evidence moderate | ", trailer.TrimStart(), StringComparison.Ordinal);
+        Assert.StartsWith("evidence adequate | ", trailer.TrimStart(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1105,7 +1105,7 @@ public sealed class ShareableOutputTests
         string trailer = Fenced(report).Single(l => l.Contains("evidence", StringComparison.Ordinal));
 
         Assert.Contains(
-            "evidence moderate | -env-cluster | f_2a91 | ", trailer, StringComparison.Ordinal);
+            "evidence adequate | -env-cluster | f_2a91 | ", trailer, StringComparison.Ordinal);
         Assert.EndsWith("CartTests.cs:1042", trailer.TrimEnd(), StringComparison.Ordinal);
         Assert.Contains("...", trailer, StringComparison.Ordinal);
     }
@@ -1158,8 +1158,8 @@ public sealed class ShareableOutputTests
     /// is pinned here.
     /// </summary>
     [Theory]
-    [InlineData("moderate")]
-    [InlineData("high")]
+    [InlineData("adequate")]
+    [InlineData("robust")]
     public void ThePathIsGivenEveryColumnTheTrailerHasLeftAndNoMore(string evidence)
     {
         // Grow one column at a time and find the longest path that survives whole.
@@ -1189,19 +1189,19 @@ public sealed class ShareableOutputTests
     [Fact]
     public void AnOversizedTrailerDropsTheLocationRatherThanTruncatingTheEvidence()
     {
-        FindingDto finding = FindingWith("moderate", "tests/Cart/CartTests.cs", 42) with
+        FindingDto finding = FindingWith("adequate", "tests/Cart/CartTests.cs", 42) with
         {
             // Exactly the columns the head and the population marker leave, so the location is the
             // only segment with nowhere to go.
             Id = new string(
                 'f',
-                FenceWidth - Indent - "evidence moderate | ".Length - "-env-cluster | ".Length)
+                FenceWidth - Indent - "evidence adequate | ".Length - "-env-cluster | ".Length)
         };
 
         string trailer = Trailer(Render(Envelope(finding)));
 
         Assert.True(trailer.Length <= FenceWidth, $"'{trailer}' is {trailer.Length} columns");
-        Assert.StartsWith("evidence moderate | ", trailer.TrimStart(), StringComparison.Ordinal);
+        Assert.StartsWith("evidence adequate | ", trailer.TrimStart(), StringComparison.Ordinal);
         Assert.DoesNotContain("CartTests", trailer, StringComparison.Ordinal);
     }
 

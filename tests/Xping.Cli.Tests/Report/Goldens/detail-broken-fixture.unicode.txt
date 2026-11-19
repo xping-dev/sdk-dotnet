@@ -11,7 +11,7 @@ FINDING                                                       row 1 of 1
       CheckoutTests.Refunds
       CartTests.Totals
     CheckoutFixture.Setup failed, blocking 12 tests in 3 of 20 runs
-    evidence moderate | all runs | f_222718db
+    evidence adequate | all runs | f_222718db
 
     failing member  CheckoutFixture.Setup
     where           per-test setup

@@ -8,7 +8,7 @@ FINDING                                                       row 5 of 5
 5.  HIGH  flaky                                          same test as #4
     SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState
     failed 6 of 20 executions (30%) in 6 of 20 runs, 1 failure mode
-    evidence high | -env-cluster | f_445c562e | .../SampleTests.cs:83
+    evidence robust | -env-cluster | f_445c562e | .../SampleTests.cs:83
 
     test      SampleApp.XUnit.SampleTests.
               FlakyTest_EnvironmentState_FailsBasedOnSystemState

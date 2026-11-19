@@ -2018,7 +2018,7 @@ internal sealed class TextReportRenderer(OutputCapabilities capabilities, bool d
         if (Location(finding.Subject) is { } location)
         {
             // The path absorbs the truncation rather than the line as a whole. Fit() cuts from the
-            // left, so applied to the joined trailer it would eat "evidence high" and leave the
+            // left, so applied to the joined trailer it would eat "evidence robust" and leave the
             // path — the one segment that can afford to lose its head — untouched.
             int spent = 0;
             foreach (string part in trailer)

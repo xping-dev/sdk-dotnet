@@ -10,7 +10,7 @@ FINDING                                                       row 1 of 2
     SampleTests.Checkout_RequiresProvisionedDatabase
     failed 20 of 20 executions (100%), one failure mode:
     System.InvalidOperationException
-    evidence high | -env-cluster | f_87ef5c9a | SampleTests.cs:10
+    evidence robust | -env-cluster | f_87ef5c9a | SampleTests.cs:10
 
     test      MyApp.Tests.SampleTests.
               Checkout_RequiresProvisionedDatabase

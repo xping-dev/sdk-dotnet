@@ -46,10 +46,10 @@ internal static class LocalAnalysisConstants
     /// </para>
     /// <para>
     /// The subject's sessions, deliberately, and not the ones a given finding was computed from —
-    /// which is what <see cref="EvidenceModerateSessions"/> bands. Whether a test has enough
+    /// which is what <see cref="EvidenceAdequateSessions"/> bands. Whether a test has enough
     /// history to be judged has to be answered once for every kind, or one metric flags a test that
     /// another silently drops with nothing on screen to explain the difference. A claim resting on
-    /// less than its subject's history is still reported; it is reported saying <c>low</c>.
+    /// less than its subject's history is still reported; it is reported saying <c>sparse</c>.
     /// </para>
     /// </remarks>
     public const int MinimumSessionsPerTestToReport = 5;
@@ -464,7 +464,7 @@ internal static class LocalAnalysisConstants
     public const double SeverityMediumThreshold = 0.30;
 
     /// <summary>
-    /// Runs a finding must rest on before its evidence is better than <c>Low</c> (8).
+    /// Runs a finding must rest on before its evidence is better than <c>Sparse</c> (8).
     /// </summary>
     /// <remarks>
     /// <para>
@@ -481,17 +481,17 @@ internal static class LocalAnalysisConstants
     /// </para>
     /// <para>
     /// Cloud looks over a long lookback and can afford 15 and 40. <see cref="DefaultWindowSessions"/>
-    /// caps the local window at twenty, so those figures would put <c>High</c> out of reach entirely
-    /// and make <c>Moderate</c> mean "present in three quarters of every build the developer has
+    /// caps the local window at twenty, so those figures would put <c>Robust</c> out of reach entirely
+    /// and make <c>Adequate</c> mean "present in three quarters of every build the developer has
     /// run". Eight and fifteen carry the same intent against the window the CLI actually has.
     /// </para>
     /// </remarks>
-    public const int EvidenceModerateSessions = 8;
+    public const int EvidenceAdequateSessions = 8;
 
     /// <summary>
-    /// Runs above which evidence is <c>High</c> (15).
+    /// Runs above which evidence is <c>Robust</c> (15).
     /// </summary>
-    public const int EvidenceHighSessions = 15;
+    public const int EvidenceRobustSessions = 15;
 
     /// <summary>
     /// Days over which the recency term halves (3).

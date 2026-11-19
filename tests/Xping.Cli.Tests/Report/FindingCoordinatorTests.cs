@@ -382,15 +382,15 @@ public sealed class FindingCoordinatorTests
         // The stub measures over every run its subject appeared in, and the subject runs once in
         // every session, so all three numbers coincide here. The next test is where they part.
         Assert.Equal(
-            EvidenceLevel.Low,
+            EvidenceLevel.Sparse,
             coordinator.Run(Context(sessionCount: 7), null, warnings).Findings[0].EvidenceLevel);
 
         Assert.Equal(
-            EvidenceLevel.Moderate,
+            EvidenceLevel.Adequate,
             coordinator.Run(Context(sessionCount: 8), null, warnings).Findings[0].EvidenceLevel);
 
         Assert.Equal(
-            EvidenceLevel.High,
+            EvidenceLevel.Robust,
             coordinator.Run(Context(sessionCount: 16), null, warnings).Findings[0].EvidenceLevel);
     }
 
@@ -408,7 +408,7 @@ public sealed class FindingCoordinatorTests
         Finding finding = coordinator.Run(Context(sessionCount: 20), null, warnings).Findings[0];
 
         Assert.Equal(20, Context(sessionCount: 20).Tests.SessionsRunIn("fp-Test0"));
-        Assert.Equal(EvidenceLevel.Moderate, finding.EvidenceLevel);
+        Assert.Equal(EvidenceLevel.Adequate, finding.EvidenceLevel);
 
         // Published beside the band, so a reader can see which of the two numbers it came from.
         Assert.Equal(10, finding.EvidenceSessions);
@@ -428,7 +428,7 @@ public sealed class FindingCoordinatorTests
         AnalysisResult result = coordinator.Run(Context(sessionCount: 20), null, warnings);
 
         Assert.Equal(0, result.ExcludedLowEvidence);
-        Assert.Equal(EvidenceLevel.Low, Assert.Single(result.Findings).EvidenceLevel);
+        Assert.Equal(EvidenceLevel.Sparse, Assert.Single(result.Findings).EvidenceLevel);
     }
 
     [Fact]
@@ -451,7 +451,7 @@ public sealed class FindingCoordinatorTests
 
         Assert.Equal(FindingKind.DurationUnstable, finding.Kind);
         Assert.Equal(10, finding.EvidenceSessions);
-        Assert.Equal(EvidenceLevel.Moderate, finding.EvidenceLevel);
+        Assert.Equal(EvidenceLevel.Adequate, finding.EvidenceLevel);
     }
 
     [Fact]
@@ -573,8 +573,8 @@ public sealed class FindingCoordinatorTests
         Assert.True(evidenced.Impact > thin.Impact, $"{evidenced.Impact} > {thin.Impact}");
         // Published as well as ranked. The evidence level said this all along; until now it never
         // reached the sort.
-        Assert.Equal(EvidenceLevel.Low, thin.EvidenceLevel);
-        Assert.Equal(EvidenceLevel.High, evidenced.EvidenceLevel);
+        Assert.Equal(EvidenceLevel.Sparse, thin.EvidenceLevel);
+        Assert.Equal(EvidenceLevel.Robust, evidenced.EvidenceLevel);
     }
 
     [Fact]

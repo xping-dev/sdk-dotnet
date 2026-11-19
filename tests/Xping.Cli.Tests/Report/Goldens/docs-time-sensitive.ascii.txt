@@ -9,7 +9,7 @@ NEEDS ATTENTION (1 medium)                             most severe first
     SchedulerTests.ScheduleEvent_CreatesEventForToday
     failed 100% in 00:00-06:00 local against 0% in the rest of the day,
     gap 100 pts across 4 days
-    evidence moderate | -env | f_3b0e91c4 | .../SchedulerTests.cs:18
+    evidence adequate | -env | f_3b0e91c4 | .../SchedulerTests.cs:18
 ```
 
 rates: the marker on each finding says which runs its percentage was

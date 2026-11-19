@@ -40,7 +40,7 @@ FINDINGS                                                       1 finding
 
 1.  HIGH  flaky
     failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode
-    evidence low | -env-cluster | f_1491bf4c | .../CalculatorTests.cs:57
+    evidence sparse | -env-cluster | f_1491bf4c | ...lculatorTests.cs:57
     repro  run 6 times: at 4 of 9 runs failing (44.4%), 6 runs show a
            failure 95% of the time
 ```

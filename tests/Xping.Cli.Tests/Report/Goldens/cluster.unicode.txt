@@ -13,7 +13,7 @@ NEEDS ATTENTION (1 high)                               most severe first
       +2 more
     UnprovisionedDatabase..ctor failed, blocking 5 tests in 20 of 20
     runs
-    evidence moderate | all runs | f_2a91
+    evidence adequate | all runs | f_2a91
 ```
 
 rates: the marker on each finding says which runs its percentage was

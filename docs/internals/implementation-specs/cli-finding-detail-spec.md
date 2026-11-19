@@ -647,7 +647,7 @@ FINDING                                                       row 5 of 6
 5.  HIGH  flaky                                          same test as #4
     SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState
     failed 6 of 20 executions (30%) in 6 of 20 runs, 1 failure mode
-    evidence high | -env-cluster | f_445c562e | .../SampleTests.cs:83
+    evidence robust | -env-cluster | f_445c562e | .../SampleTests.cs:83
 
     test      SampleApp.XUnit.SampleTests.
               FlakyTest_EnvironmentState_FailsBasedOnSystemState
@@ -688,7 +688,7 @@ FINDING                                                       row 3 of 6
         tests/SampleApp.XUnit/FixtureTests.cs:26
     UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20
     runs
-    evidence high | all runs | f_7c905f05
+    evidence robust | all runs | f_7c905f05
 
     failing member  UnprovisionedDatabase..ctor
     where           fixture setup
