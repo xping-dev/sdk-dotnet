@@ -19,12 +19,12 @@ NEEDS ATTENTION (2 high)                               most severe first
     SampleTests.Checkout_RequiresProvisionedDatabase
     failed 20 of 20 executions (100%), one failure mode:
     System.InvalidOperationException
-    evidence high | -env-cluster | f_87ef5c9a | SampleTests.cs:10
+    evidence robust | -env-cluster | f_87ef5c9a | SampleTests.cs:10
 
 2.  HIGH  flaky
     SampleTests.Checkout_AppliesDiscount
     failed 1 of 20 executions (5%) in 1 of 20 runs, 1 failure mode
-    evidence high | -env-cluster | f_d7dbebbd | SampleTests.cs:10
+    evidence robust | -env-cluster | f_d7dbebbd | SampleTests.cs:10
 ```
 
 rates: the marker on each finding says which runs its percentage was

@@ -51,7 +51,7 @@ public sealed class LatestRunAnalyzerTests
             id,
             FindingKind.Flaky,
             Severity.Medium,
-            EvidenceLevel.Moderate,
+            EvidenceLevel.Adequate,
             10,
             names.Length == 1
                 ? new FindingSubject.SingleTest(Reference(names[0]))

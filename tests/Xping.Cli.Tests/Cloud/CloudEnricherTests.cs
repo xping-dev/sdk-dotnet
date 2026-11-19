@@ -1300,7 +1300,7 @@ public sealed class CloudEnricherTests : IDisposable
                 f.Id,
                 Enum.TryParse(f.Kind, out FindingKind kind) ? kind : FindingKind.Flaky,
                 Severity.High,
-                EvidenceLevel.High,
+                EvidenceLevel.Robust,
                 20,
                 new FindingSubject.SingleTest(new TestReference(
                     f.Subject.Fingerprint!,

@@ -92,17 +92,17 @@ NEEDS ATTENTION (1 high, 1 medium, 1 low)              most severe first
 1.  HIGH  flaky
     SummaryTests.GenerateMonthlySummary
     failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
-    evidence moderate | -env-cluster | f_2a91c0de | ...ummaryTests.cs:88
+    evidence adequate | -env-cluster | f_2a91c0de | ...ummaryTests.cs:88
 
 2.  MED   slower
     FlowTests.CheckoutFlow_Completes
     3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock
-    evidence high | -env | f_8c04b71a | tests/Checkout/FlowTests.cs:214
+    evidence robust | -env | f_8c04b71a | .../Checkout/FlowTests.cs:214
 
 3.  LOW   stopped running
     LegacyImport.Roundtrip
     ran in 12 of 17 earlier runs, absent from the last 3
-    evidence moderate | -partial | f_1d77e3f5 | .../ImportTests.cs:41
+    evidence adequate | -partial | f_1d77e3f5 | .../ImportTests.cs:41
 ```
 
 rates: the marker on each finding says which runs its percentage was
@@ -122,7 +122,7 @@ the claim.
 | `HIGH` / `MED` / `LOW` | Impact ranking. Findings are ordered most severe first, so the top of the block is the part worth reading. |
 | `flaky`, `slower`, `stopped running` | The *kind* — what the finding claims. There are sixteen; the [CLI reference](../cli/command-reference.md#finding-kinds) lists them all. |
 | The counts line | The measurement the claim rests on, in plain numbers. |
-| `evidence low\|moderate\|high` | How many runs stand behind *this claim* — which is not always every run the test appeared in, since a finding can only count the runs it could measure. A `low`-evidence finding is a lead, not a verdict. |
+| `evidence sparse\|adequate\|robust` | How many runs stand behind *this claim* — which is not always every run the test appeared in, since a finding can only count the runs it could measure. A `sparse`-evidence finding is a lead, not a verdict. |
 | `f_2a91c0de` | A stable id for that finding, so you can refer to it in a ticket or diff two reports. |
 
 The report body sits inside a fenced code block and stays under 72 columns, so pasting it into

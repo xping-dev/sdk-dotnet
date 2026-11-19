@@ -41,7 +41,7 @@ FINDINGS                                                       1 finding
 
 2.  HIGH  timing out
     timed out 4 of 8 runs (50%), killed at its 5s limit
-    evidence moderate | -env-cluster | f_6e1d0b7a | ...atewayTests.cs:57
+    evidence adequate | -env-cluster | f_6e1d0b7a | ...atewayTests.cs:57
 ```
 
 rates: the marker on each finding says which runs its percentage was

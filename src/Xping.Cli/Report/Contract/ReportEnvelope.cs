@@ -356,7 +356,7 @@ internal sealed record NotMeasuredDto(int AwaitingRuns, int Unreadable);
 /// <param name="Id">Stable short identity.</param>
 /// <param name="Kind">What the finding claims.</param>
 /// <param name="Severity">How much attention it deserves.</param>
-/// <param name="EvidenceLevel">How much data it rests on.</param>
+/// <param name="EvidenceLevel">How much data it rests on: <c>sparse</c>, <c>adequate</c> or <c>robust</c>.</param>
 /// <param name="EvidenceSessions">
 /// Independent runs this finding was computed from — what <paramref name="EvidenceLevel"/> was
 /// banded from. Not the window's run count, and not the runs the test appeared in: a kind that

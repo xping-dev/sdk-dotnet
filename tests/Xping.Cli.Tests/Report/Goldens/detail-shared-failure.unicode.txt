@@ -11,7 +11,7 @@ FINDING                                                       row 1 of 1
       CheckoutTests.Refunds
       CartTests.Totals
     12 tests failed alike in 3 of 20 runs, worst run hit 12
-    evidence moderate | all runs | f_5aefe7b7
+    evidence adequate | all runs | f_5aefe7b7
 
     tests affected  12
     failures        47

@@ -226,7 +226,7 @@ internal static partial class ReportFixtures
                     "Checkout.Tests.FixtureTests.SecondTestNeedingTheDatabase",
                     "Checkout.Tests.FixtureTests.ThirdTestNeedingTheDatabase"
                 ]) with
-            { Id = "f_7c905f05", EvidenceLevel = "high" }),
+            { Id = "f_7c905f05", EvidenceLevel = "robust" }),
         "docs-location" => DocsLocation(),
 
         // One finding, whose trailer has room for its path whole: the section this feeds is about
@@ -237,7 +237,7 @@ internal static partial class ReportFixtures
                 "Checkout.Tests.SummaryTests.GenerateMonthlySummary",
                 "3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock",
                 "tests/Billing/SummaryTests.cs", 88) with
-            { Id = "f_2a91c0de", EvidenceLevel = "high" }),
+            { Id = "f_2a91c0de", EvidenceLevel = "robust" }),
         "docs-time-sensitive" => Envelope(
             Finding(nameof(FindingKind.TimeSensitive), "medium",
                 "MyApp.Tests.SchedulerTests.ScheduleEvent_CreatesEventForToday",
@@ -256,7 +256,7 @@ internal static partial class ReportFixtures
                 "MyApp.Tests.CheckoutTests.Checkout_CompletesWithinTheServiceBudget",
                 "gave up after 3 attempts in 7 of 8 retried runs (87.5%), 41s spent retrying",
                 "tests/MyApp.Tests/CheckoutTests.cs", 27) with
-            { Id = "f_9c14ab63", EvidenceLevel = "high" }),
+            { Id = "f_9c14ab63", EvidenceLevel = "robust" }),
 
         // The latest-run spec's §3.1: a regression, a new test, and the failures the findings
         // already explain, above the format spec's §3 block.
@@ -381,7 +381,7 @@ internal static partial class ReportFixtures
                 66) with
             {
                 Id = "f_c7b87f12",
-                EvidenceLevel = "high"
+                EvidenceLevel = "robust"
             },
 
             Finding(
@@ -393,7 +393,7 @@ internal static partial class ReportFixtures
                 43) with
             {
                 Id = "f_3ea537e4",
-                EvidenceLevel = "high"
+                EvidenceLevel = "robust"
             },
 
             Cluster(
@@ -406,7 +406,7 @@ internal static partial class ReportFixtures
                 ]) with
             {
                 Id = "f_7c905f05",
-                EvidenceLevel = "high"
+                EvidenceLevel = "robust"
             },
 
             Finding(
@@ -418,7 +418,7 @@ internal static partial class ReportFixtures
                 83) with
             {
                 Id = "f_66c10ec3",
-                EvidenceLevel = "high"
+                EvidenceLevel = "robust"
             },
 
             Finding(
@@ -430,7 +430,7 @@ internal static partial class ReportFixtures
                 83) with
             {
                 Id = "f_445c562e",
-                EvidenceLevel = "high",
+                EvidenceLevel = "robust",
 
                 // Resolved by FindingOrder in the builder; spelled here because this fixture stands
                 // in for its output rather than running it.
@@ -591,7 +591,7 @@ internal static partial class ReportFixtures
             : new FindingSubject.SingleTest(Reference(subject));
 
         return EnvelopeBuilder.BuildRepro(
-            new Finding("f_00000000", kind, Severity.Medium, EvidenceLevel.Moderate, 20, model, evidence, 0.5),
+            new Finding("f_00000000", kind, Severity.Medium, EvidenceLevel.Adequate, 20, model, evidence, 0.5),
             target,
             ShellDialect.Posix);
 
@@ -625,7 +625,7 @@ internal static partial class ReportFixtures
         finding = finding with
         {
             Id = "f_1491bf4c",
-            EvidenceLevel = "low",
+            EvidenceLevel = "sparse",
             Metrics = metrics,
             FailureModes = FailureModes.Of(evidence),
             Subject = finding.Subject with { Assembly = "SampleApp.MSTest" }
@@ -836,10 +836,10 @@ internal static partial class ReportFixtures
         [
             Finding(nameof(FindingKind.Flaky), "high", name,
                 "failed 6 of 12 executions (50%) in 6 of 20 runs, 1 failure mode") with
-            { Id = "f_8f042eab", EvidenceLevel = "low" },
+            { Id = "f_8f042eab", EvidenceLevel = "sparse" },
             Finding(nameof(FindingKind.RetryMasked), "medium", name,
                 "passed on retry 6 times in 6 of 20 runs, up to attempt 2") with
-            { Id = "f_a2b61c2f", EvidenceLevel = "low" }
+            { Id = "f_a2b61c2f", EvidenceLevel = "sparse" }
         ];
 
         return History(
@@ -898,7 +898,7 @@ internal static partial class ReportFixtures
         [
             Finding(nameof(FindingKind.TimingOut), "high", name,
                 "timed out 4 of 8 runs (50%), killed at its 5s limit") with
-            { Id = "f_6e1d0b7a", EvidenceLevel = "moderate" }
+            { Id = "f_6e1d0b7a", EvidenceLevel = "adequate" }
         ];
 
         // A killed attempt carries no exception, so its timeouts are one mode that recorded nothing
@@ -943,7 +943,7 @@ internal static partial class ReportFixtures
         FindingDto finding = Finding(nameof(FindingKind.Flaky), "high", name, headline) with
         {
             Id = "f_1491bf4c",
-            EvidenceLevel = "low",
+            EvidenceLevel = "sparse",
             Metrics = metrics
         };
 
@@ -1059,7 +1059,7 @@ internal static partial class ReportFixtures
 
         FindingDto single = Finding(nameof(FindingKind.AlwaysFailing), "high", name,
             "failed 10 of 10 executions (100%), one failure mode: System.InvalidOperationException") with
-        { Id = "f_1b44e0c9", EvidenceLevel = "moderate" };
+        { Id = "f_1b44e0c9", EvidenceLevel = "adequate" };
 
         FindingDto cluster = Cluster(
             "UnprovisionedDatabase..ctor",
@@ -1069,7 +1069,7 @@ internal static partial class ReportFixtures
                 name,
                 "SampleApp.MSTest.FixtureTests.ThirdTestNeedingTheDatabase"
             ]) with
-        { Id = "f_7c905f05", EvidenceLevel = "high" };
+        { Id = "f_7c905f05", EvidenceLevel = "robust" };
 
         // Both carry a repro, as the pipeline gives them. The cluster's names its first member, not
         // this test, so the view must print neither its sentence nor its command (Amendment 9A).
@@ -1791,13 +1791,13 @@ internal static partial class ReportFixtures
                 "SampleApp.MSTest.SampleTests.ThrowingTestIsTracked",
                 "failed 9 of 9 executions (100%), one failure mode: System.InvalidOperationException",
                 "samples/SampleApp.MSTest/SampleTests.cs", 65) with
-            { Id = "f_c1774d82", EvidenceLevel = "low" },
+            { Id = "f_c1774d82", EvidenceLevel = "sparse" },
 
             Finding(nameof(FindingKind.Flaky), "high",
                 "SampleApp.MSTest.SampleTests.FlakyTest_RaceCondition_FailsIntermittently",
                 "failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode",
                 "samples/SampleApp.MSTest/SampleTests.cs", 118) with
-            { Id = "f_d24c5aa9", EvidenceLevel = "low" });
+            { Id = "f_d24c5aa9", EvidenceLevel = "sparse" });
 
         return envelope with
         {
@@ -1831,7 +1831,7 @@ internal static partial class ReportFixtures
                 "MyTestProject.SampleTests.ThrowingTestIsTracked",
                 "failed 9 of 9 executions (100%), one failure mode: System.InvalidOperationException",
                 "tests/MyTestProject/SampleTests.cs", 65) with
-            { Id = "f_c1774d82", EvidenceLevel = "low" });
+            { Id = "f_c1774d82", EvidenceLevel = "sparse" });
 
         return envelope with
         {
@@ -1886,7 +1886,7 @@ internal static partial class ReportFixtures
                 "Checkout.Tests.FlowTests.CheckoutFlow_Completes",
                 "3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock",
                 "tests/Checkout/FlowTests.cs", 214) with
-            { Id = "f_8c04b71a", EvidenceLevel = "high" },
+            { Id = "f_8c04b71a", EvidenceLevel = "robust" },
 
             Finding(nameof(FindingKind.Vanished), "low",
                 "Checkout.Tests.LegacyImport.Roundtrip",
@@ -1908,7 +1908,7 @@ internal static partial class ReportFixtures
                 "SampleApp.MSTest.SampleTests.FlakyTest_PassesOnRetry",
                 "failed 5 of 10 executions (50%) in 5 of 5 runs, 1 failure mode",
                 "samples/SampleApp.MSTest/SampleTests.cs", 135) with
-            { Id = "f_8f042eab", EvidenceLevel = "low" });
+            { Id = "f_8f042eab", EvidenceLevel = "sparse" });
 
     // ---------------------------------------------------------------------
     // Builders
@@ -1963,7 +1963,7 @@ internal static partial class ReportFixtures
             "f_2a91",
             kind,
             severity,
-            "moderate",
+            "adequate",
             10,
             ToCamelCase(PopulationRules.For(Enum.Parse<FindingKind>(kind)).ToString()),
             new SubjectDto(

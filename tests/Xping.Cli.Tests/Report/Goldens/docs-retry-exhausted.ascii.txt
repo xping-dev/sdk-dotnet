@@ -9,7 +9,7 @@ NEEDS ATTENTION (1 high)                               most severe first
     CheckoutTests.Checkout_CompletesWithinTheServiceBudget
     gave up after 3 attempts in 7 of 8 retried runs (87.5%), 41s spent
     retrying
-    evidence high | -env | f_9c14ab63 | .../CheckoutTests.cs:27
+    evidence robust | -env | f_9c14ab63 | .../CheckoutTests.cs:27
 ```
 
 rates: the marker on each finding says which runs its percentage was

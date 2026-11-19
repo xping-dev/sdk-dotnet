@@ -20,7 +20,7 @@ public sealed class FindingOrderTests
             id,
             kind,
             severity,
-            EvidenceLevel.Moderate,
+            EvidenceLevel.Adequate,
             10,
             new FindingSubject.SingleTest(
                 new TestReference(fingerprint, "N.C.M", "M", null, null, "A.Tests")),

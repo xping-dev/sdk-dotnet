@@ -49,9 +49,9 @@ internal static class EvidenceLevelResolver
     /// <returns>The level.</returns>
     public static EvidenceLevel Resolve(int sessions) => sessions switch
     {
-        > LocalAnalysisConstants.EvidenceHighSessions => EvidenceLevel.High,
-        >= LocalAnalysisConstants.EvidenceModerateSessions => EvidenceLevel.Moderate,
-        _ => EvidenceLevel.Low
+        > LocalAnalysisConstants.EvidenceRobustSessions => EvidenceLevel.Robust,
+        >= LocalAnalysisConstants.EvidenceAdequateSessions => EvidenceLevel.Adequate,
+        _ => EvidenceLevel.Sparse
     };
 
     /// <summary>

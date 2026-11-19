@@ -8,7 +8,7 @@ NEEDS ATTENTION (1 medium)                             most severe first
 1.  MED   slower
     SummaryTests.GenerateMonthlySummary
     3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock
-    evidence high | -env | f_2a91c0de | tests/Billing/SummaryTests.cs:88
+    evidence robust | -env | f_2a91c0de | .../Billing/SummaryTests.cs:88
 ```
 
 rates: the marker on each finding says which runs its percentage was

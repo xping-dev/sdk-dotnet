@@ -163,7 +163,7 @@ public sealed class HistoryRenderingTests
         Assert.EndsWith(" 1 finding", fenced[heading], StringComparison.Ordinal);
         Assert.Equal("5.  HIGH  flaky", fenced[heading + 3]);
         Assert.Equal("    failed 6 of 12 executions", fenced[heading + 4]);
-        Assert.StartsWith("    evidence moderate", fenced[heading + 5], StringComparison.Ordinal);
+        Assert.StartsWith("    evidence adequate", fenced[heading + 5], StringComparison.Ordinal);
         Assert.DoesNotContain(fenced, l => l.Contains("same test as", StringComparison.Ordinal));
     }
 
@@ -228,7 +228,7 @@ public sealed class HistoryRenderingTests
         string[] fenced = Fenced(Render(History([Ran(0)], [finding], [5])));
         int row = Array.IndexOf(fenced, "5.  HIGH  flaky");
 
-        Assert.StartsWith("    evidence moderate", fenced[row + 2], StringComparison.Ordinal);
+        Assert.StartsWith("    evidence adequate", fenced[row + 2], StringComparison.Ordinal);
         Assert.Equal("    repro  run 6 times: at 4 of 9 runs failing (44.4%), 6 runs show a", fenced[row + 3]);
         Assert.Equal("           failure 95% of the time", fenced[row + 4]);
     }

@@ -668,7 +668,7 @@ public sealed class ReportEnvelopeTests : IDisposable
         Assert.StartsWith("f_", finding.GetProperty("id").GetString(), StringComparison.Ordinal);
         Assert.Equal("Vanished", finding.GetProperty("kind").GetString());
         Assert.Equal("low", finding.GetProperty("severity").GetString());
-        Assert.Equal("low", finding.GetProperty("evidenceLevel").GetString());
+        Assert.Equal("sparse", finding.GetProperty("evidenceLevel").GetString());
 
         // The number the band above was decided from, published so it can be reconciled with the
         // counts inside `evidence` rather than taken on trust. For a vanished test it is the

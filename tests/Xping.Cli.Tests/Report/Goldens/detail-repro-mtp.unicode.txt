@@ -8,7 +8,7 @@ FINDING                                                       row 1 of 1
 1.  HIGH  flaky
     CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
     failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode
-    evidence low | -env-cluster | f_1491bf4c | .../CalculatorTests.cs:57
+    evidence sparse | -env-cluster | f_1491bf4c | ...lculatorTests.cs:57
 
     test      SampleApp.MSTest.CalculatorTests.
               FlakyTest_RaceCondition_FailsIntermittently

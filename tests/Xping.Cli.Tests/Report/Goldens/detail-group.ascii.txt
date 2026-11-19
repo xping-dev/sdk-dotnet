@@ -15,7 +15,7 @@ FINDING                                                       row 3 of 5
         tests/SampleApp.XUnit/FixtureTests.cs:26
     UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20
     runs
-    evidence high | all runs | f_7c905f05
+    evidence robust | all runs | f_7c905f05
 
     failing member  UnprovisionedDatabase..ctor
     where           fixture setup

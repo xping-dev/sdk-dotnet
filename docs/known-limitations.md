@@ -655,7 +655,7 @@ A finding's trailer ends with the file and line the test is declared at:
 1.  HIGH  flaky
     SampleTests.FlakyTest_PassesOnRetry
     failed 5 of 10 executions (50%) in 5 of 5 runs, 1 failure mode
-    evidence low | -env-cluster | f_8f042eab | .../SampleTests.cs:135
+    evidence sparse | -env-cluster | f_8f042eab | .../SampleTests.cs:135
 ```
 
 None of the three frameworks reports this, so the SDK reads it from the assembly's Portable PDB,

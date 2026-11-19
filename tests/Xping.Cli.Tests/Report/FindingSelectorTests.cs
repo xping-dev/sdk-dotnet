@@ -219,7 +219,7 @@ public sealed class FindingSelectorTests
             FindingId.Compute(kind, subject.SortKey),
             kind,
             Severity.High,
-            EvidenceLevel.Moderate,
+            EvidenceLevel.Adequate,
             10,
             subject,
             new StubEvidence(),

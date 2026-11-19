@@ -109,7 +109,7 @@ times it ran.
 
 ## What each kind's evidence level counts
 
-The `evidence low|moderate|high` label on a finding is banded on the **runs that finding was
+The `evidence sparse|adequate|robust` label on a finding is banded on the **runs that finding was
 computed from** — not on the runs its test appeared in. They are different numbers for every kind in
 the table above, and for the same reasons: a discounted run is not an occasion the test's own
 behaviour was observed on, and a run the kind could not read at all is not an occasion either.
@@ -140,7 +140,7 @@ clock is not better evidenced because the test also ran in ten that did not.
 `MinimumSessionsPerTestToReport`, applied in `FindingCoordinator` — reads the runs the subject
 appeared in, for every kind alike. Emission has to be one rule, or a test flagged by one metric is
 silently dropped by another with nothing on screen to explain it. So a claim resting on two runs of
-a test with twenty runs of history is still printed. It is printed saying `evidence low`, which is
+a test with twenty runs of history is still printed. It is printed saying `evidence sparse`, which is
 what the level is for.
 
 **A filtered run cannot push a test under that floor, and this is arithmetic rather than judgement.**

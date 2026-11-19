@@ -1875,7 +1875,7 @@ public sealed class FailureModeProviderTests
         Finding finding = Assert.Single(result.Findings);
 
         Assert.Equal(FindingKind.AlwaysFailing, finding.Kind);
-        Assert.Equal(EvidenceLevel.Low, finding.EvidenceLevel);
+        Assert.Equal(EvidenceLevel.Sparse, finding.EvidenceLevel);
     }
 
     [Fact]

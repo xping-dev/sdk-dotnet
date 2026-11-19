@@ -137,7 +137,7 @@ public sealed class ReproCommandRunTests : IDisposable
         if (tests.Length == 1)
         {
             return new Finding(
-                "f_repro", FindingKind.Flaky, Severity.High, EvidenceLevel.Low, 2,
+                "f_repro", FindingKind.Flaky, Severity.High, EvidenceLevel.Sparse, 2,
                 new FindingSubject.SingleTest(tests[0]),
                 new FlakyEvidence(1, 2, 2, 1, 1, 2, 0.5, 0, 0, 1, [], [], null),
                 1);
@@ -147,7 +147,7 @@ public sealed class ReproCommandRunTests : IDisposable
         ClusterMember[] members = [.. names.Select(name => new ClusterMember(name, name, 1, 1, 2))];
 
         return new Finding(
-            "f_repro", FindingKind.SharedFailure, Severity.High, EvidenceLevel.Low, 2,
+            "f_repro", FindingKind.SharedFailure, Severity.High, EvidenceLevel.Sparse, 2,
             new FindingSubject.Group("g_repro", tests),
             new SharedFailureEvidence(signature, members.Length, members, members.Length, 1, 2, members.Length, DateTime.UnixEpoch, null, []),
             1);

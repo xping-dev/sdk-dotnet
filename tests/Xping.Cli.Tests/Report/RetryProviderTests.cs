@@ -573,11 +573,11 @@ public sealed class RetryProviderTests
     }
 
     [Theory]
-    [InlineData(7, 0, 7, "Low")]
-    [InlineData(7, 1, 8, "Moderate")]
-    [InlineData(8, 0, 8, "Moderate")]
-    [InlineData(15, 0, 15, "Moderate")]
-    [InlineData(15, 1, 16, "High")]
+    [InlineData(7, 0, 7, "Sparse")]
+    [InlineData(7, 1, 8, "Adequate")]
+    [InlineData(8, 0, 8, "Adequate")]
+    [InlineData(15, 0, 15, "Adequate")]
+    [InlineData(15, 1, 16, "Robust")]
     public void EvidenceIsBandedInSessionsRatherThanAttempts(
         int maskedSessions, int padding, int expectedSessions, string expected)
     {

@@ -45,19 +45,19 @@ internal enum Severity
 /// <para>
 /// The unit matches Xping Cloud, which bands an effective sample size computed over runs collapsed
 /// to one row per test per session. The thresholds do not, and deliberately —
-/// <see cref="LocalAnalysisConstants.EvidenceModerateSessions"/> explains why. Local windows are
-/// small, so most local findings will legitimately be <see cref="Low"/> or <see cref="Moderate"/> —
+/// <see cref="LocalAnalysisConstants.EvidenceAdequateSessions"/> explains why. Local windows are
+/// small, so most local findings will legitimately be <see cref="Sparse"/> or <see cref="Adequate"/> —
 /// that is correct, and must be surfaced rather than hidden.
 /// </para>
 /// </remarks>
 internal enum EvidenceLevel
 {
-    /// <summary>Fewer than <see cref="LocalAnalysisConstants.EvidenceModerateSessions"/> sessions.</summary>
-    Low,
+    /// <summary>Fewer than <see cref="LocalAnalysisConstants.EvidenceAdequateSessions"/> sessions.</summary>
+    Sparse,
 
-    /// <summary>Between the moderate and high session thresholds, inclusive.</summary>
-    Moderate,
+    /// <summary>Between the adequate and robust session thresholds, inclusive.</summary>
+    Adequate,
 
-    /// <summary>More than <see cref="LocalAnalysisConstants.EvidenceHighSessions"/> sessions.</summary>
-    High
+    /// <summary>More than <see cref="LocalAnalysisConstants.EvidenceRobustSessions"/> sessions.</summary>
+    Robust
 }

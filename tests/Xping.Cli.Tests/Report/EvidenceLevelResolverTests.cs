@@ -22,11 +22,11 @@ public sealed class EvidenceLevelResolverTests
     // ---------------------------------------------------------------------------------------
 
     [Theory]
-    [InlineData(0, "Low")]
-    [InlineData(7, "Low")]
-    [InlineData(8, "Moderate")]
-    [InlineData(15, "Moderate")]
-    [InlineData(16, "High")]
+    [InlineData(0, "Sparse")]
+    [InlineData(7, "Sparse")]
+    [InlineData(8, "Adequate")]
+    [InlineData(15, "Adequate")]
+    [InlineData(16, "Robust")]
     public void SessionsAreBandedAtAndEitherSideOfEveryBoundary(int sessions, string expected)
     {
         Assert.Equal(expected, EvidenceLevelResolver.Resolve(sessions).ToString());
@@ -39,12 +39,12 @@ public sealed class EvidenceLevelResolverTests
         // reachable in a window the CLI can actually resolve, or High is a level nothing ever gets
         // and the scale quietly loses its top.
         Assert.True(
-            LocalAnalysisConstants.EvidenceHighSessions < LocalAnalysisConstants.DefaultWindowSessions,
+            LocalAnalysisConstants.EvidenceRobustSessions < LocalAnalysisConstants.DefaultWindowSessions,
             "High evidence must be reachable inside the default window");
 
         Assert.True(
-            LocalAnalysisConstants.EvidenceModerateSessions <
-            LocalAnalysisConstants.EvidenceHighSessions);
+            LocalAnalysisConstants.EvidenceAdequateSessions <
+            LocalAnalysisConstants.EvidenceRobustSessions);
     }
 
     // ---------------------------------------------------------------------------------------
