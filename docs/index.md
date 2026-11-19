@@ -392,54 +392,53 @@ Working locally surfaces the *behaviour*; Xping Cloud attributes the *cause*. Se
 
 ## Documentation Structure
 
-#### [Getting Started](getting-started/local-first.md)
+#### [Get started](getting-started/local-first.md)
 
-- [Running Without an Account](getting-started/local-first.md) — the local-only path, start to finish
-- [NUnit Quick Start](getting-started/quickstart-nunit.md)
-- [xUnit Quick Start](getting-started/quickstart-xunit.md)
-- [MSTest Quick Start](getting-started/quickstart-mstest.md)
-- [CI/CD Integration](getting-started/ci-cd-setup.md)
+- [Run without an account](getting-started/local-first.md) — the local-only path, start to finish
+- [Quick start: NUnit](getting-started/quickstart-nunit.md)
+- [Quick start: xUnit (v2 and v3)](getting-started/quickstart-xunit.md)
+- [Quick start: MSTest](getting-started/quickstart-mstest.md)
+- [Set up CI](getting-started/ci-cd-setup.md)
 
-#### [Configuration](configuration/configuration-reference.md)
+#### [Configure](configuration/configuration-reference.md)
 
-- [Configuration Reference](configuration/configuration-reference.md) — every option, all three sources
-- [Local Store](configuration/local-store.md) — what `.xping/` holds and how it's managed
+- [Configuration reference](configuration/configuration-reference.md) — every option, all three sources
+- [Local store](configuration/local-store.md) — what `.xping/` holds and how it's managed
 
 #### [CLI](cli/command-reference.md)
 
-- [Command Reference](cli/command-reference.md) — `report`, `where`, `clear`, flags, JSON envelope
+- [Command reference](cli/command-reference.md) — `report`, `where`, `clear`, flags, JSON envelope
 
-#### [Guides](cloud/confidence-scores.md)
+#### [Xping Cloud](cloud/confidence-scores.md)
 
-**Getting Started:**
-- [Understanding Confidence Scores](cloud/confidence-scores.md)
-- [Session Reliability Score](cloud/session-reliability-score.md)
-- [Interpreting Test Results](cloud/interpreting-test-results.md)
+- [Confidence scores](cloud/confidence-scores.md)
+- [Session reliability score](cloud/session-reliability-score.md)
+- [Reading the PR comment](cloud/reading-the-pr-comment.md)
+- [Interpreting test results](cloud/interpreting-test-results.md)
 
-**Working with Tests:**
-- [Identifying Flaky Tests](flaky-tests/finding-flaky-tests.md)
-- [Common Flaky Patterns](flaky-tests/common-flaky-patterns.md)
-- [Fixing Flaky Tests](flaky-tests/patterns-and-fixes.md)
-- [Monitoring Test Health](flaky-tests/monitoring-test-health.md)
-- [Best Practices](flaky-tests/best-practices.md)
+#### [Flaky tests](flaky-tests/finding-flaky-tests.md)
 
-**Optimization:**
-- [Performance Overview](performance/performance.md)
-- [Performance Configuration](performance/performance-configuration.md)
-- [Performance Troubleshooting](performance/performance-troubleshooting.md)
+- [Finding flaky tests](flaky-tests/finding-flaky-tests.md)
+- [Flaky patterns and fixes](flaky-tests/patterns-and-fixes.md)
+- [Monitoring test health](flaky-tests/monitoring-test-health.md)
+- [Common flaky patterns](flaky-tests/common-flaky-patterns.md)
+- [Best practices](flaky-tests/best-practices.md)
 
-#### [Performance](performance/overview.md)
+#### [Performance](performance/performance.md)
 
-- [Performance Overview](performance/overview.md)
-- [Benchmark Results](performance/benchmark-results.md)
+- [Performance](performance/performance.md)
+- [Performance configuration](performance/performance-configuration.md)
+- [Performance troubleshooting](performance/performance-troubleshooting.md)
+- [Benchmark overview](performance/overview.md)
+- [Benchmark results](performance/benchmark-results.md)
 
 #### [Troubleshooting](troubleshooting/common-issues.md)
 
-- [Common Issues](troubleshooting/common-issues.md)
-- [Debugging Guide](troubleshooting/debugging.md)
-- [Known Limitations](troubleshooting/known-limitations.md) — what Xping does not do yet
+- [Common issues](troubleshooting/common-issues.md)
+- [Debugging](troubleshooting/debugging.md)
+- [Known limitations](troubleshooting/known-limitations.md) — what Xping does not do yet
 
-#### [API Reference](https://docs.xping.io/api/Xping.Sdk.Core.html)
+#### [API reference](https://docs.xping.io/api/Xping.Sdk.Core.html)
 
 Complete API documentation for all SDK components.
 
