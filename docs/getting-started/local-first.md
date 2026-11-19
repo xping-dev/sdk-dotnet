@@ -45,12 +45,15 @@ Set up the adapter as the quick start for your framework describes
 ([NUnit](quickstart-nunit.md), [xUnit](quickstart-xunit.md), [MSTest](quickstart-mstest.md)).
 Skip the API key step.
 
-With no API key, the SDK starts in local-only mode. To see its start line, run
-`dotnet test --logger "console;verbosity=normal"`:
+With no API key, the SDK starts in local-only mode. When you run `dotnet test` in a terminal, the
+SDK prints this line:
 
 ```
 [Xping 17:28:04 INF] Initialized in local-only mode. SessionId: "6bec32b0-922b-4b9b-bcb9-fb4e1056180f", Environment: Default. No API key configured - results stay on this machine.
 ```
+
+When the output goes to a file or a pipe instead of a terminal, for example in a CI log,
+`dotnet test` shows this line only with `--logger "console;verbosity=normal"`.
 
 ---
 
