@@ -5,6 +5,7 @@
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xping.Sdk.Core.Configuration;
@@ -731,6 +732,104 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
             .GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
         Assert.True(bound.CollectCiActorEmail);
+    }
+
+    // ---------------------------------------------------------------------------
+    // LogLevel — reaches the console logger on every path
+    // ---------------------------------------------------------------------------
+
+    private static ILogger SdkLogger(IServiceCollection services) =>
+        services.BuildServiceProvider().GetRequiredService<ILoggerFactory>().CreateLogger("Xping.Tests");
+
+    private static XpingConfiguration LocalConfig(LogLevel level) =>
+        new() { Mode = XpingMode.LocalOnly, LogLevel = level };
+
+    // Debug messages, such as a local store that could not be written, used to be dropped whatever
+    // was configured: the level was fixed at Information.
+    [Fact]
+    public void AConfiguredDebugLevelShowsDebugMessages()
+    {
+        var services = new ServiceCollection();
+        services.AddXping(LocalConfig(LogLevel.Debug));
+
+        Assert.True(SdkLogger(services).IsEnabled(LogLevel.Debug));
+    }
+
+    [Fact]
+    public void TheDefaultLevelShowsInformationButNotDebug()
+    {
+        var services = new ServiceCollection();
+        services.AddXping(new XpingConfiguration { Mode = XpingMode.LocalOnly });
+
+        ILogger logger = SdkLogger(services);
+        Assert.True(logger.IsEnabled(LogLevel.Information));
+        Assert.False(logger.IsEnabled(LogLevel.Debug));
+    }
+
+    [Fact]
+    public void NoneSilencesTheSdk()
+    {
+        var services = new ServiceCollection();
+        services.AddXping(LocalConfig(LogLevel.None));
+
+        Assert.False(SdkLogger(services).IsEnabled(LogLevel.Critical));
+    }
+
+    [Fact]
+    public void XpingLogLevelWinsOverTheInstance()
+    {
+        using var _ = WithEnv("XPING_LOGLEVEL", "debug");
+
+        var services = new ServiceCollection();
+        services.AddXping(LocalConfig(LogLevel.Warning));
+
+        Assert.True(SdkLogger(services).IsEnabled(LogLevel.Debug));
+    }
+
+    [Fact]
+    public void XpingLogLevelWinsOverTheBuilder()
+    {
+        using var _ = WithEnv("XPING_LOGLEVEL", "Error");
+
+        var services = new ServiceCollection();
+        services.AddXping(builder => builder.WithMode(XpingMode.LocalOnly).WithLogLevel(LogLevel.Debug));
+
+        ILogger logger = SdkLogger(services);
+        Assert.True(logger.IsEnabled(LogLevel.Error));
+        Assert.False(logger.IsEnabled(LogLevel.Warning));
+    }
+
+    [Fact]
+    public void TheConfigurationSectionSetsTheLevel()
+    {
+        var services = new ServiceCollection();
+        services.AddXping(InMemoryXpingConfig(new() { ["Xping:Mode"] = "LocalOnly", ["Xping:LogLevel"] = "Debug" }));
+
+        Assert.True(SdkLogger(services).IsEnabled(LogLevel.Debug));
+    }
+
+    [Fact]
+    public void XpingLogLevelWinsOverTheConfigurationSection()
+    {
+        using var _ = WithEnv("XPING_LOGLEVEL", "Trace");
+
+        var services = new ServiceCollection();
+        services.AddXping(InMemoryXpingConfig(new() { ["Xping:Mode"] = "LocalOnly", ["Xping:LogLevel"] = "Warning" }));
+
+        Assert.True(SdkLogger(services).IsEnabled(LogLevel.Trace));
+    }
+
+    [Fact]
+    public void AnUnknownXpingLogLevelIsIgnored()
+    {
+        using var _ = WithEnv("XPING_LOGLEVEL", "loud");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromConfiguration(InMemoryXpingConfig());
+        var bound = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal(LogLevel.Information, bound.LogLevel);
     }
 
     // ---------------------------------------------------------------------------

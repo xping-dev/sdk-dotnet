@@ -102,6 +102,7 @@ Or use environment variables:
 - `XPING_API_ENDPOINT`
 - `XPING_ENVIRONMENT`
 - `XPING_DEFAULTBRANCH` (optional: the default branch Xping Cloud uses for CI runs; replaces the one GitHub Actions and GitLab CI report)
+- `XPING_LOGLEVEL` (optional: `Debug` shows the SDK's diagnostics; default `Information`)
 
 ## Metadata Extraction
 

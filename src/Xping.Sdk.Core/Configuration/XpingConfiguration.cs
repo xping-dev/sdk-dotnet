@@ -4,6 +4,7 @@
  */
 
 using System.ComponentModel.DataAnnotations;
+using Microsoft.Extensions.Logging;
 
 namespace Xping.Sdk.Core.Configuration;
 
@@ -116,6 +117,17 @@ public sealed class XpingConfiguration
     /// effective mode.
     /// </summary>
     public XpingMode Mode { get; set; } = XpingMode.Auto;
+
+    /// <summary>
+    /// Gets or sets the lowest level of SDK message written to the console. Defaults to
+    /// <see cref="LogLevel.Information"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="LogLevel.Debug"/> shows the diagnostics that explain a quiet failure, such as a
+    /// local store that could not be written. <see cref="LogLevel.None"/> silences the SDK. Can also
+    /// be set with the <c>XPING_LOGLEVEL</c> environment variable.
+    /// </remarks>
+    public LogLevel LogLevel { get; set; } = LogLevel.Information;
 
     /// <summary>
     /// Gets or sets a value indicating whether to capture stack traces for failed tests.
@@ -304,6 +316,13 @@ public sealed class XpingConfiguration
                 "Valid values are Auto, LocalOnly, Cloud, and Disabled.");
         }
 
+        if (!IsDefinedLogLevel(LogLevel))
+        {
+            errors.Add(
+                $"LogLevel has an undefined value ({(int)LogLevel}). " +
+                "Valid values are Trace, Debug, Information, Warning, Error, Critical, and None.");
+        }
+
         XpingMode mode = ResolveMode();
 
         // The API key is only meaningful when the SDK will actually talk to the platform.
@@ -393,6 +412,9 @@ public sealed class XpingConfiguration
 
     private static bool IsDefinedMode(XpingMode mode) =>
         mode is XpingMode.Auto or XpingMode.LocalOnly or XpingMode.Cloud or XpingMode.Disabled;
+
+    internal static bool IsDefinedLogLevel(LogLevel level) =>
+        level is >= LogLevel.Trace and <= LogLevel.None;
 
     /// <summary>
     /// Gets the environment to record: the configured one, or <see cref="DefaultEnvironment"/>.

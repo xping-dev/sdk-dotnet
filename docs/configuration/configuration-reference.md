@@ -60,6 +60,7 @@ If you configure in code and want `appsettings.json` or `Xping__*` honoured as w
 | `CollectLocalGitAuthor` | bool | `false` | `XPING_COLLECTLOCALGITAUTHOR` | Include git author name in local-run metadata (opt-in to avoid PII collection) |
 | `CollectCiActorEmail` | bool | `false` | `XPING_COLLECTCIACTOREMAIL` | Record the CI actor's email address as `CI.ActorEmail` |
 | `DefaultBranch` | string | *(none)* | `XPING_DEFAULTBRANCH` | The branch Xping Cloud treats as the default branch for this pipeline's CI runs. Replaces the value the platform reports |
+| `LogLevel` | LogLevel | `Information` | `XPING_LOGLEVEL` | Lowest level of SDK message written to the console: `Trace`, `Debug`, `Information`, `Warning`, `Error`, `Critical` or `None` |
 | `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
 | `LocalStorePath` | string | repository root | `XPING_LOCAL_STORE` | Overrides the [local store](local-store.md) location |
 | `CloudUrl` | string | `https://app.xping.io` | `XPING_CLOUDURL` | CLI only. Xping Cloud (Portal) URL used by `xping login` and Cloud-enriched reports |
@@ -862,7 +863,43 @@ XpingContext.Initialize(config);
 
 ## Advanced Settings
 
-> **Logging:** The SDK uses `Microsoft.Extensions.Logging.ILogger` for diagnostics. Configure log verbosity through your host's standard logging configuration (e.g., `appsettings.json` `Logging` section or `ILoggingBuilder`). There are no SDK-specific `LogLevel` or `Logger` configuration properties.
+### LogLevel
+
+**Type:** `Microsoft.Extensions.Logging.LogLevel`  
+**Default:** `Information`  
+**Environment Variable:** `XPING_LOGLEVEL`
+
+The lowest level of SDK message written to the console. The values are `Trace`, `Debug`,
+`Information`, `Warning`, `Error`, `Critical` and `None`. The environment variable is not case
+sensitive; a value it does not recognise is ignored.
+
+Set it to `Debug` when the SDK is quieter than you expect. Debug messages explain failures the SDK
+otherwise absorbs so it never breaks your test run, such as a local store that could not be written
+or a CI platform whose PR context was skipped. `None` silences the SDK.
+
+**Example:**
+
+```json
+{
+  "Xping": {
+    "LogLevel": "Debug"
+  }
+}
+```
+
+```bash
+export XPING_LOGLEVEL="Debug"
+```
+
+```csharp
+var config = new XpingConfiguration
+{
+    LogLevel = LogLevel.Debug // using Microsoft.Extensions.Logging;
+};
+XpingContext.Initialize(config);
+```
+
+---
 
 ### StrictMode
 
@@ -1037,7 +1074,8 @@ The SDK reads `XPING_LOCAL_STORE` once, when it initializes; changing it during 
     "UploadTimeout": "00:00:30",
     "EnablePullRequestDetection": true,
     "CollectLocalGitAuthor": false,
-    "CollectCiActorEmail": false
+    "CollectCiActorEmail": false,
+    "LogLevel": "Information"
   }
 }
 ```
@@ -1171,6 +1209,7 @@ Xping SDK validates configuration on initialization and provides clear error mes
 | `MaxRetries` | Must be between 0 and 10 |
 | `RetryDelay` | Between 0 and 1 day |
 | `UploadTimeout` | Between 1 second and 1 day |
+| `LogLevel` | One of `Trace`, `Debug`, `Information`, `Warning`, `Error`, `Critical`, `None` |
 
 ### Handling Validation Errors
 

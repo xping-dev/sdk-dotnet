@@ -15,38 +15,44 @@ The Xping SDK includes built-in diagnostic logging to help troubleshoot integrat
 
 ### Console Logging (Default)
 
-Enable logging programmatically during SDK initialization:
+The SDK writes its messages to the console at `Information` and above. To see more, raise the
+level with the `XPING_LOGLEVEL` environment variable:
+
+```bash
+XPING_LOGLEVEL=Debug dotnet test
+```
+
+Or set [`LogLevel`](../configuration/configuration-reference.md#loglevel) in the `"Xping"` section of
+`appsettings.json`, or in code:
 
 ```csharp
+using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Diagnostics;
 
 var config = new XpingConfiguration
 {
-    ApiKey = "your-api-key",
-    ProjectId = "your-project",
-    LogLevel = XpingLogLevel.Debug  // Enable debug logging
+    LogLevel = LogLevel.Debug
 };
 
 XpingContext.Initialize(config);
 ```
 
+The environment variable wins over both.
+
 ### Log Levels
 
-The SDK supports four log levels, each including all levels below it:
+`LogLevel` takes the `Microsoft.Extensions.Logging.LogLevel` values. Each one includes every level
+above it:
 
-| Level | Description | Use Case |
-|-------|-------------|----------|
-| `XpingLogLevel.None` | No logging output | Production when logs aren't needed |
-| `XpingLogLevel.Error` | Errors and critical failures only | Production when you only want failure notifications |
-| `XpingLogLevel.Warning` | Warnings and errors | Production to track potential issues |
-| `XpingLogLevel.Info` | Informational, warnings, errors (default) | Development and CI/CD to track activity |
-| `XpingLogLevel.Debug` | All messages including detailed diagnostics | Troubleshooting and debugging SDK issues |
-
-**Recommended settings:**
-- **Development/Local:** `XpingLogLevel.Debug` or `XpingLogLevel.Info`
-- **CI/CD:** `XpingLogLevel.Info`
-- **Production:** `XpingLogLevel.Warning` or `XpingLogLevel.Error`
+| Level | What you see | Use case |
+|-------|--------------|----------|
+| `Trace` | Everything | Rarely needed |
+| `Debug` | Detailed diagnostics, including failures the SDK absorbs (a local store it could not write, PR detection it skipped) | Troubleshooting the SDK |
+| `Information` | Start-up, the run summary, warnings and errors (default) | Day to day, and CI |
+| `Warning` | Warnings and errors | Quieter CI logs |
+| `Error` | Errors only | Quietest useful setting |
+| `Critical` | Failures that stop the SDK | Rarely needed |
+| `None` | Nothing | Silencing the SDK |
 
 ### Filtering Xping Logs
 

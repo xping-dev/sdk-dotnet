@@ -5,6 +5,7 @@
 
 namespace Xping.Sdk.Core.Tests.Configuration;
 
+using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Configuration;
 
 public sealed class XpingConfigurationBuilderTests
@@ -41,6 +42,7 @@ public sealed class XpingConfigurationBuilderTests
             .WithDefaultBranch("develop")
             .WithEnabled(false)
             .WithCaptureStackTraces(false)
+            .WithLogLevel(LogLevel.Debug)
             .WithEnableCompression(false)
             .WithMaxRetries(5)
             .WithRetryDelay(TimeSpan.FromSeconds(5))
@@ -62,6 +64,7 @@ public sealed class XpingConfigurationBuilderTests
         Assert.Equal("develop", config.DefaultBranch);
         Assert.False(config.Enabled);
         Assert.False(config.CaptureStackTraces);
+        Assert.Equal(LogLevel.Debug, config.LogLevel);
         Assert.False(config.EnableCompression);
         Assert.Equal(5, config.MaxRetries);
         Assert.Equal(TimeSpan.FromSeconds(5), config.RetryDelay);
