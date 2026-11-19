@@ -355,7 +355,6 @@ internal sealed class XpingMessageSink : IMessageSink
             ? detector.DetectRetryMetadata(testCase, outcome, known)
             : _retryDetector.DetectRetryMetadata(testCase, outcome);
 
-        stackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace;
         (TimeSpan? timeoutBudget, TimeoutBudgetSource? timeoutBudgetSource) = testCase.Timeout > 0
             ? (TimeSpan.FromMilliseconds(testCase.Timeout), TimeoutBudgetSource.Declared)
             : ((TimeSpan?)null, (TimeoutBudgetSource?)null);

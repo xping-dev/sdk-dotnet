@@ -671,7 +671,11 @@ Larger batches keep more data in memory before uploading:
 }
 ```
 
-#### 2. Upload Failures
+#### 2. Stack Traces
+
+Every failed test's stack trace is kept in memory until the run ends, and written to the local store. No setting turns this off: `UploadStackTraces` only decides whether the text is sent to Xping Cloud. A run with many failures and deep stacks uses memory in proportion.
+
+#### 3. Upload Failures
 
 If uploads fail repeatedly, tests accumulate in memory:
 

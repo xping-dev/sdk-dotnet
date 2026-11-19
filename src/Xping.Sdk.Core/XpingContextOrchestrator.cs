@@ -998,13 +998,15 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         _lastEnvironmentInfo = environmentInfo;
         AccumulateLocalExecutions(executions);
 
-        // The local store keeps the full trace; only the upload loses it unless the user opted in.
+        // The local store keeps the full trace; only the upload loses it unless the user opted in. No
+        // copy in the modes that never upload.
+        bool stripTraces = !_uploadStackTraces && _mode == XpingMode.Cloud;
         builder
             .WithSessionId(SessionId)
             .WithStartedAt(StartedAt)
             .WithEndedAt(DateTime.UtcNow)
             .WithEnvironmentInfo(environmentInfo)
-            .AddExecutions(_uploadStackTraces ? executions : executions.Select(e => e.WithoutStackTrace()))
+            .AddExecutions(stripTraces ? executions.Select(e => e.WithoutStackTrace()) : executions)
             .WithAssemblies(_sessionAssemblies)
             .WithSessionState(sessionState)
             .WithPullRequestContext(_pullRequestContext);

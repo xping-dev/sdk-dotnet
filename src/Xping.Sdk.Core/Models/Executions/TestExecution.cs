@@ -257,7 +257,11 @@ public sealed class TestExecution
     /// <summary>
     /// A copy without the raw stack trace, for an upload that must not carry it.
     /// </summary>
-    /// <returns>This execution when it has no trace; otherwise a copy marked as omitted.</returns>
+    /// <returns>
+    /// This execution when it has no trace; otherwise a copy without it, marked as omitted only for
+    /// a failure. NUnit records a trace for <c>Assert.Ignore</c> and <c>Assert.Pass</c> too, and a
+    /// skipped test must not read as a failure whose trace was withheld.
+    /// </returns>
     internal TestExecution WithoutStackTrace() => StackTrace is null
         ? this
         : new TestExecution(
@@ -276,7 +280,7 @@ public sealed class TestExecution
             stackTrace: null,
             ErrorMessageHash,
             StackTraceHash,
-            stackTraceOmitted: true,
+            stackTraceOmitted: Outcome.IsFailure(),
             TimeoutBudget,
             TimeoutBudgetSource,
             Site,

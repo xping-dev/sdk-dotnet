@@ -27,7 +27,6 @@ public sealed class TestExecutionBuilder
     private string? _stackTrace;
     private string? _errorMessageHash;
     private string? _stackTraceHash;
-    private bool _stackTraceOmitted;
     private TimeSpan? _timeoutBudget;
     private TimeoutBudgetSource? _timeoutBudgetSource;
     private FailureSite? _site;
@@ -157,13 +156,13 @@ public sealed class TestExecutionBuilder
     /// </summary>
     /// <param name="exceptionType">The exception type.</param>
     /// <param name="errorMessage">The error message.</param>
-    /// <param name="stackTrace">The stack trace.</param>
+    /// <param name="stackTrace">The stack trace. A blank one is recorded as no trace.</param>
     /// <returns>The builder instance for method chaining.</returns>
     public TestExecutionBuilder WithException(string? exceptionType, string? errorMessage, string? stackTrace = null)
     {
         _exceptionType = exceptionType;
         _errorMessage = errorMessage;
-        _stackTrace = stackTrace;
+        _stackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace;
         return this;
     }
 
@@ -186,20 +185,6 @@ public sealed class TestExecutionBuilder
     public TestExecutionBuilder WithStackTraceHash(string? stackTraceHash)
     {
         _stackTraceHash = stackTraceHash;
-        return this;
-    }
-
-    /// <summary>
-    /// Marks that the stack trace was left out on purpose.
-    /// </summary>
-    /// <param name="omitted">
-    /// <see langword="true"/> when a failure's trace existed and was not uploaded because
-    /// <c>UploadStackTraces</c> is <see langword="false"/>; otherwise <see langword="false"/>.
-    /// </param>
-    /// <returns>The builder instance for method chaining.</returns>
-    public TestExecutionBuilder WithStackTraceOmitted(bool omitted)
-    {
-        _stackTraceOmitted = omitted;
         return this;
     }
 
@@ -271,7 +256,7 @@ public sealed class TestExecutionBuilder
             stackTrace: _stackTrace,
             errorMessageHash: _errorMessageHash,
             stackTraceHash: _stackTraceHash,
-            stackTraceOmitted: _stackTraceOmitted,
+            stackTraceOmitted: false,
             testOrchestrationRecord: _testOrchestrationRecord,
             retry: _retry,
             timeoutBudget: _timeoutBudget,
@@ -301,7 +286,6 @@ public sealed class TestExecutionBuilder
         _stackTrace = null;
         _errorMessageHash = null;
         _stackTraceHash = null;
-        _stackTraceOmitted = false;
         _timeoutBudget = null;
         _timeoutBudgetSource = null;
         _site = null;

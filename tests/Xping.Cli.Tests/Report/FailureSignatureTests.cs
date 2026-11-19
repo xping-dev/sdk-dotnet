@@ -16,7 +16,6 @@ public sealed class FailureSignatureTests
         string? exceptionType = null,
         string? errorMessage = null,
         string? stackTrace = null,
-        bool stackTraceOmitted = false,
         string fingerprint = "fp-Alpha")
     {
         TestExecution execution = TestSessionFactory.Execution(
@@ -24,8 +23,7 @@ public sealed class FailureSignatureTests
             TestOutcome.Failed,
             errorMessage: errorMessage,
             exceptionType: exceptionType,
-            stackTrace: stackTrace,
-            stackTraceOmitted: stackTraceOmitted);
+            stackTrace: stackTrace);
 
         return FailureSignatureFactory.Create(execution, fingerprint);
     }
@@ -116,13 +114,12 @@ public sealed class FailureSignatureTests
     }
 
     [Fact]
-    public void AFailureWhoseStackTraceWasOmittedIsStillSignedFromTypeAndMessage()
+    public void AFailureWithoutAStackTraceIsStillSignedFromTypeAndMessage()
     {
         FailureSignature signature = Signature(
             "System.InvalidOperationException",
             "boom",
-            stackTrace: null,
-            stackTraceOmitted: true);
+            stackTrace: null);
 
         Assert.False(signature.Unavailable);
         Assert.True(signature.Degraded);

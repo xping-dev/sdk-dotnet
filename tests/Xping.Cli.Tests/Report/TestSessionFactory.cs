@@ -92,10 +92,6 @@ internal static class TestSessionFactory
     /// </param>
     /// <param name="exceptionType">The type the adapter recorded, when it recorded one.</param>
     /// <param name="stackTrace">The stack trace the adapter recorded, when it recorded one.</param>
-    /// <param name="stackTraceOmitted">
-    /// Whether stack trace capture was switched off. Distinct from having no trace: it means the
-    /// developer opted out, not that none existed.
-    /// </param>
     /// <param name="concurrency">
     /// Tests in flight alongside this one, itself included, or <see langword="null"/> to record no
     /// orchestration data at all. Null is the default because it is what an execution written before
@@ -132,7 +128,6 @@ internal static class TestSessionFactory
         bool retry = true,
         string? exceptionType = null,
         string? stackTrace = null,
-        bool stackTraceOmitted = false,
         int? concurrency = null,
         int? timeoutBudgetMs = null,
         FailureSite? failureSite = null,
@@ -188,7 +183,6 @@ internal static class TestSessionFactory
             .WithStartTime(Epoch.AddMilliseconds(startOffsetMs))
             .WithEndTime(Epoch.AddMilliseconds(startOffsetMs + durationMs))
             .WithRetry(retryMetadata)
-            .WithStackTraceOmitted(stackTraceOmitted)
             .WithTimeoutBudget(
                 timeoutBudgetMs is { } budgetMs ? TimeSpan.FromMilliseconds(budgetMs) : null,
                 timeoutBudgetMs is null ? null : TimeoutBudgetSource.Declared)

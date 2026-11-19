@@ -340,7 +340,6 @@ public sealed class XpingMessageSink(
         RetryMetadata? retryMetadata = attemptNumber is int attempt && _retryDetector is IXUnitRetryDetector detector
             ? detector.DetectRetryMetadata(test, outcome, attempt)
             : _retryDetector.DetectRetryMetadata(test, outcome);
-        stackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace;
         (TimeSpan? timeoutBudget, TimeoutBudgetSource? timeoutBudgetSource) = ResolveTimeoutBudget(testCase);
 
         (FailureSite? failureSite, string? failureSiteMember) = ResolveFailureSite(

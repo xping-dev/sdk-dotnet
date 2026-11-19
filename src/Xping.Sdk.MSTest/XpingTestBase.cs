@@ -200,7 +200,7 @@ public abstract class XpingTestBase
             testFingerprint: pinnedFingerprint);
 
         var errorMessage = GetErrorMessage(context) ?? string.Empty;
-        string? stackTrace = GetStackTrace(context) is { } trace && !string.IsNullOrWhiteSpace(trace) ? trace : null;
+        string? stackTrace = GetStackTrace(context);
 
         (FailureSite? failureSite, string? failureSiteMember) =
             ResolveFailureSite(outcome, testMethod?.ReflectedType, stackTrace);

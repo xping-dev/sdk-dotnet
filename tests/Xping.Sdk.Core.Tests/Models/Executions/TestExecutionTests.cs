@@ -41,6 +41,26 @@ public sealed class TestExecutionTests
         }
     }
 
+    // NUnit records a trace for Assert.Ignore and Assert.Pass; a skipped test is not a failure whose
+    // trace was withheld.
+    [Theory]
+    [InlineData(TestOutcome.Skipped)]
+    [InlineData(TestOutcome.Passed)]
+    public void WithoutStackTrace_DropsATraceThatIsNotAFailuresWithoutMarkingIt(TestOutcome outcome)
+    {
+        TestExecution execution = new TestExecutionBuilder()
+            .WithTestName("Ignored")
+            .WithOutcome(outcome)
+            .WithIdentity(new TestIdentity { Assembly = "MyApp.Tests", FullyQualifiedName = "MyApp.Tests.Ignored" })
+            .WithException(null, "ignored", "   at NUnit.Framework.Assert.Ignore()")
+            .Build();
+
+        TestExecution copy = execution.WithoutStackTrace();
+
+        Assert.Null(copy.StackTrace);
+        Assert.False(copy.StackTraceOmitted);
+    }
+
     [Fact]
     public void WithoutStackTrace_LeavesAnExecutionWithoutATraceAsItIs()
     {

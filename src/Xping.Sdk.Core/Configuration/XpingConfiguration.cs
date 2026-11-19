@@ -135,8 +135,8 @@ public sealed class XpingConfiguration
     /// </summary>
     /// <remarks>
     /// Off by default because a trace can carry source paths and code details. The upload still
-    /// carries <c>StackTraceHash</c>, which holds method signatures only, so Cloud can group failures
-    /// without the text. The local store always keeps the full trace. Can also be set with the
+    /// carries <c>StackTraceHash</c>, a SHA-256 of up to five method signatures with no paths or line
+    /// numbers, so Cloud can group failures without the text. The local store always keeps the full trace. Can also be set with the
     /// <c>XPING_UPLOADSTACKTRACES</c> environment variable.
     /// </remarks>
     public bool UploadStackTraces { get; set; }
