@@ -273,6 +273,6 @@ dotnet test
 
 ## See Also
 
-- [Performance Overview](./performance-overview.md) - Understanding SDK performance characteristics
-- [Performance Troubleshooting](./performance-troubleshooting.md) - Diagnosing performance issues
-- [Configuration Reference](../../configuration/configuration-reference.md) - Complete configuration options
+- [Performance Overview](performance.md) - Understanding SDK performance characteristics
+- [Performance Troubleshooting](performance-troubleshooting.md) - Diagnosing performance issues
+- [Configuration Reference](../configuration/configuration-reference.md) - Complete configuration options

@@ -40,7 +40,7 @@ public async Task ProcessOrder_CompletesSuccessfully()
 - Retry Behavior: 0.52 (often passes on second attempt)
 - Overall Confidence: 0.48 (Unreliable)
 
-> **Related**: For fixing strategies, see [Fixing Flaky Tests](./fixing-flaky-tests.md#race-conditions).
+> **Related**: For fixing strategies, see [Fixing Flaky Tests](patterns-and-fixes.md#race-conditions).
 
 ---
 
@@ -79,7 +79,7 @@ public async Task GetUser_ReturnsUserData()
 - Dependency Impact: 0.42 (fails when PaymentServiceTests also fail)
 - Overall Confidence: 0.41 (Unreliable)
 
-> **Related**: For fixing strategies, see [Fixing Flaky Tests](./fixing-flaky-tests.md#external-service-dependencies).
+> **Related**: For fixing strategies, see [Fixing Flaky Tests](patterns-and-fixes.md#external-service-dependencies).
 
 ---
 
@@ -127,7 +127,7 @@ public class UserServiceTests
 - Execution Stability: 0.48 (varies based on test order)
 - Overall Confidence: 0.39 (Highly Unreliable)
 
-> **Related**: For fixing strategies, see [Fixing Flaky Tests](./fixing-flaky-tests.md#shared-state).
+> **Related**: For fixing strategies, see [Fixing Flaky Tests](patterns-and-fixes.md#shared-state).
 
 ---
 
@@ -195,7 +195,7 @@ public void ScheduleEvent_CreatesEventForToday()
 The finding says *when*, never *why*. It is capped at medium severity for that reason: a clock
 reading tells you where to look and nothing about what to fix.
 
-> **Related**: For fixing strategies, see [Fixing Flaky Tests](./fixing-flaky-tests.md#time-based-flakiness).
+> **Related**: For fixing strategies, see [Fixing Flaky Tests](patterns-and-fixes.md#time-based-flakiness).
 
 ---
 
@@ -237,7 +237,7 @@ public void ProcessUsers_SortsCorrectly()
 - Historical Pass Rate: 0.55 (intermittent failures)
 - Overall Confidence: 0.45 (Unreliable)
 
-> **Related**: For fixing strategies, see [Fixing Flaky Tests](./fixing-flaky-tests.md#non-deterministic-data).
+> **Related**: For fixing strategies, see [Fixing Flaky Tests](patterns-and-fixes.md#non-deterministic-data).
 
 ---
 
@@ -311,7 +311,7 @@ The second block is the argument for deleting the retry attribute rather than ra
 retries are no longer buying a green build, only wall-clock.
 
 > **Related**: Retry attempt tracking differs by framework — see
-> [Known Limitations](../../known-limitations.md). Where an adapter cannot record each attempt,
+> [Known Limitations](../troubleshooting/known-limitations.md). Where an adapter cannot record each attempt,
 > silence here is indistinguishable from "no retries happened".
 
 ---
@@ -333,7 +333,7 @@ Use this table to quickly identify the pattern based on Xping factor scores:
 
 ## See Also
 
-- [Identifying Flaky Tests](./identifying-flaky-tests.md) - How to find flaky tests in your suite
-- [Fixing Flaky Tests](./fixing-flaky-tests.md) - Strategies for fixing each pattern
-- [Understanding Confidence Scores](../getting-started/understanding-confidence-scores.md) - How scores are calculated
-- [Best Practices](./best-practices.md) - Prevent flakiness from the start
+- [Identifying Flaky Tests](finding-flaky-tests.md) - How to find flaky tests in your suite
+- [Fixing Flaky Tests](patterns-and-fixes.md) - Strategies for fixing each pattern
+- [Understanding Confidence Scores](../cloud/confidence-scores.md) - How scores are calculated
+- [Best Practices](best-practices.md) - Prevent flakiness from the start

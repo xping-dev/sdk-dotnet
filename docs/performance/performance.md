@@ -142,7 +142,7 @@ If you experience performance issues, we want to know - open an issue and we'll 
 
 ## Benchmarks and Validation
 
-Detailed benchmark results and methodology are available in the benchmark project (`tests/Xping.Sdk.Benchmarks/README.md`) and [Performance Benchmark Results](../../performance/benchmark-results.md).
+Detailed benchmark results and methodology are available in the benchmark project (`tests/Xping.Sdk.Benchmarks/README.md`) and [Performance Benchmark Results](benchmark-results.md).
 
 **Key validated metrics:**
 - ✅ Test tracking overhead: **700-800ns** (7× better than 5ms target)
@@ -156,6 +156,6 @@ All benchmarks use [BenchmarkDotNet](https://benchmarkdotnet.org/) for precise, 
 
 ## See Also
 
-- [Performance Configuration](./performance-configuration.md) - Tuning performance settings
-- [Performance Troubleshooting](./performance-troubleshooting.md) - Diagnosing performance issues
-- [Performance Benchmark Results](../../performance/benchmark-results.md) - Detailed benchmark data
+- [Performance Configuration](performance-configuration.md) - Tuning performance settings
+- [Performance Troubleshooting](performance-troubleshooting.md) - Diagnosing performance issues
+- [Performance Benchmark Results](benchmark-results.md) - Detailed benchmark data

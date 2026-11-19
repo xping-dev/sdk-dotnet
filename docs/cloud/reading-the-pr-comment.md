@@ -133,13 +133,13 @@ Each explanation counts toward your workspace's monthly AI analysis limit, share
 
 This list names tests that flaky detection flagged while this PR ran but that did **not** fail at the head commit (for example, they passed after a retry). Each row shows the test, its project, the kind of flakiness and its severity. A flagged test that did fail is shown in **Failed tests** instead, with the verdict *Became flaky during this PR*.
 
-See [Identifying Flaky Tests](../working-with-tests/identifying-flaky-tests.md) for how detection works.
+See [Identifying Flaky Tests](../flaky-tests/finding-flaky-tests.md) for how detection works.
 
 ---
 
 ## Reliability
 
-The reliability line compares each project's [session reliability score](../getting-started/session-reliability-score.md) at the head commit with the newest run of your PR's target branch (shown by its name, for example `main`) in the last 30 days:
+The reliability line compares each project's [session reliability score](session-reliability-score.md) at the head commit with the newest run of your PR's target branch (shown by its name, for example `main`) in the last 30 days:
 
 > **Reliability** · Reliable 0.86 · −0.03 vs `main` (2026-11-08)
 
@@ -193,7 +193,7 @@ Yes. An Owner or Admin can pause comments for the whole workspace (**Settings �
 
 ## See Also
 
-- [Understanding Confidence Scores](../getting-started/understanding-confidence-scores.md)
-- [Session Reliability Score](../getting-started/session-reliability-score.md)
-- [Identifying Flaky Tests](../working-with-tests/identifying-flaky-tests.md)
-- [Fixing Flaky Tests](../working-with-tests/fixing-flaky-tests.md)
+- [Understanding Confidence Scores](confidence-scores.md)
+- [Session Reliability Score](session-reliability-score.md)
+- [Identifying Flaky Tests](../flaky-tests/finding-flaky-tests.md)
+- [Fixing Flaky Tests](../flaky-tests/patterns-and-fixes.md)

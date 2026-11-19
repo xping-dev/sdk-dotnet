@@ -380,13 +380,13 @@ Patterns that show up in accumulated execution history:
 - **Non-deterministic data** — random inputs that occasionally hit an edge case
 
 Working locally surfaces the *behaviour*; Xping Cloud attributes the *cause*. See
-[Common Flaky Patterns](guides/working-with-tests/common-flaky-patterns.md) for worked examples.
+[Common Flaky Patterns](flaky-tests/common-flaky-patterns.md) for worked examples.
 
 > **How Cloud confidence scores work**: Xping analyses test execution history across six weighted
 > factors — pass rate (35%), execution stability (20%), retry behaviour (15%), environment
 > consistency (15%), failure patterns (10%), and dependency impact (5%) — producing a 0–1 score.
 > ESS is the effective sample size: how many independent runs stand behind that number. See
-> [Understanding Confidence Scores](guides/getting-started/understanding-confidence-scores.md).
+> [Understanding Confidence Scores](cloud/confidence-scores.md).
 
 ---
 
@@ -409,25 +409,24 @@ Working locally surfaces the *behaviour*; Xping Cloud attributes the *cause*. Se
 
 - [Command Reference](cli/command-reference.md) — `report`, `where`, `clear`, flags, JSON envelope
 
-#### [Guides](guides/getting-started/understanding-confidence-scores.md)
+#### [Guides](cloud/confidence-scores.md)
 
 **Getting Started:**
-- [Understanding Confidence Scores](guides/getting-started/understanding-confidence-scores.md)
-- [Session Reliability Score](guides/getting-started/session-reliability-score.md)
-- [Navigating Xping Cloud](guides/getting-started/navigating-xping-cloud.md)
-- [Interpreting Test Results](guides/getting-started/interpreting-test-results.md)
+- [Understanding Confidence Scores](cloud/confidence-scores.md)
+- [Session Reliability Score](cloud/session-reliability-score.md)
+- [Interpreting Test Results](cloud/interpreting-test-results.md)
 
 **Working with Tests:**
-- [Identifying Flaky Tests](guides/working-with-tests/identifying-flaky-tests.md)
-- [Common Flaky Patterns](guides/working-with-tests/common-flaky-patterns.md)
-- [Fixing Flaky Tests](guides/working-with-tests/fixing-flaky-tests.md)
-- [Monitoring Test Health](guides/working-with-tests/monitoring-test-health.md)
-- [Best Practices](guides/working-with-tests/best-practices.md)
+- [Identifying Flaky Tests](flaky-tests/finding-flaky-tests.md)
+- [Common Flaky Patterns](flaky-tests/common-flaky-patterns.md)
+- [Fixing Flaky Tests](flaky-tests/patterns-and-fixes.md)
+- [Monitoring Test Health](flaky-tests/monitoring-test-health.md)
+- [Best Practices](flaky-tests/best-practices.md)
 
 **Optimization:**
-- [Performance Overview](guides/optimization/performance-overview.md)
-- [Performance Configuration](guides/optimization/performance-configuration.md)
-- [Performance Troubleshooting](guides/optimization/performance-troubleshooting.md)
+- [Performance Overview](performance/performance.md)
+- [Performance Configuration](performance/performance-configuration.md)
+- [Performance Troubleshooting](performance/performance-troubleshooting.md)
 
 #### [Performance](performance/overview.md)
 
@@ -438,9 +437,9 @@ Working locally surfaces the *behaviour*; Xping Cloud attributes the *cause*. Se
 
 - [Common Issues](troubleshooting/common-issues.md)
 - [Debugging Guide](troubleshooting/debugging.md)
-- [Known Limitations](known-limitations.md) — what Xping does not do yet
+- [Known Limitations](troubleshooting/known-limitations.md) — what Xping does not do yet
 
-#### [API Reference](https://docs.xping.io/api/Xping.Sdk.Core.Collection.html)
+#### [API Reference](https://docs.xping.io/api/Xping.Sdk.Core.html)
 
 Complete API documentation for all SDK components.
 

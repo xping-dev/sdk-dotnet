@@ -18,7 +18,7 @@ The SDK collects comprehensive telemetry from every test execution. Each time a 
   Portable PDB and made relative to the repository root. Shown as the last segment of a finding's
   trailer, so a report says where to open a flaky test, not just which one it is. Absent when the
   assembly was built without debug symbols — see
-  [known limitations](../../known-limitations.md).
+  [known limitations](../troubleshooting/known-limitations.md).
 - **Categories & Tags**: Test classifications for filtering and organization
 - **Description**: Test documentation (if provided)
 - **Custom Attributes**: Additional metadata from test attributes
@@ -83,7 +83,7 @@ This rich telemetry enables Xping to calculate confidence scores and detect patt
 
 **Low Scores (<0.60)**: These tests need attention, but a low score doesn't automatically mean the test is flaky. A test that consistently fails due to a genuine bug will also have a low confidence score. Xping distinguishes between consistently broken tests and flaky ones - only tests that exhibit flakiness patterns (inconsistent pass/fail behavior, retry dependencies, environment-specific issues) appear in the "Flaky Tests" tab. Consistently failing tests will show low scores but won't be flagged as flaky until they demonstrate unstable behavior.
 
-> **Related**: For details on what confidence scores are and how they're calculated, see [Understanding Confidence Scores](./understanding-confidence-scores.md).
+> **Related**: For details on what confidence scores are and how they're calculated, see [Understanding Confidence Scores](confidence-scores.md).
 
 ---
 
@@ -157,7 +157,6 @@ Use this framework to decide what to do based on confidence scores:
 
 ## See Also
 
-- [Understanding Confidence Scores](./understanding-confidence-scores.md) - Learn how scores are calculated
-- [Navigating Xping Cloud](./navigating-xping-cloud.md) - Find and view test data
-- [Identifying Flaky Tests](../working-with-tests/identifying-flaky-tests.md) - Use Xping Cloud to find unreliable tests
-- [Fixing Flaky Tests](../working-with-tests/fixing-flaky-tests.md) - Take action on low-confidence tests
+- [Understanding Confidence Scores](confidence-scores.md) - Learn how scores are calculated
+- [Identifying Flaky Tests](../flaky-tests/finding-flaky-tests.md) - Use Xping Cloud to find unreliable tests
+- [Fixing Flaky Tests](../flaky-tests/patterns-and-fixes.md) - Take action on low-confidence tests

@@ -2050,6 +2050,12 @@ Tracked in: K1–K8 and K10 → xping-dev/sdk-dotnet#369; K9 → xping-dev/dashb
 
 No open questions remain from Phase 0. If a later phase finds a new decision it cannot settle from the code, it adds the question here before it writes the page.
 
+**Open questions from later phases**
+
+| # | Phase | Question | Status |
+|---|---|---|---|
+| Q1 | P1 | `docfx metadata` prints `Found project reference without a matching metadata reference` once per referenced project (Shared, Core). Every adapter project triggers it, with or without the `TargetFramework` property, with `Configuration=Release`, and with `ProduceReferenceAssembly=false`. Cross-project types still resolve (`Xping.Sdk.MSTest.XpingContext` inherits `Xping.Sdk.Core.XpingContextOrchestrator` in the output), so the warnings are cosmetic. `docfx build` has 0 warnings. Feeding docfx the built DLLs would remove them, but `release.yml` has no build step and S13 forbids changing it. Accept the 2 metadata warnings, or allow a build step in `release.yml`? | Open: ask Adrian |
+
 ---
 
 ## 8. Writing rules for every later phase

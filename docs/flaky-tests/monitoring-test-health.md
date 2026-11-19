@@ -219,7 +219,6 @@ In team retrospectives:
 
 ## See Also
 
-- [Identifying Flaky Tests](./identifying-flaky-tests.md) - How to find problematic tests
-- [Fixing Flaky Tests](./fixing-flaky-tests.md) - Strategies for addressing issues
-- [Best Practices](./best-practices.md) - Team-level practices for reliability
-- [Navigating Xping Cloud](../getting-started/navigating-xping-cloud.md) - Using Xping Cloud effectively
+- [Identifying Flaky Tests](finding-flaky-tests.md) - How to find problematic tests
+- [Fixing Flaky Tests](patterns-and-fixes.md) - Strategies for addressing issues
+- [Best Practices](best-practices.md) - Team-level practices for reliability

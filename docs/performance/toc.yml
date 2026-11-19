@@ -1,4 +1,11 @@
-- name: Overview
+- name: Performance
+  href: performance.md
+# Merged into performance.md or moved to tests/Xping.Sdk.Benchmarks/README.md in P10, then deleted.
+- name: Performance configuration
+  href: performance-configuration.md
+- name: Performance troubleshooting
+  href: performance-troubleshooting.md
+- name: Benchmark overview
   href: overview.md
-- name: Benchmark Results
+- name: Benchmark results
   href: benchmark-results.md

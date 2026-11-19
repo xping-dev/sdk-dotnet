@@ -22,7 +22,7 @@ Xping doesn't just track pass/fail results—it analyzes multiple dimensions of 
 
 The confidence score combines six key factors to give you a complete picture of test reliability. Tests with low confidence scores (below 0.60) exhibit patterns that indicate flakiness rather than consistent failures.
 
-> **Related**: For details on how confidence scores are calculated, see [Understanding Confidence Scores](../getting-started/understanding-confidence-scores.md).
+> **Related**: For details on how confidence scores are calculated, see [Understanding Confidence Scores](../cloud/confidence-scores.md).
 
 ---
 
@@ -36,8 +36,6 @@ The easiest way to find flaky tests is through the **Flaky Tests** tab in Xping 
 4. Sort by confidence score (ascending) to see the most problematic tests first
 
 This filtered view helps you prioritize reliability improvements by showing only tests that need attention.
-
-> **Related**: For navigation details, see [Navigating Xping Cloud](../getting-started/navigating-xping-cloud.md).
 
 ---
 
@@ -147,7 +145,6 @@ Xping's Flaky Detection Analysis helps distinguish between these cases and true 
 
 ## See Also
 
-- [Common Flaky Patterns](./common-flaky-patterns.md) - Catalog of flakiness patterns and detection signatures
-- [Fixing Flaky Tests](./fixing-flaky-tests.md) - Strategies for addressing flaky tests
-- [Understanding Confidence Scores](../getting-started/understanding-confidence-scores.md) - How scores are calculated
-- [Navigating Xping Cloud](../getting-started/navigating-xping-cloud.md) - Using Xping Cloud to find tests
+- [Common Flaky Patterns](common-flaky-patterns.md) - Catalog of flakiness patterns and detection signatures
+- [Fixing Flaky Tests](patterns-and-fixes.md) - Strategies for addressing flaky tests
+- [Understanding Confidence Scores](../cloud/confidence-scores.md) - How scores are calculated

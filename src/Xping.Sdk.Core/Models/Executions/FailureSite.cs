@@ -20,7 +20,7 @@ namespace Xping.Sdk.Core.Models.Executions;
 /// Every value is declared, including those no adapter can currently detect, because the enum is part
 /// of the JSON contract — a consumer written against it should not need updating each time a framework
 /// starts exposing a site it previously hid. Which values are reachable on which framework is recorded
-/// in <c>docs/known-limitations.md</c>, and is a property of the test frameworks rather than of this
+/// in <c>docs/troubleshooting/known-limitations.md</c>, and is a property of the test frameworks rather than of this
 /// enum.
 /// </para>
 /// <para>

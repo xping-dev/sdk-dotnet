@@ -91,7 +91,7 @@ error message on vstest, and through the exit code on Microsoft.Testing.Platform
 - Two theory rows whose arguments display the same way share one identity.
 - The runner is not recorded under xUnit's own console runner.
 
-See [Known Limitations](https://docs.xping.io/known-limitations.html#xunit-v3).
+See [Known Limitations](https://docs.xping.io/troubleshooting/known-limitations.html#xunit-v3).
 
 ## Sample Project
 
