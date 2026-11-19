@@ -1618,6 +1618,7 @@ includes API access. Otherwise the report says so and stays local.
 | `15` | Xping Cloud could not be reached | `login` |
 | `16` | Xping Cloud does not accept this CLI version | `login` |
 | `17` | The credential store failed | `login`, `logout`, `auth status` |
+| `70` | The CLI crashed: an unexpected error stopped the command. stderr says what failed; add `--verbose` for the stack trace | all |
 | `130` | Cancelled with Ctrl+C | all |
 
 Xping Cloud never changes the exit code of `report`: Cloud problems are one line on stderr.

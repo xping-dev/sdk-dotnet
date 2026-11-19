@@ -1355,9 +1355,10 @@ a `report` meaning and are easy to recognise in scripts:
 | 15 | `CloudUnreachable` | discovery, network, TLS, `invalid_client` on an auth command | `login`, (never `report`) |
 | 16 | `CloudVersionMismatch` | contract version or min CLI version, 426 | `login`, (never `report`) |
 | 17 | `CredentialStoreError` | store unavailable at login, write failure, deletion failure; `auth status` with no credential when a store could not be read | `login`, `logout`, `auth status` |
+| 70 | `Program.UnhandledErrorExitCode` | an exception no command handled (`EX_SOFTWARE`). It was 1, the same as a `report` threshold hit, so CI could not tell a crash from findings (#369 K6) | all |
 | 130 | `Cancelled` | Ctrl+C (`Program.Run` maps it for every command) | all |
 
-`report` never returns a code above 4, and never a Cloud-specific one (Amendment 1B); Cloud problems are hints (§10.4). Ctrl+C
+`report` never returns a code above 4 except 70 for a crash, and never a Cloud-specific one (Amendment 1B); Cloud problems are hints (§10.4). Ctrl+C
 is 130 for every command. The table is repeated in
 `docs/cli/command-reference.md` (phase 8).
 

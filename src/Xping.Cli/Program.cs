@@ -29,6 +29,16 @@ namespace Xping.Cli;
 /// </summary>
 internal static class Program
 {
+    /// <summary>
+    /// The exit code for an exception no command handled.
+    /// </summary>
+    /// <remarks>
+    /// Its own code so a CI step can tell "the tool crashed" from "the report found problems"
+    /// (<c>--fail-on</c>, exit 1). 70 is <c>EX_SOFTWARE</c> from sysexits.h, clear of the report's
+    /// 0–4 and the sign-in commands' 10–17.
+    /// </remarks>
+    internal const int UnhandledErrorExitCode = 70;
+
     internal static int Main(string[] args)
     {
         using var cancellation = new CancellationTokenSource();
@@ -150,7 +160,7 @@ internal static class Program
             if (options.Verbose)
                 error.WriteLine(Redaction.Scrub(ex.ToString()));
 
-            return 1;
+            return UnhandledErrorExitCode;
         }
 
         return noArgs ? 1 : exitCode;
