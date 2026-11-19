@@ -435,8 +435,6 @@ finding kind.
 Cloud adds what a single machine cannot supply: confidence scores, evidence sufficiency,
 root-cause categorisation, and trends across CI, branches, and teammates.
 
-> **Learn More:** For detailed information about navigating Xping Cloud, filtering tests, and understanding the test detail view, see [Navigating Xping Cloud](../guides/getting-started/navigating-xping-cloud.md).
-
 ---
 
 ## Common Patterns
@@ -516,7 +514,7 @@ Categories are automatically captured and visible in Xping Cloud for filtering a
 > This is because NUnit skips ignored tests before execution begins, and the tracking hooks are never invoked.
 > Only tests that actually execute will be tracked.
 >
-> For more details, see [Known Limitations](../known-limitations.md#nunit).
+> For more details, see [Known Limitations](../troubleshooting/known-limitations.md#nunit).
 
 ---
 
@@ -550,9 +548,9 @@ Now explore more features:
 
 - **[CI/CD Integration](ci-cd-setup.md)** - Integrate with GitHub Actions, Azure DevOps, and more
 - **[Configuration Reference](../configuration/configuration-reference.md)** - Advanced configuration options
-- **[Understanding Confidence Scores](../guides/getting-started/understanding-confidence-scores.md)** - Learn about test reliability scoring
-- **[Performance Overview](../guides/optimization/performance-overview.md)** - Understanding performance, optimization, and tuning settings
-- **[Known Limitations](../known-limitations.md)** - Framework-specific constraints and workarounds
+- **[Understanding Confidence Scores](../cloud/confidence-scores.md)** - Learn about test reliability scoring
+- **[Performance Overview](../performance/performance.md)** - Understanding performance, optimization, and tuning settings
+- **[Known Limitations](../troubleshooting/known-limitations.md)** - Framework-specific constraints and workarounds
 
 ---
 

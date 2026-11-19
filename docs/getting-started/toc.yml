@@ -1,10 +1,10 @@
-- name: Running Without an Account
+- name: Run without an account
   href: local-first.md
-- name: Quick Start - NUnit
+- name: "Quick start: NUnit"
   href: quickstart-nunit.md
-- name: Quick Start - xUnit
+- name: "Quick start: xUnit (v2 and v3)"
   href: quickstart-xunit.md
-- name: Quick Start - MSTest
+- name: "Quick start: MSTest"
   href: quickstart-mstest.md
-- name: CI/CD Integration
+- name: Set up CI
   href: ci-cd-setup.md

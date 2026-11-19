@@ -792,8 +792,8 @@ After setting up CI/CD integration:
 ## Next Steps
 
 - **[Configuration Reference](../configuration/configuration-reference.md)** - All configuration options
-- **[Identifying Flaky Tests](../guides/working-with-tests/identifying-flaky-tests.md)** - Understanding CI test reliability
-- **[Performance Overview](../guides/optimization/performance-overview.md)** - Understanding performance, optimization, and tuning settings
+- **[Identifying Flaky Tests](../flaky-tests/finding-flaky-tests.md)** - Understanding CI test reliability
+- **[Performance Overview](../performance/performance.md)** - Understanding performance, optimization, and tuning settings
 - **[Troubleshooting](../troubleshooting/common-issues.md)** - Common CI/CD issues
 
 ---

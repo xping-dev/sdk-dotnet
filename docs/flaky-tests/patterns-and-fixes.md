@@ -26,7 +26,7 @@ Use the six confidence score factors to hypothesize the cause:
 - **Failure Pattern (Low)**: Random failures suggest non-deterministic data
 - **Historical Pass Rate (Low)**: Could be consistently broken, not flaky
 
-> **Related**: For detailed pattern recognition, see [Common Flaky Patterns](./common-flaky-patterns.md).
+> **Related**: For detailed pattern recognition, see [Common Flaky Patterns](common-flaky-patterns.md).
 
 ### 3. Reproduce Locally
 
@@ -36,7 +36,7 @@ that test. Run it that many times, from the repository root, or from the project
 command names no project. `-e XPING_ENABLED=false` keeps the reruns out of your history.
 `xping report --test <name>` prints the same `repro` line under each finding about the test, and
 the command as `Repro of row N:`.
-[Reproducing a finding](../../cli/command-reference.md#reproducing-a-finding) shows the output and
+[Reproducing a finding](../cli/command-reference.md#reproducing-a-finding) shows the output and
 says which findings get a command.
 
 With no `Repro:` line because the runner wasn't recorded (the xUnit console runner, a custom host),
@@ -440,7 +440,7 @@ public void HighlyFlakyTest()
 
 ## See Also
 
-- [Common Flaky Patterns](./common-flaky-patterns.md) - Pattern catalog for diagnosis
-- [Identifying Flaky Tests](./identifying-flaky-tests.md) - How to find flaky tests
-- [Monitoring Test Health](./monitoring-test-health.md) - Track improvements over time
-- [Best Practices](./best-practices.md) - Prevent flakiness from the start
+- [Common Flaky Patterns](common-flaky-patterns.md) - Pattern catalog for diagnosis
+- [Identifying Flaky Tests](finding-flaky-tests.md) - How to find flaky tests
+- [Monitoring Test Health](monitoring-test-health.md) - Track improvements over time
+- [Best Practices](best-practices.md) - Prevent flakiness from the start

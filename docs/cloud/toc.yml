@@ -1,0 +1,9 @@
+- name: Confidence scores
+  href: confidence-scores.md
+- name: Session reliability score
+  href: session-reliability-score.md
+- name: Reading the PR comment
+  href: reading-the-pr-comment.md
+# Split in P4 (data half → configuration/collected-data.md) and P7 (score half → confidence-scores.md), then deleted.
+- name: Interpreting test results
+  href: interpreting-test-results.md

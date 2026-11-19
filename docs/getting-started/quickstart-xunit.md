@@ -442,8 +442,6 @@ finding kind.
 Cloud adds what a single machine cannot supply: confidence scores, evidence sufficiency,
 root-cause categorisation, and trends across CI, branches, and teammates.
 
-> **Learn More:** For detailed information about navigating Xping Cloud, filtering tests, and understanding the test detail view, see [Navigating Xping Cloud](../guides/getting-started/navigating-xping-cloud.md).
-
 ---
 
 ## Common Patterns
@@ -565,12 +563,12 @@ public class ExperimentalTests
 > The xUnit adapter uses a message sink pattern that captures all test lifecycle events, including skipped tests.
 > No workarounds needed!
 >
-> For framework comparison and other limitations, see [Known Limitations](../known-limitations.md).
+> For framework comparison and other limitations, see [Known Limitations](../troubleshooting/known-limitations.md).
 
 **xUnit v3 retries.** xRetry.v3 reports only the attempt a retried test ended on. Xping records that
 attempt with its number, so a test that passed on a retry shows as one, but the attempts before it
 are not recorded and the duration is that of all attempts together. See
-[Known Limitations](../known-limitations.md#xunit-v3-records-only-the-last-retry-attempt).
+[Known Limitations](../troubleshooting/known-limitations.md#xunit-v3-records-only-the-last-retry-attempt).
 
 ---
 
@@ -605,9 +603,9 @@ Now explore more features:
 
 - **[CI/CD Integration](ci-cd-setup.md)** - Integrate with GitHub Actions, Azure DevOps, and more
 - **[Configuration Reference](../configuration/configuration-reference.md)** - Advanced configuration options
-- **[Understanding Confidence Scores](../guides/getting-started/understanding-confidence-scores.md)** - Learn about test reliability scoring
-- **[Performance Overview](../guides/optimization/performance-overview.md)** - Understanding performance, optimization, and tuning settings
-- **[Known Limitations](../known-limitations.md)** - Framework-specific constraints and comparisons
+- **[Understanding Confidence Scores](../cloud/confidence-scores.md)** - Learn about test reliability scoring
+- **[Performance Overview](../performance/performance.md)** - Understanding performance, optimization, and tuning settings
+- **[Known Limitations](../troubleshooting/known-limitations.md)** - Framework-specific constraints and comparisons
 
 ---
 

@@ -61,7 +61,7 @@ When you see low scores:
 3. **Fix or Disable**: Either fix the root cause or temporarily disable
 4. **Track**: Create tickets to ensure disabled tests get re-enabled
 
-> **Related**: For fixing strategies, see [Fixing Flaky Tests](./fixing-flaky-tests.md).
+> **Related**: For fixing strategies, see [Fixing Flaky Tests](patterns-and-fixes.md).
 
 ---
 
@@ -387,7 +387,7 @@ If something still seems incorrect, this may indicate an edge case worth investi
 
 ## See Also
 
-- [Identifying Flaky Tests](./identifying-flaky-tests.md) - Find unreliable tests
-- [Fixing Flaky Tests](./fixing-flaky-tests.md) - Strategies for addressing issues
-- [Monitoring Test Health](./monitoring-test-health.md) - Regular review workflows
-- [Common Flaky Patterns](./common-flaky-patterns.md) - Pattern catalog
+- [Identifying Flaky Tests](finding-flaky-tests.md) - Find unreliable tests
+- [Fixing Flaky Tests](patterns-and-fixes.md) - Strategies for addressing issues
+- [Monitoring Test Health](monitoring-test-health.md) - Regular review workflows
+- [Common Flaky Patterns](common-flaky-patterns.md) - Pattern catalog

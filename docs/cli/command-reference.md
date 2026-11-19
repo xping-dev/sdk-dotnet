@@ -33,7 +33,7 @@ Printed commands are quoted for the shell you most likely use: PowerShell 7.3 or
 bash or zsh everywhere else. Set `XPING_SHELL` to `posix` or `powershell` to choose; Git Bash on
 Windows, and a coding agent running commands through it, wants `posix`. The `--format json` fields
 carry the same strings. cmd.exe and Windows PowerShell 5.1 aren't supported; see
-[known limitations](../known-limitations.md#printed-commands-are-quoted-for-one-shell-chosen-by-xping_shell-or-the-os).
+[known limitations](../troubleshooting/known-limitations.md#printed-commands-are-quoted-for-one-shell-chosen-by-xping_shell-or-the-os).
 
 > Global tools install to `~/.dotnet/tools` (`%USERPROFILE%\.dotnet\tools` on Windows), which the
 > .NET SDK normally adds to your `PATH`. If your shell answers `command not found: xping`, add that
@@ -284,7 +284,7 @@ of the sentence. A finding has to be both real and worth a morning: the test mus
 half as long again — a factor of 1.5, which is a 50% increase — *and* have gained at least a hundred
 milliseconds at its own speed, *and* the comparison must clear its bar. Where that bar holds and
 where it does not — the recent slice being only three runs — is in
-[known limitations](../known-limitations.md); both arms publish the spread of the runs they were
+[known limitations](../troubleshooting/known-limitations.md); both arms publish the spread of the runs they were
 measured over, in the JSON evidence, so the answer can be read off the finding rather than assumed.
 
 `TimeSensitive` reads three axes: the local six-hour quarter of the day, weekend against weekday,
@@ -327,13 +327,13 @@ one that fails under contention. Whichever way it runs, the finding is illustrat
 that drove it — the ones on the trend's side of the test's mean concurrency, rather than its newest
 failures — and the headline quotes the pair of levels that supplied the most of the correlation,
 rather than the two ends of the observed range. What the report cannot do is separate concurrency from duration — a slow test overlaps more
-neighbours by construction — which is in [known limitations](../known-limitations.md).
+neighbours by construction — which is in [known limitations](../troubleshooting/known-limitations.md).
 
 `BrokenFixture` and `SharedFailure` describe the same measurement and differ only in what can be said
 about its cause. A cluster is reported as a broken fixture when **every** failure in it was recorded
 in the same lifecycle member — a `[SetUp]`, a `[TestInitialize]`, a class fixture constructor — and
 stays a shared failure otherwise. Which failures an adapter can place, and which it cannot, is in
-[known limitations](../known-limitations.md).
+[known limitations](../troubleshooting/known-limitations.md).
 
 `Vanished` is decided by a test, not by a count of appearances. A test that ran in three of seventeen
 earlier runs is *expected* to miss the next three, so before calling an absence a change the report
@@ -345,7 +345,7 @@ of the claim is visible rather than implied. On the default three-run current sl
 at a baseline run rate of about 0.71 — twelve of seventeen earlier runs carries, eight does not — and
 it eases towards 0.632 as the history lengthens. On a window shorter than eight runs the current
 slice narrows to a single run and one run's absence never reaches the bar, so the kind is silent
-there — see [known limitations](../known-limitations.md).
+there — see [known limitations](../troubleshooting/known-limitations.md).
 
 It also asks only the runs that were in a position to answer. A run under a `dotnet test --filter`
 did not fail to see the tests it excluded; it never looked for them, and counting its silence makes
@@ -359,7 +359,7 @@ runs, and the finding's denominators count only those — the sentence says `ful
 how many of the window's runs covered part of the suite. Only this kind sets them aside; every other
 kind still counts them in full, because a filtered run's outcomes are as true as any other run's.
 Where the fallback applies, a deletion removing more than half a suite is indistinguishable from a
-filter and is not reported — see [known limitations](../known-limitations.md).
+filter and is not reported — see [known limitations](../troubleshooting/known-limitations.md).
 
 ### Finding ids
 
@@ -835,7 +835,7 @@ It is the file and the line the test's body starts on, made relative to the repo
 is printed whenever the SDK captured one rather than being reserved for a verbose mode — knowing a
 test is flaky is only half of what you need to fix it. Whether that line is the opening brace or the
 first statement depends on how the assembly was built; see
-[known limitations](../known-limitations.md).
+[known limitations](../troubleshooting/known-limitations.md).
 
 None of NUnit, MSTest or xUnit reports this, so the SDK reads it from the test assembly's Portable
 PDB. That means a build with `DebugType=none` has no location to report, and the trailer ends at
@@ -846,7 +846,7 @@ A group finding — one covering several tests at once, like a broken fixture �
 because its members are declared in different places. The members and their own locations are in
 the JSON output.
 
-See [known limitations](../known-limitations.md) for what the line number can and cannot tell you.
+See [known limitations](../troubleshooting/known-limitations.md) for what the line number can and cannot tell you.
 
 ### `--summary`
 

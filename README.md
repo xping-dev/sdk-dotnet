@@ -26,7 +26,7 @@
     <a href="#local-vs-cloud"><strong>Local vs. Cloud</strong></a> •
     <a href="#how-it-works"><strong>How It Works</strong></a> •
     <a href="https://docs.xping.io"><strong>Documentation</strong></a> •
-    <a href="https://docs.xping.io/known-limitations.html"><strong>Known Limitations</strong></a> •
+    <a href="https://docs.xping.io/troubleshooting/known-limitations.html"><strong>Known Limitations</strong></a> •
     <a href="https://github.com/xping-dev/sdk-dotnet/issues"><strong>Report Bug</strong></a>
   </p>
 </div>
@@ -393,7 +393,7 @@ Patterns that show up in accumulated execution history:
 - **Non-deterministic data** — random inputs that occasionally hit an edge case
 
 Working locally surfaces the *behaviour*; Xping Cloud attributes the *cause*. See the
-[Common Flaky Patterns Guide](https://docs.xping.io/guides/working-with-tests/common-flaky-patterns.html)
+[Common Flaky Patterns Guide](https://docs.xping.io/flaky-tests/common-flaky-patterns.html)
 for worked examples.
 
 ---
@@ -414,9 +414,9 @@ for worked examples.
 
 - [Getting Started](https://docs.xping.io/index.html#quick-start)
 - [Running Without an Account](https://docs.xping.io/getting-started/local-first.html)
-- [Known Limitations](https://docs.xping.io/known-limitations.html)
+- [Known Limitations](https://docs.xping.io/troubleshooting/known-limitations.html)
 - [Troubleshooting](https://docs.xping.io/troubleshooting/common-issues.html)
-- [API Reference](https://docs.xping.io/api/Xping.Sdk.Core.Collection.html)
+- [API Reference](https://docs.xping.io/api/Xping.Sdk.Core.html)
 
 Full documentation at [docs.xping.io](https://docs.xping.io).
 

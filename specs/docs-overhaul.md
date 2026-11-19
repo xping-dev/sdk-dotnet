@@ -157,7 +157,13 @@ Inbound links that move with the files. Fix them in the same PR as the move:
 | Root `README.md`, `nuspec/README.Cli.md`, adapter READMEs | Quickstart, local-first, configuration-reference and common-issues URLs. These keep their paths. Check them anyway. |
 | Internal links | 5 pages link `guides/optimization/performance-overview.md`. PR-comment and CLI pages link the Guides pages. |
 
-Xping Cloud (dashboard `src/`) links only to `https://docs.xping.io/`, so no Cloud code changes.
+Xping Cloud (dashboard `src/`) builds docs links as the docs base URL plus a path, so a grep for the full `docs.xping.io/…` URL misses them.
+Two Cloud links point to moved pages. They change in a dashboard PR that merges in step with the docs release, because docs.xping.io changes only on a release tag:
+
+| Link source (dashboard) | Old path | New path |
+|---|---|---|
+| `src/Core/Xping.Application/Core/Services/PullRequestReports/PrReportOptions.cs:20`, `src/UX/Xping.Portal/appsettings.json:33`, `src/Services/Xping.Analytics/appsettings.json:18` (`PrReportDocsPath`, the PR comment's "How to read this" link) | `guides/pull-requests/reading-the-xping-comment.html` | `cloud/reading-the-pr-comment.html` |
+| `src/UX/Xping.Portal/Components/Pages/Sessions/Tabs/Components/SessionVerdictStrip.razor:22` | `guides/getting-started/session-reliability-score.html` | `cloud/session-reliability-score.html` |
 
 ---
 
@@ -1162,7 +1168,7 @@ Key current facts used throughout:
 | 23 | Projects section: table columns, `–`/`pending`, dropped-category list, last 3 earlier commits | ✅ | :685-760; `PreviousCommitsShown = 3` (`PullRequestReportViewModelBuilder.cs:54`) |
 | 24 | Failure page sections (Verdict, This run, Timeline, Compared with last passing run on main, Related) and "PR has moved on" notice | ✅ | `Pages/PullRequests/Failure.razor:61-68,290` |
 | 25 | Turn off: workspace pause in Settings → Integrations; per-project toggle | ✅ | `Settings/Integrations/Index.razor:58` "Pause PR comments"; `Identity/Projects/Components/ProjectPrCommentsPanel.razor` "Pull-request comments" Turn on/off |
-| 26 | Footer "How to read this" links to this page | ✅ | `PrReportDocsPath = guides/pull-requests/reading-the-xping-comment.html` (`PrReportOptions.cs:20`) — URL must not change |
+| 26 | Footer "How to read this" links to this page | ✅ | `PrReportDocsPath = guides/pull-requests/reading-the-xping-comment.html` (`PrReportOptions.cs:20`). The page moves to `cloud/reading-the-pr-comment.md` in P1; the dashboard setting moves with it (§2) |
 | 27 | Links to session-reliability-score, understanding-confidence-scores, identifying/fixing flaky tests | ✅ | Targets exist (but two of them are stale — see above) |
 
 **Structural:**
@@ -1712,14 +1718,14 @@ The code changes in §7.1 (K1–K9) are not part of `feat/docs-overhaul`. Each o
   - Do not add NEW pages yet. Each NEW page arrives with its content phase.
   - Move `versioning.md` to `docs/internals/` (S6).
   - Delete `guides/getting-started/navigating-xping-cloud.md` and its two `Dashboard_*.png` images (C2). Remove the links to it from `index.md`, the three quickstarts, `understanding-confidence-scores.md`, `interpreting-test-results.md`, `identifying-flaky-tests.md` and `monitoring-test-health.md`.
-  - Add `Xping.Sdk.XUnit.V3` to `docfx.json` metadata, and fix the 2 metadata warnings.
+  - Add `Xping.Sdk.XUnit.V3` to `docfx.json` metadata. The 2 `docfx metadata` warnings stay (Q1).
   - Update every inbound link in the §2 table: `ReportVocabulary.cs`, `DocumentedSampleTests.cs`, the READMEs and internal links.
   - Delete the stale remote branches (S8).
   - Do not change `release.yml` (S13).
-- **Verify against:** `docs/docfx.json`, `DocumentedSampleTests.cs:61-73`, and a grep for `docs.xping.io` across both repos.
+- **Verify against:** `docs/docfx.json`, `DocumentedSampleTests.cs:61-73`, a grep for `docs.xping.io` across both repos, and a grep for every moved path (Cloud builds links from a base URL plus a path).
 - **Accept when:**
   - the nav matches §2, apart from the NEW pages;
-  - the build has 0 warnings;
+  - `docfx build` has 0 warnings (`docfx metadata` keeps its 2 accepted warnings, Q1);
   - `DocumentedSampleTests` passes;
   - the CLI's printed population-marker URL resolves;
   - the API reference lists `Xping.Sdk.XUnit.V3`.
@@ -1959,7 +1965,7 @@ The code changes in §7.1 (K1–K9) are not part of `feat/docs-overhaul`. Each o
   - Make one link-check pass that covers absolute `docs.xping.io` links.
   - Remove any history wording ("now", "used to", "previously", "new in").
   - Remove "Dashboard" from text and image names.
-  - Make `docfx build` fail on warnings in a PR check workflow. The check only builds the docs; the deploy stays in `release.yml`, unchanged (S13).
+  - Make `docfx build` fail on warnings in a PR check workflow. The check runs `docfx metadata` first without `--warningsAsErrors`, because its 2 warnings are accepted (Q1). The check only builds the docs; the deploy stays in `release.yml`, unchanged (S13).
 - **Verify against:** the §8 glossary and the invariants list.
 - **Accept when:**
   - `docfx build` has 0 warnings with `--warningsAsErrors`;
@@ -2049,6 +2055,12 @@ Tracked in: K1–K8 and K10 → xping-dev/sdk-dotnet#369; K9 → xping-dev/dashb
 | K10 | Replace `CaptureStackTraces` with `UploadStackTraces` (default `false`, S14). Adapters always record the trace and its hash; the orchestrator strips the raw trace from the upload copy unless the option is on. Delete `CaptureStackTraceConfigurationResolver`. Update the config reference, local-store privacy notes, samples and READMEs. | sdk-dotnet | P4, P5 |
 
 No open questions remain from Phase 0. If a later phase finds a new decision it cannot settle from the code, it adds the question here before it writes the page.
+
+**Open questions from later phases**
+
+| # | Phase | Question | Status |
+|---|---|---|---|
+| Q1 | P1 | `docfx metadata` prints `Found project reference without a matching metadata reference` once per referenced project (Shared, Core). Every adapter project triggers it, with or without the `TargetFramework` property, with `Configuration=Release`, and with `ProduceReferenceAssembly=false`. Cross-project types still resolve (`Xping.Sdk.MSTest.XpingContext` inherits `Xping.Sdk.Core.XpingContextOrchestrator` in the output), so the warnings are cosmetic. `docfx build` has 0 warnings. Feeding docfx the built DLLs would remove them, but `release.yml` has no build step and S13 forbids changing it. Accept the 2 metadata warnings, or allow a build step in `release.yml`? | **Accepted (2026-11-19).** The 2 metadata warnings stay. `release.yml` is unchanged. P12's warnings-as-errors check applies to `docfx build`, not `docfx metadata`. |
 
 ---
 

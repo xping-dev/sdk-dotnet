@@ -380,67 +380,65 @@ Patterns that show up in accumulated execution history:
 - **Non-deterministic data** — random inputs that occasionally hit an edge case
 
 Working locally surfaces the *behaviour*; Xping Cloud attributes the *cause*. See
-[Common Flaky Patterns](guides/working-with-tests/common-flaky-patterns.md) for worked examples.
+[Common Flaky Patterns](flaky-tests/common-flaky-patterns.md) for worked examples.
 
 > **How Cloud confidence scores work**: Xping analyses test execution history across six weighted
 > factors — pass rate (35%), execution stability (20%), retry behaviour (15%), environment
 > consistency (15%), failure patterns (10%), and dependency impact (5%) — producing a 0–1 score.
 > ESS is the effective sample size: how many independent runs stand behind that number. See
-> [Understanding Confidence Scores](guides/getting-started/understanding-confidence-scores.md).
+> [Understanding Confidence Scores](cloud/confidence-scores.md).
 
 ---
 
 ## Documentation Structure
 
-#### [Getting Started](getting-started/local-first.md)
+#### [Get started](getting-started/local-first.md)
 
-- [Running Without an Account](getting-started/local-first.md) — the local-only path, start to finish
-- [NUnit Quick Start](getting-started/quickstart-nunit.md)
-- [xUnit Quick Start](getting-started/quickstart-xunit.md)
-- [MSTest Quick Start](getting-started/quickstart-mstest.md)
-- [CI/CD Integration](getting-started/ci-cd-setup.md)
+- [Run without an account](getting-started/local-first.md) — the local-only path, start to finish
+- [Quick start: NUnit](getting-started/quickstart-nunit.md)
+- [Quick start: xUnit (v2 and v3)](getting-started/quickstart-xunit.md)
+- [Quick start: MSTest](getting-started/quickstart-mstest.md)
+- [Set up CI](getting-started/ci-cd-setup.md)
 
-#### [Configuration](configuration/configuration-reference.md)
+#### [Configure](configuration/configuration-reference.md)
 
-- [Configuration Reference](configuration/configuration-reference.md) — every option, all three sources
-- [Local Store](configuration/local-store.md) — what `.xping/` holds and how it's managed
+- [Configuration reference](configuration/configuration-reference.md) — every option, all three sources
+- [Local store](configuration/local-store.md) — what `.xping/` holds and how it's managed
 
 #### [CLI](cli/command-reference.md)
 
-- [Command Reference](cli/command-reference.md) — `report`, `where`, `clear`, flags, JSON envelope
+- [Command reference](cli/command-reference.md) — `report`, `where`, `clear`, flags, JSON envelope
 
-#### [Guides](guides/getting-started/understanding-confidence-scores.md)
+#### [Xping Cloud](cloud/confidence-scores.md)
 
-**Getting Started:**
-- [Understanding Confidence Scores](guides/getting-started/understanding-confidence-scores.md)
-- [Session Reliability Score](guides/getting-started/session-reliability-score.md)
-- [Navigating Xping Cloud](guides/getting-started/navigating-xping-cloud.md)
-- [Interpreting Test Results](guides/getting-started/interpreting-test-results.md)
+- [Confidence scores](cloud/confidence-scores.md)
+- [Session reliability score](cloud/session-reliability-score.md)
+- [Reading the PR comment](cloud/reading-the-pr-comment.md)
+- [Interpreting test results](cloud/interpreting-test-results.md)
 
-**Working with Tests:**
-- [Identifying Flaky Tests](guides/working-with-tests/identifying-flaky-tests.md)
-- [Common Flaky Patterns](guides/working-with-tests/common-flaky-patterns.md)
-- [Fixing Flaky Tests](guides/working-with-tests/fixing-flaky-tests.md)
-- [Monitoring Test Health](guides/working-with-tests/monitoring-test-health.md)
-- [Best Practices](guides/working-with-tests/best-practices.md)
+#### [Flaky tests](flaky-tests/finding-flaky-tests.md)
 
-**Optimization:**
-- [Performance Overview](guides/optimization/performance-overview.md)
-- [Performance Configuration](guides/optimization/performance-configuration.md)
-- [Performance Troubleshooting](guides/optimization/performance-troubleshooting.md)
+- [Finding flaky tests](flaky-tests/finding-flaky-tests.md)
+- [Flaky patterns and fixes](flaky-tests/patterns-and-fixes.md)
+- [Monitoring test health](flaky-tests/monitoring-test-health.md)
+- [Common flaky patterns](flaky-tests/common-flaky-patterns.md)
+- [Best practices](flaky-tests/best-practices.md)
 
-#### [Performance](performance/overview.md)
+#### [Performance](performance/performance.md)
 
-- [Performance Overview](performance/overview.md)
-- [Benchmark Results](performance/benchmark-results.md)
+- [Performance](performance/performance.md)
+- [Performance configuration](performance/performance-configuration.md)
+- [Performance troubleshooting](performance/performance-troubleshooting.md)
+- [Benchmark overview](performance/overview.md)
+- [Benchmark results](performance/benchmark-results.md)
 
 #### [Troubleshooting](troubleshooting/common-issues.md)
 
-- [Common Issues](troubleshooting/common-issues.md)
-- [Debugging Guide](troubleshooting/debugging.md)
-- [Known Limitations](known-limitations.md) — what Xping does not do yet
+- [Common issues](troubleshooting/common-issues.md)
+- [Debugging](troubleshooting/debugging.md)
+- [Known limitations](troubleshooting/known-limitations.md) — what Xping does not do yet
 
-#### [API Reference](https://docs.xping.io/api/Xping.Sdk.Core.Collection.html)
+#### [API reference](https://docs.xping.io/api/Xping.Sdk.Core.html)
 
 Complete API documentation for all SDK components.
 

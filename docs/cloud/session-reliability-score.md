@@ -6,7 +6,7 @@ The **session reliability score** is a single number between 0 and 1 that summar
 
 ## How the Score Is Calculated
 
-When a test session completes, Xping aggregates the individual [confidence scores](./understanding-confidence-scores.md) of every test that ran using the following formula:
+When a test session completes, Xping aggregates the individual [confidence scores](confidence-scores.md) of every test that ran using the following formula:
 
 ```
 Session Reliability = α × WeightedMean(scores) + (1 − α) × Min(scores)
@@ -96,6 +96,6 @@ The table below shows how the same test suite produces different session scores 
 
 ## See Also
 
-- [Understanding Confidence Scores](./understanding-confidence-scores.md) — How individual test confidence scores are calculated
-- [Interpreting Test Results](./interpreting-test-results.md) — How to act on confidence scores and session results
-- [Monitoring Test Health](../working-with-tests/monitoring-test-health.md) — Tracking trends over time
+- [Understanding Confidence Scores](confidence-scores.md) — How individual test confidence scores are calculated
+- [Interpreting Test Results](interpreting-test-results.md) — How to act on confidence scores and session results
+- [Monitoring Test Health](../flaky-tests/monitoring-test-health.md) — Tracking trends over time

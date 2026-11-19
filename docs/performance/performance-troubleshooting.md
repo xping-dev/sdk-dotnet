@@ -285,8 +285,8 @@ When investigating performance issues:
 
 If you've followed this guide and still have performance concerns:
 
-1. **Check [Common Issues](../../troubleshooting/common-issues.md)** for known problems
-2. **Review [Performance Overview](./performance-overview.md)** for expected characteristics
+1. **Check [Common Issues](../troubleshooting/common-issues.md)** for known problems
+2. **Review [Performance Overview](performance.md)** for expected characteristics
 3. **Open a GitHub issue** with:
    - Test suite size and framework
    - Measured overhead percentage
@@ -300,7 +300,7 @@ If you've followed this guide and still have performance concerns:
 
 ## See Also
 
-- [Performance Overview](./performance-overview.md) - Understanding SDK performance
-- [Performance Configuration](./performance-configuration.md) - Tuning settings
-- [Common Issues](../../troubleshooting/common-issues.md) - General troubleshooting
-- [Performance Benchmark Results](../../performance/benchmark-results.md) - Detailed benchmarks
+- [Performance Overview](performance.md) - Understanding SDK performance
+- [Performance Configuration](performance-configuration.md) - Tuning settings
+- [Common Issues](../troubleshooting/common-issues.md) - General troubleshooting
+- [Performance Benchmark Results](benchmark-results.md) - Detailed benchmarks
