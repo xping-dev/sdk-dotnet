@@ -13,21 +13,21 @@
   <p align="center">
     <strong>Your coding agent can't tell a flaky test from a broken one.</strong>
     <br />
-    Xping records every <code>dotnet test</code> run — local ones included — so
-    "is this test flaky?" gets answered from history instead of from one red run.
+    Xping records every <code>dotnet test</code> run, including the runs on your own machine,
+    so you can judge a test from its history instead of from one red run.
     <br />
-    <sub>Recording and local reports are free, need no account, and make no network calls.</sub>
+    <sub>Recording and local reports are free. They need no account and make no network calls.</sub>
   </p>
 </div>
 
 <div align="center">
   <p align="center">
-    <a href="#quick-start"><strong>Quick Start</strong></a> •
-    <a href="#local-vs-cloud"><strong>Local vs. Cloud</strong></a> •
-    <a href="#how-it-works"><strong>How It Works</strong></a> •
+    <a href="#quick-start"><strong>Quick start</strong></a> •
+    <a href="#local-and-xping-cloud"><strong>Local and Xping Cloud</strong></a> •
+    <a href="#how-it-works"><strong>How it works</strong></a> •
     <a href="https://docs.xping.io"><strong>Documentation</strong></a> •
-    <a href="https://docs.xping.io/troubleshooting/known-limitations.html"><strong>Known Limitations</strong></a> •
-    <a href="https://github.com/xping-dev/sdk-dotnet/issues"><strong>Report Bug</strong></a>
+    <a href="https://docs.xping.io/troubleshooting/known-limitations.html"><strong>Known limitations</strong></a> •
+    <a href="https://github.com/xping-dev/sdk-dotnet/issues"><strong>Report a bug</strong></a>
   </p>
 </div>
 
@@ -35,99 +35,127 @@
 
 ---
 
-## Why this exists
+## Why history matters
 
-`dotnet test` is amnesiac. Every run starts from zero and discards everything the last one
-knew. A test that failed on Tuesday and passed on Wednesday leaves no trace anyone can point
-at on Thursday, so "is that one flaky?" gets answered from memory and settled by re-running
-until it goes green.
+A single test run cannot tell a flaky test from a real failure. Both look the same: one red result.
 
-That was already expensive when a human was doing it. Now an agent is. Hand Claude a failing 
-test and a single run to learn from, and it will make the test pass. With one data point, a 
-real regression and a flake look identical — so it fixes what it can see:
+When you, or a coding agent, fix a test from one red run, the usual fixes hide the problem:
 
-| It does this | And you get |
-| ------------ | ----------- |
-| Loosens the assertion | A test that still runs, but stopped checking the thing that broke |
-| Adds a retry | A real, reproducible failure that now passes on attempt three |
-| Bumps the timeout | The same race condition, just harder to hit in CI |
-| Moves the test into its own [Collection] | A green suite that now runs those tests serially — the shared-state bug is untouched, and every build is slower |
-| Mocks the dependency that failed | A test that passes deterministically because it no longer touches the code that broke. |
+| The fix | The result |
+| ------- | ---------- |
+| Loosen the assertion | The test runs, but it no longer checks the thing that broke. |
+| Add a retry | A real failure that you can reproduce passes on the third attempt. |
+| Increase the timeout | The race condition is still there. It happens less often, so it is harder to find in CI. |
+| Move the test into its own `[Collection]` | The tests run one after another. The shared-state bug is still there, and every build is slower. |
+| Mock the dependency that failed | The test always passes, because it no longer runs the code that broke. |
 
-Every one of those is a reasonable move on one data point. Nobody notices until the suite
-stops meaning anything.
-
-Xping is the accumulation layer underneath. The SDK records each execution with its outcome,
-duration, and environment; the CLI reads that history back and says which tests behaved
-consistently and which didn't — to you in the terminal, and to your agent as structured JSON.
-Nothing about your test code changes.
+Each of these fixes makes sense when you have only one run. Xping keeps the history of every run.
+The SDK records each test execution with its outcome, duration and environment. The CLI reads
+that history and reports which tests behaved consistently and which did not: as text for you, and
+as JSON for your agent. Your test code does not change.
 
 ---
 
 ## Two ways to run Xping
 
-|                | **Local** | **Cloud** |
-| -------------- | --------- | --------- |
-| **Setup**      | SDK package + CLI tool | + an upload key |
-| **Account**    | Not required | Required ([invite-only](#connecting-to-xping-cloud)) |
-| **Your data**  | Stays in `.xping/` in your repo | Uploaded to Xping Cloud |
-| **History**    | Your machine, your runs | Every machine, every branch, CI included |
-| **You get**    | Observations and evidence from local runs | Confidence scores, evidence sufficiency, trends, PR comments |
+|                | **Local** | **Xping Cloud** |
+| -------------- | --------- | --------------- |
+| **Setup**      | SDK package and CLI tool | Also an API key with the Upload scope |
+| **Account**    | Not needed | Needed ([by invitation](#connect-to-xping-cloud)) |
+| **Your data**  | Stays in `.xping/` in your repository | Uploaded to Xping Cloud |
+| **History**    | Your machine, your runs | Every machine and branch, CI included |
+| **You get**    | Observations and evidence from local runs | Confidence scores, evidence levels, flaky detection, trends, PR comments |
 
-**Start local.** Nothing leaves your machine, and you can add an upload key later without
-changing a line of test code.
+**Start locally.** Nothing leaves your machine. You can add an API key later without changing
+your test code.
 
 ---
 
-## Quick Start
+## Quick start
 
-### 1. Install both pieces
+### 1. Install the SDK and the CLI
 
 ```bash
-dotnet add package Xping.Sdk.XUnit --prerelease    # xUnit v2; or Xping.Sdk.XUnit.V3 / Xping.Sdk.NUnit / Xping.Sdk.MSTest
+dotnet add package Xping.Sdk.XUnit --prerelease    # xUnit v2. Or Xping.Sdk.XUnit.V3, Xping.Sdk.NUnit, Xping.Sdk.MSTest
 
-dotnet tool install -g Xping.Cli --prerelease      # puts `xping` on your PATH
+dotnet tool install -g Xping.Cli --prerelease      # adds the xping command to your PATH
 ```
 
-For xUnit, match the xUnit package your project references: `xunit` (v2) takes `Xping.Sdk.XUnit`,
-`xunit.v3` takes `Xping.Sdk.XUnit.V3`.
+All Xping packages are prereleases, so each install command needs `--prerelease`. For xUnit, pick
+the adapter that matches your xUnit package: `xunit` (v2) takes `Xping.Sdk.XUnit`, and `xunit.v3`
+takes `Xping.Sdk.XUnit.V3`.
 
-The SDK records what happens during each run; the CLI reads what it recorded. You need
-both — the SDK alone writes history nothing reads.
+The SDK records each run, and the CLI reads what it recorded. You need both.
 
-> The CLI targets `net10.0` and needs the .NET 10 SDK or runtime. The SDK packages target
-> `netstandard2.0`, so your test projects can stay on any supported .NET version.
+> The CLI needs the .NET 10 SDK or runtime. Your test projects can target .NET Framework 4.6.2 or
+> later, or .NET 8 or later. The MSTest adapter needs MSTest 3.8 or later.
 
 ### 2. Turn on tracking
 
-**xUnit** — add one line to `AssemblyInfo.cs`:
+**xUnit**: add one line to `AssemblyInfo.cs`:
+
 ```csharp
 [assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")] // xUnit v2
 [assembly: TestFramework(typeof(Xping.Sdk.XUnit.V3.XpingTestFramework))]           // xUnit v3
 ```
 
-**NUnit** — add one assembly-level attribute:
+**NUnit**: add one file. It tracks every test in the assembly, and its setup fixture starts and
+ends the Xping session:
+
 ```csharp
+using System.Threading.Tasks;
+using NUnit.Framework;
+using Xping.Sdk.NUnit;
+
 [assembly: XpingTrack]
+
+[SetUpFixture]
+public class XpingSetup
+{
+    [OneTimeSetUp]
+    public void BeforeAllTests() => XpingContext.Initialize();
+
+    [OneTimeTearDown]
+    public async Task AfterAllTests() => await XpingContext.FinalizeAndShutdownAsync();
+}
 ```
 
-**MSTest** — inherit from the base class:
+Keep the `[OneTimeTearDown]` method. The SDK writes the run when the session ends, and without
+this method the session never ends.
+
+**MSTest**: add one class that starts and ends the Xping session, and make your test classes
+inherit from `XpingTestBase`:
+
 ```csharp
+using System.Threading.Tasks;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xping.Sdk.MSTest;
+
+[TestClass]
+public static class XpingSetup
+{
+    [AssemblyInitialize]
+    public static void AssemblyInit(TestContext context) => XpingContext.Initialize();
+
+    [AssemblyCleanup]
+    public static async Task AssemblyCleanup() => await XpingContext.FinalizeAndShutdownAsync();
+}
+
 [TestClass]
 public class MyTests : XpingTestBase { }
 ```
 
-### 3. Run your tests — more than once
+### 3. Run your tests several times
 
 ```bash
 dotnet test
 ```
 
-One run tells you nothing about reliability. A dozen tells you plenty. Run them the way you
-normally would — including the local runs that never reach CI, which is where most of the
-evidence has always been thrown away — and let the history build up.
+Each run adds to the history. One run says nothing about reliability, so `xping report` shows no
+findings until it has at least **5 runs**, and each test needs at least 5 runs of its own. Run your
+tests as you normally do. The runs on your own machine count too.
 
-### 4. Ask what happened
+### 4. Read the report
 
 ```bash
 xping report
@@ -171,260 +199,260 @@ https://docs.xping.io/cli/command-reference.html#the-population-marker
 Detail of row 1: xping report --id f_2b84a621 --assembly SampleApp.MSTest
 ````
 
-No API key, no signup, no network calls. Everything lives in `.xping/` on your machine.
+No API key, no account and no network calls. The history stays in `.xping/` on your machine.
 
-[Running Without an Account →](https://docs.xping.io/getting-started/local-first.html)
+[Run without an account →](https://docs.xping.io/getting-started/local-first.html)
 
-### Framework-specific guides
+### Guides for each framework
 
-- [NUnit Setup Guide](https://docs.xping.io/getting-started/quickstart-nunit.html) — attributes, filtering, best practices
-- [xUnit Setup Guide](https://docs.xping.io/getting-started/quickstart-xunit.html) — custom framework configuration and examples
-- [MSTest Setup Guide](https://docs.xping.io/getting-started/quickstart-mstest.html) — base class usage and TestContext integration
+- [Quick start: NUnit](https://docs.xping.io/getting-started/quickstart-nunit.html): attributes, filtering and configuration
+- [Quick start: xUnit](https://docs.xping.io/getting-started/quickstart-xunit.html): the test framework setup for xUnit v2 and v3
+- [Quick start: MSTest](https://docs.xping.io/getting-started/quickstart-mstest.html): the base class and the assembly setup
 
 ---
 
-## The CLI surface
+## CLI commands
 
 ```bash
 xping report                    # findings from recent runs
-xping report --format json      # the versioned envelope, for a script or an agent
+xping report --format json      # versioned JSON, for a script or an agent
 xping report --summary          # one line per assembly, for a chat message or a CI step title
-xping report --fail-on high     # exit non-zero when any assembly has a high finding
-xping report --runs 50          # widen the window (or --since <sha|yyyy-MM-dd>)
+xping report --fail-on high     # exit with code 1 when any assembly has a high finding
+xping report --runs 50          # a larger window (or --since <sha|yyyy-MM-dd>)
 xping report --assembly Shop.Tests --kind flaky   # one assembly, one or more finding kinds
 xping report --id f_445c562e    # one finding in detail, by the id on its row
-xping report --test Login       # one test's history, run by run
-xping where                     # show where local runs are stored
+xping report --test Login       # the history of one test, run by run
+xping where                     # where the local runs are stored
 xping clear                     # delete recorded runs
+xping login                     # sign in to Xping Cloud from your browser
+xping logout                    # sign out and remove the stored sign-in
+xping auth status               # which Xping Cloud credential the CLI uses
 ```
 
-With several test projects, `xping report` prints one row per assembly, most severe first;
-`--assembly <name>` opens one assembly's full report. `--top`, `--all` and `--kind` need it.
+With several test projects, `xping report` prints one row per assembly, most severe first.
+`--assembly <name>` opens the full report of one assembly. `--top`, `--all` and `--kind` need it.
 [Scoping →](https://docs.xping.io/cli/command-reference.html#scoping)
 
-`xping report --help` lists the rest: `--top`/`--all`, `--directory`, `--ascii`, `--no-color`.
+`xping report --help` lists the other options, such as `--directory`, `--ascii` and `--no-color`.
 
 ---
 
-## Feeding it to your agent
+## Use with a coding agent
 
-`xping report --format json` emits a versioned envelope — findings, evidence levels, run
-counts, failure signatures — which is what makes the difference between an agent guessing and
-an agent knowing:
+`xping report --format json` returns versioned JSON: the findings, their evidence levels, the run
+counts and the failure modes. An agent can use it like this:
 
-1. **Claude hits a failing test.** Instead of rewriting the assertion on one red run, it asks
-   Xping what this test's history looks like.
-2. **Xping answers with evidence.** Failed 34 of 34 runs, one failure signature, evidence
-   high — or failed 4 of 40, three signatures, only ever in parallel.
-3. **Claude acts on it.** A failure that consistent isn't flake, it's a bug, and the test was
-   right to catch it. A single local failure against a long clean history is noise: run it
-   again, don't touch the test.
+1. **The agent finds a failing test.** Before it changes the assertion, it asks Xping for the
+   history of that test.
+2. **Xping returns the evidence.** For example: failed in 34 of 34 runs, one failure mode,
+   evidence robust. Or: failed in 4 of 40 runs, three failure modes.
+3. **The agent decides.** A test that fails the same way in every run probably found a real bug,
+   so the agent fixes the code and keeps the test. One local failure after a long series of passes
+   may be noise, so the agent runs the test again before it changes anything.
 
-What comes back is evidence, not a verdict. The agent still decides.
+The report gives evidence, not a verdict. The agent still makes the decision.
 
-Today that means piping `--format json` into your agent's context. A dedicated skill and an
-MCP server are [on the roadmap](#roadmap).
+To use it, pass the `--format json` output to your agent. A dedicated skill and an MCP server are
+[on the roadmap](#roadmap).
 
 ---
 
-## Local vs. Cloud
+## Local and Xping Cloud
 
-The local CLI reports **what it observed**. It does not assign confidence scores or name
-causes — a handful of runs on one machine isn't an evidence base strong enough to support
-that kind of claim, and we'd rather show you the runs than a number that implies more
-certainty than the data has. Scoring lives in Xping Cloud, where there's enough history
-across machines, branches, and CI to justify it.
+The local CLI reports **what it observed**. It does not give a test a score, and it does not name
+a cause. A few runs on one machine are not enough evidence for that. Xping Cloud scores tests,
+because it has the history of many machines, branches and CI jobs.
 
-|                                        | Local | Cloud |
+|                                        | Local | Xping Cloud |
 | -------------------------------------- | :---: | :---: |
-| Run-by-run pass/fail history            | ✓ | ✓ |
-| Inconsistent and newly-failing tests    | ✓ | ✓ |
-| Consistently-failing tests (real bugs)  | ✓ | ✓ |
-| Duration and environment capture        | ✓ | ✓ |
-| JSON envelope for agents and scripts    | ✓ | ✓ |
-| Per-test confidence score               | — | ✓ |
-| Evidence sufficiency (ESS)              | — | ✓ |
-| Root-cause categorisation               | — | ✓ |
-| Reliability trends over time            | — | ✓ |
-| Cross-environment comparison            | — | ✓ |
-| History across CI, branches, teammates  | — | ✓ |
-| GitHub PR comments                      | — | ✓ |
+| Pass and fail history, run by run       | ✓ | ✓ |
+| Tests that pass and fail inconsistently | ✓ | ✓ |
+| Tests that fail in every run            | ✓ | ✓ |
+| Duration and environment of each run    | ✓ | ✓ |
+| JSON output for agents and scripts      | ✓ | ✓ |
+| Confidence score per test               | — | ✓ |
+| Effective sample size (ESS) and evidence level | — | ✓ |
+| Flaky verdict and cause category        | — | ✓ |
+| Reliability trends                      | — | ✓ |
+| Comparison across environments          | — | ✓ |
+| History from CI, branches and teammates | — | ✓ |
+| Pull request comments (GitHub, GitLab, Azure DevOps) | — | ✓ |
 
-Confidence runs 0–1. ESS is the effective sample size — how many independent runs stand
-behind that number.
+The confidence score is a number from 0 to 1. ESS is the effective sample size: the weighted
+number of runs behind the score.
+[Confidence scores →](https://docs.xping.io/cloud/confidence-scores.html)
 
 ---
 
-## Connecting to Xping Cloud
+## Connect to Xping Cloud
 
-Set one environment variable. Nothing else changes — same packages, same attributes.
+Set one environment variable. Your packages and test code stay the same.
 
 ```bash
 export XPING_APIKEY="your-api-key"
 ```
 
-Your project is named after your test assembly, so a solution with several test projects gets
-one Xping project each. Set `XPING_PROJECTID` or add `ProjectId` to `appsettings.json` to report them all as a single project instead.
+Create the key in Xping Cloud under **Settings → API keys**. Create it with only the Upload scope.
+Set it as an environment variable on each machine and in CI. Never commit it.
 
-Runs upload as they finish, so history pools across every machine, branch, and CI job — a
-test that only fails on a teammate's laptop still counts. Analysis happens at
-[app.xping.io](https://app.xping.io): confidence scores per test, evidence sufficiency,
-root-cause categorisation, trends across environments, and PR comments on GitHub.
+Each test assembly becomes its own Xping Cloud project. To send several assemblies to one project,
+set `XPING_PROJECTID` or add `ProjectId` to `appsettings.json`.
 
-> **Xping Cloud is currently invite-only.** We're running a small, high-touch pilot while
-> the scoring model settles. [Request access](https://xping.io/contact?pilot=True) — or keep working locally,
-> which stays free and account-free regardless.
+The SDK uploads the results while the tests run and at the end of each run. Xping Cloud combines
+the runs from every machine, branch and CI job, so a test that fails only on a teammate's laptop is
+part of the history. [app.xping.io](https://app.xping.io) shows a confidence score per test, the
+evidence behind it, flaky tests and their cause category, and trends across environments. Xping
+Cloud also comments on pull requests in GitHub, GitLab and Azure DevOps.
 
-For CI setup (GitHub Actions, Azure DevOps, Jenkins, GitLab), see the
-[Configuration Reference](https://docs.xping.io/configuration/configuration-reference.html).
+> **Xping Cloud access is by invitation.** [Request access](https://xping.io/contact?pilot=True).
+> The local report stays free and needs no account.
 
-### Two credentials, on purpose
+To set up CI, see [Set up CI](https://docs.xping.io/getting-started/ci-cd-setup.html).
 
-`XPING_APIKEY` is an **upload-only** key. Export it from the environment on every dev machine
-and in CI; never commit it. It can write test runs and nothing else, so the key sitting in
-your CI secrets is not a way into your data.
+### Two credentials
 
-Reading back the team's scored history is a **person's** action, authenticated as you rather
-than as a shared machine credential:
+The SDK uses the API key to upload. The CLI uses your own sign-in to read:
 
 ```bash
-xping login          # once per machine; the sign-in goes to your OS credential store
-xping report         # the same report, now with Cloud confidence under each finding
+xping login          # once per machine; the CLI keeps the sign-in in your OS credential store
+xping report         # the same report, with the Xping Cloud confidence score on each row
 ```
 
-Machines write, people read: that's how history pools across a team without anyone sharing a
-credential, and why a contractor's laptop can contribute runs without getting read access to
-your suite. See [`xping login`](https://docs.xping.io/cli/command-reference.html#xping-login).
+A key with only the Upload scope can write test runs and cannot read your data. So a key in your CI
+secrets, or on a contractor's laptop, adds runs to the history without giving read access. See
+[`xping login`](https://docs.xping.io/cli/command-reference.html#xping-login).
 
 ---
 
-## How It Works
+## How it works
 
 <img src="docs/media/architecture-consumers.svg" width="820" alt="Xping architecture" />
 
-Adapters are thin — they hook the framework's execution pipeline and hand results to
-`Xping.Sdk.Core`, which owns collection, environment detection, and delivery. Overhead is
-under 5 ms per test.
+Each adapter connects to the execution pipeline of its framework and passes the results to
+`Xping.Sdk.Core`. Core records the results, detects the environment, writes the local store and
+uploads to Xping Cloud.
 
-Two things are worth reading off that diagram:
+- **Only the CLI reads the local store.** Use `xping report` to read it, not the files in
+  `.xping/`.
+- **Not everyone uses a terminal.** People who do not run the tests, such as QA, team leads and
+  product managers, can open [app.xping.io](https://app.xping.io) and see the same history. This
+  repository holds the SDK and the CLI. The documentation for both is at
+  [docs.xping.io](https://docs.xping.io).
 
-- **The CLI is the only reader of the local store.** `.xping/` is an implementation detail;
-  `xping report` is the interface.
-- **The terminal isn't the only surface.** Not everyone who cares about the suite runs it.
-  Developers get the report one command away; QA, leads, and product open
-  [app.xping.io](https://app.xping.io) and see the same evidence with nothing installed. This
-  repo is the developer half — the portal is documented at [docs.xping.io](https://docs.xping.io).
-
-> **Reading cloud history from the CLI.** After `xping login`, `xping report` asks Xping Cloud
-> about every test it names and labels what came back. Each finding gets a
-> `cloud: confidence 0.22 ▼0.61 · highly unreliable · 35 d` line under its name, a flaky or
-> always-failing test takes Cloud's verdict as its label (`cloud broken`, `cloud known-flaky`), and the header
-> ends in `· cloud`. If Cloud is unreachable you get the local report and one line saying why.
+> **Xping Cloud data in the CLI.** After `xping login`, `xping report` asks Xping Cloud about the
+> tests it lists and labels the answers, so you cannot mistake them for local numbers. When Xping
+> Cloud cannot be reached, you get the local report and one line that says why.
+> [Cloud data →](https://docs.xping.io/cli/command-reference.html#cloud-data)
 
 ---
 
 ## Configuration
 
-Configure via **environment variables**, **appsettings.json**, or **programmatically**.
-Environment variables are recommended for the API key — it should never reach source control.
+You can configure the SDK with **environment variables**, **appsettings.json** or **code**.
+`XPING_*` environment variables win over the other sources. Keep the API key in an environment
+variable, so it never reaches source control.
 
 ```bash
-# Cloud only
+# Xping Cloud
 export XPING_APIKEY="your-api-key"
+export XPING_PROJECTID="your-project-id"   # optional: one project for every test assembly
+export XPING_BATCHSIZE="100"               # optional: results per upload batch
+export XPING_UPLOADSTACKTRACES="false"     # optional: upload the stack trace text
 
-# Optional: pin every test assembly to one project instead of one project each
-export XPING_PROJECTID="your-project-id"
-
-# Optional, either way
+# Local and Xping Cloud
 export XPING_ENABLED="true"
-export XPING_BATCHSIZE="100"
-export XPING_UPLOADSTACKTRACES="false"
+export XPING_LOGLEVEL="Information"
 ```
 
-Without `XPING_APIKEY`, the SDK writes to `.xping/` and makes no network calls. Full
-options in the [Configuration Reference](https://docs.xping.io/configuration/configuration-reference.html).
+Without `XPING_APIKEY`, the SDK writes to `.xping/` and makes no network calls. For every option,
+see the [Configuration reference](https://docs.xping.io/configuration/configuration-reference.html).
 
 ---
 
-## Your Data
+## Your data
 
-### What gets recorded
+### What Xping records
 
-**Per test execution** — name and fully qualified name, outcome, duration, start and end
-timestamps (UTC), error message and stack trace on failure, the declared timeout budget when
-the test sets one, categories and traits. A test the framework killed for overrunning its
-timeout is recorded as a timeout, not folded into ordinary failures.
+**Each test execution**: the name and fully qualified name, the outcome, the duration, the start
+and end times (UTC), the error message and stack trace of a failure, the declared timeout, and the
+categories and traits. When the framework stops a test because it ran past its timeout, Xping
+records a timeout, not a failure.
 
-**Per environment** — OS and version, .NET runtime version, machine name, CI platform
-detection, build and branch information from the CI environment, network metrics, and the
-machine's time zone and UTC offset at the start of the run — which is what lets a failure be
-placed at a local time of day rather than only at a UTC instant.
+**Each run's environment**: the operating system, the .NET runtime version, the machine name, the
+CI platform, the build and branch details from CI, and the time zone and UTC offset at the start
+of the run. The time zone lets Xping place a failure at a local time of day.
 
-### What never gets recorded
+**Who ran the tests**:
 
-No source code. No assertion values. No credentials or secrets. No personally identifiable
-information.
+- The machine name, always.
+- On CI: the login and id of the person who started the run, always. Their email address only when
+  you turn on `CollectCiActorEmail`.
+- Outside CI: the git author name only when you turn on `CollectLocalGitAuthor`.
+
+**Error text**: Xping stores the error message word for word, and uploads it word for word to
+Xping Cloud. It contains whatever your test or your code put in it. Xping does not read your source
+code.
 
 ### Local
 
-Everything is written to `.xping/` in your repository and stays there. No network calls are
-made without an API key. Add `.xping/` to your `.gitignore` — the history is machine-local
-and isn't meant to be shared through version control. To start over, run `xping clear` (or
-delete the folder).
+The history stays in `.xping/` in your repository. Without an API key, the SDK makes no network
+calls. The folder contains its own `.gitignore`, so git ignores it. To delete the history, run
+`xping clear`.
 
-### Cloud
+### Xping Cloud
 
-Data is transmitted over HTTPS. Keep API keys in environment variables or CI secrets, never
-in source control. Stack trace text is not uploaded unless you set `UploadStackTraces`, and retention is set
-per workspace. The SDK is MIT-licensed and open source — [read exactly what it
-sends](https://github.com/xping-dev/sdk-dotnet).
-
----
-
-## What Xping Helps You Find
-
-Patterns that show up in accumulated execution history:
-
-- **Race conditions** — intermittent failures with no code change between runs
-- **External dependencies** — failures that track network or service availability
-- **Shared state** — tests that pass alone and fail in a suite
-- **Time-based flakiness** — failures clustered in one local time of day, at weekends, or on
-  one side of a daylight-saving change
-- **Non-deterministic data** — random inputs that occasionally hit an edge case
-
-Working locally surfaces the *behaviour*; Xping Cloud attributes the *cause*. See the
-[Common Flaky Patterns Guide](https://docs.xping.io/flaky-tests/common-flaky-patterns.html)
-for worked examples.
+The SDK uploads over HTTPS. Keep API keys in environment variables or CI secrets, never in source
+control. The SDK does not upload the stack trace text unless you set `UploadStackTraces`. Xping
+Cloud always receives a hash of the methods in the trace, without file paths or line numbers. The
+local store keeps the full trace. How long Xping Cloud keeps your data depends on your plan; see
+[xping.io/pricing](https://xping.io/pricing). The SDK is open source under the MIT license, so you
+can [read exactly what it sends](https://github.com/xping-dev/sdk-dotnet).
 
 ---
 
-## Repository Layout
+## What Xping helps you find
+
+Patterns that show up in the run history:
+
+- **Intermittent failures**: the test passes and fails with no code change between runs.
+- **Parallel runs**: the test fails only when it runs at the same time as other tests.
+- **Shared state**: tests that fail together because they share a fixture or a resource.
+- **Time-based failures**: failures at one local time of day, at weekends, or around a
+  daylight-saving change.
+- **Random data**: random inputs that sometimes hit an edge case.
+
+The local report shows the behaviour. Xping Cloud also gives a cause category. For worked
+examples, see [Common flaky patterns](https://docs.xping.io/flaky-tests/common-flaky-patterns.html).
+
+---
+
+## Repository layout
 
 | Path | Contents |
 | ---- | -------- |
-| `src/Xping.Sdk.Core` | Collection, environment detection, configuration, delivery |
+| `src/Xping.Sdk.Core` | Collection, environment detection, configuration, local store, upload |
 | `src/Xping.Sdk.XUnit` · `.XUnit.V3` · `.NUnit` · `.MSTest` | Framework adapters (xUnit v2, xUnit v3, NUnit, MSTest) |
-| `src/Xping.Cli` | `xping` — local analysis and reporting |
-| `samples/` | Runnable examples per framework |
+| `src/Xping.Cli` | `xping`: local analysis and reports |
+| `samples/` | A runnable example for each framework |
 | `docs/` | Source for [docs.xping.io](https://docs.xping.io) |
 
 ---
 
 ## Documentation
 
-- [Getting Started](https://docs.xping.io/index.html#quick-start)
-- [Running Without an Account](https://docs.xping.io/getting-started/local-first.html)
-- [Known Limitations](https://docs.xping.io/troubleshooting/known-limitations.html)
+- [Get started](https://docs.xping.io/index.html#quick-start)
+- [Run without an account](https://docs.xping.io/getting-started/local-first.html)
+- [Known limitations](https://docs.xping.io/troubleshooting/known-limitations.html)
 - [Troubleshooting](https://docs.xping.io/troubleshooting/common-issues.html)
-- [API Reference](https://docs.xping.io/api/Xping.Sdk.Core.html)
+- [API reference](https://docs.xping.io/api/Xping.Sdk.Core.html)
 
-Full documentation at [docs.xping.io](https://docs.xping.io).
+The full documentation is at [docs.xping.io](https://docs.xping.io).
 
 ---
 
 ## Contributing
 
-Bug reports, feature requests, documentation fixes, and code contributions are all welcome.
+Bug reports, feature requests, documentation fixes and code contributions are welcome.
 
 ```bash
 git clone https://github.com/xping-dev/sdk-dotnet.git
@@ -434,37 +462,35 @@ dotnet build
 dotnet test
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the guidelines.
 
 ---
 
 ## Roadmap
 
-Tracked in [Milestones](https://github.com/xping-dev/sdk-dotnet/milestones):
+Planned work is tracked in [Milestones](https://github.com/xping-dev/sdk-dotnet/milestones):
 [Working Set](https://github.com/xping-dev/sdk-dotnet/milestone/1) ·
 [Backlog](https://github.com/xping-dev/sdk-dotnet/milestone/2)
 
-Currently on the list:
+It includes:
 
 - Agent integration: a Claude skill and an MCP server over `xping report`
-- Quarantine — mark known-flaky tests so CI stops failing on them
-- `xping watch` — stream new runs as they land, beside `dotnet watch test`
-- Richer local analysis: duration regression, failure signature grouping
-- Azure DevOps and GitLab integration
+- Quarantine: mark known flaky tests so that CI does not fail on them
+- `xping watch`: show new runs as they finish, next to `dotnet watch test`
 
 ---
 
 ## Support
 
-- [GitHub Discussions](https://github.com/xping-dev/sdk-dotnet/discussions) — questions and ideas
-- [Issue Tracker](https://github.com/xping-dev/sdk-dotnet/issues) — bugs and feature requests
-- [support@xping.io](mailto:support@xping.io) — direct support
+- [GitHub Discussions](https://github.com/xping-dev/sdk-dotnet/discussions): questions and ideas
+- [Issue tracker](https://github.com/xping-dev/sdk-dotnet/issues): bugs and feature requests
+- [support@xping.io](mailto:support@xping.io): direct support
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 ---
 
@@ -472,7 +498,7 @@ MIT — see [LICENSE](LICENSE).
   <p><strong>Built by developers who hate flaky tests</strong></p>
   <p><sub>Made by <a href="https://xping.io">Xping</a> • Follow us on <a href="https://github.com/xping-dev">GitHub</a></sub></p>
   <br />
-  <p>If Xping helps you build better software, give us a ⭐ on GitHub!</p>
+  <p>If Xping helps you, give us a ⭐ on GitHub!</p>
 </div>
 
 <p align="right">(<a href="#top">back to top</a>)</p>
