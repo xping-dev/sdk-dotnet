@@ -414,7 +414,7 @@ public sealed class XpingConfiguration
         mode is XpingMode.Auto or XpingMode.LocalOnly or XpingMode.Cloud or XpingMode.Disabled;
 
     internal static bool IsDefinedLogLevel(LogLevel level) =>
-        level is >= LogLevel.Trace and <= LogLevel.None;
+        Enum.IsDefined(typeof(LogLevel), level);
 
     /// <summary>
     /// Gets the environment to record: the configured one, or <see cref="DefaultEnvironment"/>.
