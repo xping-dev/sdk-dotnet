@@ -236,6 +236,75 @@ public sealed class LocalStorePathResolverTests : IDisposable
         }
     }
 
+    // Test projects run in parallel and resolve together at the end of their runs. With one shared
+    // probe file, a run that lost the race took the profile fallback while its siblings and the CLI
+    // used the repository root.
+    [Fact]
+    public void AProbeHeldByAnotherRunDoesNotSendThisOneToTheFallback()
+    {
+        string repo = Path.Combine(_temp, "busy-repo");
+        Directory.CreateDirectory(Path.Combine(repo, ".git"));
+        string store = Path.Combine(repo, LocalStorePathResolver.StoreDirectoryName);
+        Directory.CreateDirectory(store);
+
+        using (new FileStream(Path.Combine(store, ".write-probe"), FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            Assert.Equal(store, LocalStorePathResolver.Resolve(repo));
+        }
+    }
+
+    // `--directory .` reaches the resolver as typed; the SDK always passes an absolute path.
+    [Fact]
+    public void ARelativeKeyIsTheDirectoryItNames()
+    {
+        Assert.Equal(
+            LocalStorePathResolver.NormalizeKey(Directory.GetCurrentDirectory()),
+            LocalStorePathResolver.NormalizeKey("."));
+    }
+
+    // Only when the assembly reports no location at all; every such run shares one folder.
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void NoKeyIsTheDefaultKey(string? key)
+    {
+        Assert.Equal("default", LocalStorePathResolver.NormalizeKey(key));
+    }
+
+    // A path the platform cannot expand is still a key; it is hashed as it came.
+    [Fact]
+    public void APathThatCannotBeExpandedIsKeptAsItCame()
+    {
+        const string key = "bad\0path";
+        bool folds = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+        Assert.Equal(folds ? key.ToUpperInvariant() : key, LocalStorePathResolver.NormalizeKey(key));
+    }
+
+    [Fact]
+    public void ATrailingSeparatorDoesNotMakeASecondKey()
+    {
+        string project = Path.Combine(_temp, "Shop.Tests");
+
+        Assert.Equal(
+            LocalStorePathResolver.NormalizeKey(project),
+            LocalStorePathResolver.NormalizeKey(project + Path.DirectorySeparatorChar));
+    }
+
+    // An IDE and a shell can spell one directory in different case, and on Windows and macOS that is
+    // still one directory. On Linux it is two.
+    [Fact]
+    public void KeyCaseIsFoldedOnlyWhereTheFileSystemIgnoresIt()
+    {
+        string project = Path.Combine(_temp, "Shop.Tests");
+        bool folds = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+        bool same = LocalStorePathResolver.NormalizeKey(project) ==
+            LocalStorePathResolver.NormalizeKey(project.ToUpperInvariant());
+
+        Assert.Equal(folds, same);
+    }
+
     [Fact]
     public void EnsureCreatedMakesSessionsDirectoryAndGitIgnore()
     {

@@ -5,6 +5,7 @@
 
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using Xping.Sdk.Core.Services.Diagnostics;
 
@@ -18,7 +19,7 @@ namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 /// <list type="number">
 /// <item><description>The nearest ancestor of the test assembly containing <c>.git</c>, <c>*.sln</c>
 /// or <c>*.slnx</c>, plus <c>/.xping</c>.</description></item>
-/// <item><description>A per-repository folder under the user's local application data.</description></item>
+/// <item><description>A folder under the user's local application data, keyed as below.</description></item>
 /// </list>
 /// <para>
 /// The SDK and the CLI must land on the same fallback folder, although the SDK starts from the test
@@ -76,7 +77,7 @@ internal static class LocalStorePathResolver
         return GetProfileFallback(repoRoot ?? FindProjectDirectory(origin) ?? origin);
     }
 
-    private static readonly string[] ProjectFilePatterns = ["*.csproj", "*.fsproj", "*.vbproj"];
+    private static readonly string[] ProjectFileExtensions = [".csproj", ".fsproj", ".vbproj"];
 
     /// <summary>
     /// Returns the nearest ancestor of <paramref name="startDirectory"/> (or the directory itself)
@@ -85,7 +86,8 @@ internal static class LocalStorePathResolver
     private static string? FindProjectDirectory(string? startDirectory) =>
         RepositoryRoot.FindNearest(
             startDirectory,
-            directory => ProjectFilePatterns.Any(pattern => directory.EnumerateFiles(pattern).Any()));
+            directory => directory.EnumerateFiles("*proj").Any(file =>
+                ProjectFileExtensions.Contains(file.Extension, StringComparer.OrdinalIgnoreCase)));
 
     /// <summary>
     /// Returns whether a store can actually be created and written at the given path.
@@ -97,8 +99,11 @@ internal static class LocalStorePathResolver
             Directory.CreateDirectory(storeRoot);
 
             // Creating the directory can succeed on a path that still rejects file writes, so probe
-            // with a real file rather than trusting the directory alone.
-            string probe = Path.Combine(storeRoot, ".write-probe");
+            // with a real file rather than trusting the directory alone. The name is unique because
+            // test projects run in parallel and resolve together at the end of their runs: on a
+            // shared name, the loser of the race would see a sharing violation, take the profile
+            // fallback and record its run where the CLI never looks.
+            string probe = Path.Combine(storeRoot, ".write-probe-" + Guid.NewGuid().ToString("N"));
             using (var stream = new FileStream(probe, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 stream.WriteByte(0);
@@ -188,15 +193,46 @@ internal static class LocalStorePathResolver
                 return null;
 
             // Keyed so unrelated projects falling back to the profile do not pool their history into
-            // one meaningless store. A trailing separator must not make a second folder.
-            string normalized = key?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ?? "default";
-
-            return Path.Combine(baseDirectory, "Xping", "stores", ComputeShortHash(normalized));
+            // one meaningless store.
+            return Path.Combine(baseDirectory, "Xping", "stores", ComputeShortHash(NormalizeKey(key)));
         }
         catch (PlatformNotSupportedException)
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Spells one directory one way, so the SDK and the CLI hash the same string for it.
+    /// </summary>
+    /// <remarks>
+    /// The two sides reach the directory differently: the SDK from an absolute assembly path, the CLI
+    /// from <c>--directory</c> as typed, which can be relative, end in a separator, or differ in case
+    /// from the path an IDE used. Windows and macOS file systems ignore case by default, so case is
+    /// folded there; Linux keeps it, because two spellings there are two directories.
+    /// </remarks>
+    internal static string NormalizeKey(string? key)
+    {
+        if (string.IsNullOrEmpty(key))
+            return "default";
+
+        string normalized;
+        try
+        {
+            normalized = Path.GetFullPath(key);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or IOException
+                                       or System.Security.SecurityException)
+        {
+            normalized = key!;
+        }
+
+        normalized = normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        bool caseInsensitive =
+            RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+        return caseInsensitive ? normalized.ToUpperInvariant() : normalized;
     }
 
     private static string ComputeShortHash(string value)

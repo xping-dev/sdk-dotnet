@@ -247,8 +247,9 @@ public sealed class XpingConfiguration
     /// <para>
     /// When left unset, the store lives in <c>.xping/</c> under the root of the repository that
     /// contains the test assembly — the nearest ancestor holding <c>.git</c>, <c>*.sln</c> or
-    /// <c>*.slnx</c> — and falls back to a per-repository folder under the user's local application
-    /// data when no repository is found or its root is not writable. That default is what lets the
+    /// <c>*.slnx</c> — and falls back to a folder under the user's local application data when no
+    /// repository is found or its root is not writable. That folder is per repository, or per test
+    /// project when there is no repository, so the CLI finds it when run from inside either. That default is what lets the
     /// CLI, run from anywhere inside the repository, find the history of that repository.
     /// </para>
     /// <para>
