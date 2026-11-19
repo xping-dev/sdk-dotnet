@@ -4,6 +4,12 @@
  */
 
 using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
+using Xping.Cli.Auth;
+using Xping.Cli.Hosting;
+using Xping.Cli.Report;
+using Xping.Cli.Services;
+using Xping.Sdk.Core.Services.LocalStore;
 
 namespace Xping.Cli.Tests;
 
@@ -71,5 +77,57 @@ public sealed class ProgramTests
 
         Assert.Equal(2, code);
         Assert.Contains("Unrecognized command or argument", error, StringComparison.Ordinal);
+    }
+
+    // Scripts branch on it, and docs/cli/command-reference.md repeats it.
+    [Fact]
+    public void ACrashHasItsOwnExitCode()
+    {
+        Assert.Equal(70, ExitCodes.Crashed);
+    }
+
+    // Only the command's invocation used to be guarded, so a failure while the host or the parser
+    // was built escaped Run and the runtime printed the raw exception.
+    [Fact]
+    public void AFailureWhileStartingUpIsACrash()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        int code = Program.Run(
+            ["where"],
+            output,
+            error,
+            configureServices: services => services.AddSingleton<GlobalOptions>(
+                _ => throw new InvalidOperationException("broken registration")));
+
+        Assert.Equal(ExitCodes.Crashed, code);
+        Assert.Equal("xping: broken registration" + Environment.NewLine, error.ToString());
+    }
+
+    // Work torn down by Ctrl+C need not fail with OperationCanceledException.
+    [Fact]
+    public void AnyFailureAfterCtrlCIsACancel()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        int code = Program.Run(
+            ["where"],
+            output,
+            error,
+            configureServices: services => services.AddSingleton<ILocalSessionStoreFactory>(new ThrowingStoreFactory()),
+            cancelKeys: new CancelKeyHandler(cancellation));
+
+        Assert.Equal(AuthExitCodes.Cancelled, code);
+        Assert.Equal("Cancelled." + Environment.NewLine, error.ToString());
+    }
+
+    private sealed class ThrowingStoreFactory : ILocalSessionStoreFactory
+    {
+        public ILocalSessionStore Create(LocalStoreOptions? options = null, string? startDirectory = null) =>
+            throw new ObjectDisposedException("store");
     }
 }

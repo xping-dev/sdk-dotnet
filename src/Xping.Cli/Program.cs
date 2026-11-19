@@ -29,16 +29,6 @@ namespace Xping.Cli;
 /// </summary>
 internal static class Program
 {
-    /// <summary>
-    /// The exit code for an exception no command handled.
-    /// </summary>
-    /// <remarks>
-    /// Its own code so a CI step can tell "the tool crashed" from "the report found problems"
-    /// (<c>--fail-on</c>, exit 1). 70 is <c>EX_SOFTWARE</c> from sysexits.h, clear of the report's
-    /// 0–4 and the sign-in commands' 10–17.
-    /// </remarks>
-    internal const int UnhandledErrorExitCode = 70;
-
     internal static int Main(string[] args)
     {
         using var cancellation = new CancellationTokenSource();
@@ -87,83 +77,86 @@ internal static class Program
         CancelKeyHandler? cancelKeys = null)
     {
         CancellationToken cancellationToken = cancelKeys?.Token ?? CancellationToken.None;
+        GlobalOptions? options = null;
 
-        using IHost host = BuildHost(
-            output,
-            error,
-            input ?? TextReader.Null,
-            isTerminal is { } all ? Terminals.All(all) : Terminals.Detect(),
-            configureServices);
-
-        var globals = new GlobalOptionSet();
-        RootCommand root = BuildRootCommand(host.Services, output, globals, cancelKeys);
-
-        bool noArgs = args.Length == 0;
-
-        // Matches the historical bare-word `help` verb; `--help`/`-h` are already recognized by
-        // the root command itself.
-        string[] effectiveArgs = noArgs
-            ? ["--help"]
-            : args[0] == "help" ? ["--help"] : args;
-
-        ParseResult parseResult = root.Parse(effectiveArgs);
-
-        if (parseResult.Errors.Count > 0)
-        {
-            // Scrubbed although no message should hold a secret: the parser quotes what it could not
-            // place, and an argument can be one.
-            foreach (ParseError parseError in parseResult.Errors)
-                error.WriteLine(Redaction.Scrub(parseError.Message));
-
-            // From the parse rather than the first argument: a global option can come first.
-            error.WriteLine(CommandPath(parseResult.CommandResult) is { } path
-                ? $"Run `xping {path} --help` for usage."
-                : "Run `xping --help` for usage.");
-            return 2;
-        }
-
-        GlobalOptions options = host.Services.GetRequiredService<GlobalOptions>();
-        options.CloudUrl = parseResult.GetValue(globals.CloudUrl);
-        options.ApiKey = parseResult.GetValue(globals.ApiKey);
-        options.Verbose = parseResult.GetValue(globals.Verbose);
-
-        Redaction.AddSecret(options.ApiKey);
-
-        var configuration = new InvocationConfiguration
-        {
-            Output = output,
-            Error = error,
-
-            // Main owns Ctrl+C; the parser's own handler would race it for the same signal.
-            ProcessTerminationTimeout = null,
-
-            // Escaping exceptions are reported below, scrubbed. The default handler prints the raw
-            // message and stack trace, which is where a token in an exception message would leak.
-            EnableDefaultExceptionHandler = false
-        };
-
-        int exitCode;
+        // The host and the parser are inside the try too: a crash while starting up is still a crash.
         try
         {
+            using IHost host = BuildHost(
+                output,
+                error,
+                input ?? TextReader.Null,
+                isTerminal is { } all ? Terminals.All(all) : Terminals.Detect(),
+                configureServices);
+
+            var globals = new GlobalOptionSet();
+            RootCommand root = BuildRootCommand(host.Services, output, globals, cancelKeys);
+
+            bool noArgs = args.Length == 0;
+
+            // Matches the historical bare-word `help` verb; `--help`/`-h` are already recognized by
+            // the root command itself.
+            string[] effectiveArgs = noArgs
+                ? ["--help"]
+                : args[0] == "help" ? ["--help"] : args;
+
+            ParseResult parseResult = root.Parse(effectiveArgs);
+
+            if (parseResult.Errors.Count > 0)
+            {
+                // Scrubbed although no message should hold a secret: the parser quotes what it could not
+                // place, and an argument can be one.
+                foreach (ParseError parseError in parseResult.Errors)
+                    error.WriteLine(Redaction.Scrub(parseError.Message));
+
+                // From the parse rather than the first argument: a global option can come first.
+                error.WriteLine(CommandPath(parseResult.CommandResult) is { } path
+                    ? $"Run `xping {path} --help` for usage."
+                    : "Run `xping --help` for usage.");
+                return 2;
+            }
+
+            options = host.Services.GetRequiredService<GlobalOptions>();
+            options.CloudUrl = parseResult.GetValue(globals.CloudUrl);
+            options.ApiKey = parseResult.GetValue(globals.ApiKey);
+            options.Verbose = parseResult.GetValue(globals.Verbose);
+
+            Redaction.AddSecret(options.ApiKey);
+
+            var configuration = new InvocationConfiguration
+            {
+                Output = output,
+                Error = error,
+
+                // Main owns Ctrl+C; the parser's own handler would race it for the same signal.
+                ProcessTerminationTimeout = null,
+
+                // Escaping exceptions are reported below, scrubbed. The default handler prints the raw
+                // message and stack trace, which is where a token in an exception message would leak.
+                EnableDefaultExceptionHandler = false
+            };
+
             // Blocking is safe here: a console app has no synchronization context to deadlock on,
             // and keeping Run synchronous keeps every existing caller and test as it is.
-            exitCode = parseResult.InvokeAsync(configuration, cancellationToken).GetAwaiter().GetResult();
+            int exitCode = parseResult.InvokeAsync(configuration, cancellationToken).GetAwaiter().GetResult();
+
+            return noArgs ? 1 : exitCode;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (Exception) when (cancellationToken.IsCancellationRequested)
         {
+            // Not only OperationCanceledException: work torn down by Ctrl+C can fail some other way,
+            // and the user still asked it to stop.
             error.WriteLine("Cancelled.");
             return AuthExitCodes.Cancelled;
         }
         catch (Exception ex)
         {
             error.WriteLine($"xping: {Redaction.Scrub(ex.Message)}");
-            if (options.Verbose)
+            if (options?.Verbose == true)
                 error.WriteLine(Redaction.Scrub(ex.ToString()));
 
-            return UnhandledErrorExitCode;
+            return ExitCodes.Crashed;
         }
-
-        return noArgs ? 1 : exitCode;
     }
 
     /// <summary>

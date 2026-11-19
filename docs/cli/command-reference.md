@@ -82,7 +82,7 @@ xping report [options]
 
 > `--all` means *every finding*, not *every assembly*. Scoping is `--assembly`.
 
-**Exit codes:** `0` a report was produced and nothing reached `--fail-on` · `1` a finding reached `--fail-on`, in any assembly · `2` no report could be produced (no store, no readable runs, a parse error, or `--top`, `--all` or `--kind` without `--assembly` over several assemblies) · `3` with `--id`, the report was produced and that finding is not in it; with `--test`, no test matches the name, or none of its runs is in the window · `4` with `--test`, the name matches more than one test; with `--id` and no `--assembly`, more than one assembly reports that finding.
+**Exit codes:** `0` a report was produced and nothing reached `--fail-on` · `1` a finding reached `--fail-on`, in any assembly · `2` no report could be produced (no store, no readable runs, a parse error, or `--top`, `--all` or `--kind` without `--assembly` over several assemblies) · `3` with `--id`, the report was produced and that finding is not in it; with `--test`, no test matches the name, or none of its runs is in the window · `4` with `--test`, the name matches more than one test; with `--id` and no `--assembly`, more than one assembly reports that finding · `70` the CLI crashed · `130` cancelled.
 
 The 1/2 distinction is what lets a build step tell "I looked and found problems" apart from "I could not look". Warnings go to stderr, so `--format json` on stdout stays parsable.
 
@@ -1265,7 +1265,7 @@ The store location is discovered by walking up for a repository root, so this is
 
 The size includes any temp files left by interrupted writes, because retention counts them toward the store's size limit.
 
-**Exit codes:** `0` success · `1` no store could be resolved.
+**Exit codes:** `0` success · `1` no store could be resolved · `70` the CLI crashed.
 
 ---
 
@@ -1301,7 +1301,7 @@ Refusing to delete all 36 runs without confirmation. Re-run with --force to proc
 
 Pass `--force` to delete without prompting.
 
-**Exit codes:** `0` success · `1` refused, cancelled, or some runs could not be deleted.
+**Exit codes:** `0` success · `1` refused, cancelled, or some runs could not be deleted · `70` the CLI crashed.
 
 ---
 
@@ -1462,7 +1462,7 @@ sign-in predates Xping Cloud sending it; the text then shows the workspace ID al
 
 **Exit codes:** `0` signed in · `2` invalid option or configuration · `11` declined · `12` timed out
 · `13` not an interactive terminal · `14` other sign-in failure · `15` Xping Cloud unreachable · `16`
-CLI version not accepted · `17` credential store error · `130` cancelled. See [Exit codes](#exit-codes).
+CLI version not accepted · `17` credential store error · `70` the CLI crashed · `130` cancelled. See [Exit codes](#exit-codes).
 
 ---
 
@@ -1498,7 +1498,7 @@ never touches an API key; when one is set it says where, so you can unset it.
 `result` is `signed-out`, `signed-out-locally` or `not-signed-in`.
 
 **Exit codes:** `0` signed out, or not signed in · `2` invalid configuration · `17` the stored
-sign-in could not be removed (the message names the store) · `130` cancelled.
+sign-in could not be removed (the message names the store) · `70` the CLI crashed · `130` cancelled.
 
 ---
 
@@ -1560,7 +1560,7 @@ unreadable credentials file — for an agent to pass on.
 
 **Exit codes:** `0` a credential is available (a sign-in or a key) · `2` invalid configuration, such
 as a bad `XPING_CLOUDURL` (with `--json`, a failure document) · `10` no credential · `17` no
-credential, and a credential store could not be read · `130` cancelled.
+credential, and a credential store could not be read · `70` the CLI crashed · `130` cancelled.
 
 ---
 
@@ -1606,7 +1606,7 @@ includes API access. Otherwise the report says so and stays local.
 | Code | Meaning | Commands |
 |---|---|---|
 | `0` | Success | all |
-| `1` | A finding reached `--fail-on`; `where` or `clear` failed | `report`, `where`, `clear` |
+| `1` | A finding reached `--fail-on`; `where` or `clear` failed; `xping` run with no command | `report`, `where`, `clear`, `xping` |
 | `2` | Invalid option (including `--cloud-url`, `--project`, `--workspace`); no report could be produced; for `login`, `logout` and `auth status`, an invalid `XPING_CLOUDURL` or settings file (`report` prints a hint instead) | all |
 | `3` | The `--id` finding is not in the report; no test matches `--test`, or none of its runs is in the window | `report` |
 | `4` | `--test` matches more than one test | `report` |

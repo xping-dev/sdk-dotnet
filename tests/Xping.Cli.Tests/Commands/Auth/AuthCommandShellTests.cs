@@ -158,22 +158,9 @@ public sealed class AuthCommandShellTests
             services => services.AddSingleton<ILocalSessionStoreFactory>(
                 new ThrowingStoreFactory($"rejected key {apiKey} with Authorization: Bearer abc")));
 
-        Assert.Equal(Program.UnhandledErrorExitCode, code);
+        Assert.Equal(ExitCodes.Crashed, code);
         Assert.Empty(output);
         Assert.Equal("xping: rejected key [redacted] with Authorization: [redacted]" + Environment.NewLine, error);
-    }
-
-    // A crash used to share exit 1 with --fail-on, so a CI step could not tell "found problems"
-    // from "could not look".
-    [Fact]
-    public void AnEscapingExceptionHasItsOwnExitCode()
-    {
-        var (code, _, _) = Run(
-            ["where"],
-            services => services.AddSingleton<ILocalSessionStoreFactory>(new ThrowingStoreFactory("boom")));
-
-        Assert.Equal(70, code);
-        Assert.NotEqual(ExitCodes.FindingsAtThreshold, code);
     }
 
     [Fact]
@@ -184,7 +171,7 @@ public sealed class AuthCommandShellTests
             services => services.AddSingleton<ILocalSessionStoreFactory>(
                 new ThrowingStoreFactory("failed with refresh_token=abc")));
 
-        Assert.Equal(Program.UnhandledErrorExitCode, code);
+        Assert.Equal(ExitCodes.Crashed, code);
         Assert.Contains($"{nameof(ThrowingStoreFactory)}.{nameof(ThrowingStoreFactory.Create)}", error, StringComparison.Ordinal);
         Assert.DoesNotContain("refresh_token=abc", error, StringComparison.Ordinal);
     }

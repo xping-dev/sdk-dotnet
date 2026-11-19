@@ -11,7 +11,7 @@ namespace Xping.Cli.Report;
 /// What the process returns, and why.
 /// </summary>
 /// <remarks>
-/// Five outcomes. The distinction between the second and third is the point: a build step needs to
+/// Five outcomes of a report, and one for a crash of any command. The distinction between the second and third is the point: a build step needs to
 /// tell "I looked and found problems" apart from "I could not look" — collapsing both into a
 /// non-zero code would make a broken store indistinguishable from a failing test suite. The last
 /// two answer the questions <c>--id</c> and <c>--test</c> ask, and are not failures of the tool.
@@ -35,6 +35,14 @@ internal static class ExitCodes
 
     /// <summary>The name <c>--test</c> was given matches more than one test.</summary>
     public const int TestAmbiguous = 4;
+
+    /// <summary>An exception no command handled, in any command.</summary>
+    /// <remarks>
+    /// Its own code so a CI step can tell "the tool crashed" from "the report found problems"
+    /// (<see cref="FindingsAtThreshold"/>). 70 is <c>EX_SOFTWARE</c> from sysexits.h, clear of the
+    /// report's 0–4 and the sign-in commands' 10–17.
+    /// </remarks>
+    public const int Crashed = 70;
 
     /// <summary>
     /// Chooses the exit code for a finished report.
