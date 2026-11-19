@@ -200,13 +200,8 @@ public abstract class XpingTestBase
             testFingerprint: pinnedFingerprint);
 
         var errorMessage = GetErrorMessage(context) ?? string.Empty;
-        string? stackTrace = GetStackTrace(context);
-        (string? configuredStackTrace, bool stackTraceOmitted) =
-            ResolveStackTrace(outcome, stackTrace, services.CaptureStackTraces);
+        string? stackTrace = GetStackTrace(context) is { } trace && !string.IsNullOrWhiteSpace(trace) ? trace : null;
 
-        // Resolved from the raw trace, before ResolveStackTrace nulls it for a user who opted out of
-        // capture. The site is a classification rather than the trace itself, so it survives that
-        // choice.
         (FailureSite? failureSite, string? failureSiteMember) =
             ResolveFailureSite(outcome, testMethod?.ReflectedType, stackTrace);
 
@@ -233,11 +228,10 @@ public abstract class XpingTestBase
             .WithStartTime(startTime)
             .WithEndTime(endTime)
             .WithMetadata(metadata)
-            .WithException(GetExceptionType(context), errorMessage, configuredStackTrace)
+            .WithException(GetExceptionType(context), errorMessage, stackTrace)
             .WithFailureSite(failureSite, failureSiteMember)
             .WithErrorMessageHash(services.IdentityGenerator.GenerateErrorMessageHash(errorMessage))
-            .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(configuredStackTrace))
-            .WithStackTraceOmitted(stackTraceOmitted)
+            .WithStackTraceHash(services.IdentityGenerator.GenerateStackTraceHash(stackTrace))
             .WithTimeoutBudget(timeoutBudget, timeoutBudgetSource)
             .WithTestOrchestrationRecord(orchestrationRecord)
             .WithRetry(retryMetadata)
@@ -490,23 +484,6 @@ public abstract class XpingTestBase
 
     private static string? GetExceptionType(TestContext context) =>
         GetTestException(context)?.GetType().FullName;
-
-    private static (string? stackTrace, bool stackTraceOmitted) ResolveStackTrace(
-        TestOutcome outcome,
-        string? stackTrace,
-        bool captureStackTraces)
-    {
-        string? normalizedStackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace;
-        bool stackTraceAvailable = normalizedStackTrace != null;
-        bool stackTraceOmitted = !captureStackTraces && outcome.IsFailure() && stackTraceAvailable;
-
-        if (!captureStackTraces)
-        {
-            return (null, stackTraceOmitted);
-        }
-
-        return (normalizedStackTrace, false);
-    }
 
     private static string? GetErrorMessage(TestContext context) =>
         GetTestException(context)?.Message;

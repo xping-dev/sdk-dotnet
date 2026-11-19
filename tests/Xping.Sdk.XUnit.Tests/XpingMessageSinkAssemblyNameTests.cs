@@ -53,7 +53,6 @@ public sealed class XpingMessageSinkAssemblyNameTests
             executionTracker.Object,
             retryDetector.Object,
             identityGenerator.Object,
-            captureStackTraces: true,
             assemblyName: simpleAssemblyName);
 
         ITest test = BuildFakeTest(fullDisplayName);

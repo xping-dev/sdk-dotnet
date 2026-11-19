@@ -232,7 +232,6 @@ public sealed class XpingContext : XpingContextOrchestrator
         return new XpingBaseServices(
             executionTracker: Services.GetRequiredService<IExecutionTracker>(),
             retryDetector: Services.GetRequiredService<IRetryDetector<TestContext>>(),
-            identityGenerator: Services.GetRequiredService<ITestIdentityGenerator>(),
-            captureStackTraces: CaptureStackTraceConfigurationResolver.ResolveCaptureStackTraces(Services));
+            identityGenerator: Services.GetRequiredService<ITestIdentityGenerator>());
     }
 }

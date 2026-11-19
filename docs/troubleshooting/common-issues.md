@@ -204,12 +204,12 @@ If uploads fail (network issues, invalid credentials), the SDK logs errors but d
    - Batches with stack traces can be large
    - Compression helps but may not be enough
 
-   **Solution:** Reduce `BatchSize` or disable stack trace capture:
+   **Solution:** Reduce `BatchSize`, and leave `UploadStackTraces` off (the default) so stack trace text stays out of the upload:
    ```json
    {
      "Xping": {
        "BatchSize": 50,
-       "CaptureStackTraces": false
+       "UploadStackTraces": false
      }
    }
    ```
@@ -598,20 +598,7 @@ public async Task Cleanup()
 }
 ```
 
-#### 2. Stack Trace Capture
-
-Capturing stack traces adds overhead for failed tests:
-
-**Solution:** Disable if you don't need stack traces:
-```json
-{
-  "Xping": {
-    "CaptureStackTraces": false
-  }
-}
-```
-
-#### 3. Network Issues
+#### 2. Network Issues
 
 Slow network connections can impact performance if batches fill up frequently.
 
@@ -619,7 +606,7 @@ Slow network connections can impact performance if batches fill up frequently.
 - Increase `BatchSize` to batch more tests
 - Increase `FlushInterval` to reduce upload frequency
 
-#### 4. Compression Overhead
+#### 3. Compression Overhead
 
 Compression reduces payload size but adds CPU overhead.
 
@@ -684,20 +671,7 @@ Larger batches keep more data in memory before uploading:
 }
 ```
 
-#### 2. Stack Traces
-
-Stack traces consume significant memory, especially for deep call stacks:
-
-**Solution:** Disable stack trace capture:
-```json
-{
-  "Xping": {
-    "CaptureStackTraces": false
-  }
-}
-```
-
-#### 3. Upload Failures
+#### 2. Upload Failures
 
 If uploads fail repeatedly, tests accumulate in memory:
 

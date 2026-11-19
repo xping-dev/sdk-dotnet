@@ -197,6 +197,48 @@ public sealed class LocalHistoryWriteTests : IDisposable
         Assert.Single(SessionFiles(store));
     }
 
+    // Stack traces can carry source paths and code, so the upload leaves them out unless asked to.
+    // The hash, method signatures only, still goes, and the local store keeps the full trace.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TheUploadCarriesTheStackTraceOnlyWhenAskedTo_AndTheStoreAlwaysKeepsIt(bool uploadStackTraces)
+    {
+        string store = Path.Combine(_temp, "configured");
+        var uploaded = new List<TestExecution>();
+
+        var uploader = new Mock<IXpingUploader>();
+        uploader
+            .Setup(u => u.UploadAsync(It.IsAny<TestSession>(), It.IsAny<CancellationToken>()))
+            .Callback<TestSession, CancellationToken>((session, _) => uploaded.AddRange(session.Executions))
+            .ReturnsAsync(new UploadResult { Success = true, TotalRecordsCount = 1 });
+
+        TestExecution failed = new TestExecutionBuilder()
+            .WithTestName("Fails")
+            .WithOutcome(TestOutcome.Failed)
+            .WithIdentity(new TestIdentity { Assembly = "MyApp.Tests", FullyQualifiedName = "MyApp.Tests.Fails" })
+            .WithException("System.InvalidOperationException", "boom", "   at MyApp.Tests.Fails() in /src/Tests.cs:line 16")
+            .WithStackTraceHash("hash")
+            .Build();
+
+        await using (Harness orchestrator = CreateUploading(store, uploader.Object, uploadStackTraces: uploadStackTraces))
+        {
+            orchestrator.Record(failed);
+            await orchestrator.FinalizeAsync();
+        }
+
+        TestExecution sent = Assert.Single(uploaded);
+        Assert.Equal(uploadStackTraces, sent.StackTrace != null);
+        Assert.Equal(!uploadStackTraces, sent.StackTraceOmitted);
+        Assert.Equal("hash", sent.StackTraceHash);
+        Assert.Equal("boom", sent.ErrorMessage);
+
+        using JsonDocument written = ReadSession(Assert.Single(SessionFiles(store)));
+        JsonElement local = Assert.Single(written.RootElement.GetProperty("executions").EnumerateArray());
+        Assert.Equal(failed.StackTrace, local.GetProperty("stackTrace").GetString());
+        Assert.False(local.GetProperty("stackTraceOmitted").GetBoolean());
+    }
+
     [Fact]
     public async Task TheBatchesAreUploadedWhole_AndInOrder()
     {
@@ -331,7 +373,8 @@ public sealed class LocalHistoryWriteTests : IDisposable
         store.Verify(s => s.Write(It.IsAny<TestSession>()), Times.Never);
     }
 
-    private static Harness CreateUploading(string storePath, IXpingUploader uploader, ILocalSessionStore? store = null)
+    private static Harness CreateUploading(
+        string storePath, IXpingUploader uploader, ILocalSessionStore? store = null, bool uploadStackTraces = false)
     {
         // Composed by hand rather than through AddXping: a zero FlushInterval fails validation
         // there, and it is what keeps the timer and the buffer-full flush out of this test, so
@@ -346,6 +389,7 @@ public sealed class LocalHistoryWriteTests : IDisposable
                     o.BatchSize = 1;
                     o.FlushInterval = TimeSpan.Zero;
                     o.LocalStorePath = storePath;
+                    o.UploadStackTraces = uploadStackTraces;
                 });
                 services
                     .AddXpingInfrastructure()

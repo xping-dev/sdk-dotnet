@@ -41,7 +41,7 @@ public sealed class XpingConfigurationBuilderTests
             .WithEnvironment("Production")
             .WithDefaultBranch("develop")
             .WithEnabled(false)
-            .WithCaptureStackTraces(false)
+            .WithUploadStackTraces(true)
             .WithLogLevel(LogLevel.Debug)
             .WithEnableCompression(false)
             .WithMaxRetries(5)
@@ -63,7 +63,7 @@ public sealed class XpingConfigurationBuilderTests
         Assert.Equal("Production", config.Environment);
         Assert.Equal("develop", config.DefaultBranch);
         Assert.False(config.Enabled);
-        Assert.False(config.CaptureStackTraces);
+        Assert.True(config.UploadStackTraces);
         Assert.Equal(LogLevel.Debug, config.LogLevel);
         Assert.False(config.EnableCompression);
         Assert.Equal(5, config.MaxRetries);

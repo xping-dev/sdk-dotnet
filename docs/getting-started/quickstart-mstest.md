@@ -100,7 +100,7 @@ and the wrong place for the API key:
   "Xping": {
     "Enabled": true,
     "BatchSize": 100,
-    "CaptureStackTraces": true
+    "UploadStackTraces": false
   }
 }
 ```

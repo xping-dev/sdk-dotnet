@@ -33,7 +33,6 @@ internal sealed class XpingTestFrameworkExecutor(
             services.ExecutionTracker,
             services.RetryDetector,
             services.IdentityGenerator,
-            services.CaptureStackTraces,
             assemblyName);
 
         return base.RunTestCases(testCases, trackingSink, executionOptions, cancellationToken);

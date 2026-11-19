@@ -171,8 +171,7 @@ public sealed class XpingTrackAttributeSourceLocationTests
             [
                 executionTracker.Object,
                 new Mock<IRetryDetector<ITest>>().Object,
-                identityGenerator.Object,
-                true
+                identityGenerator.Object
             ],
             culture: null)!;
 

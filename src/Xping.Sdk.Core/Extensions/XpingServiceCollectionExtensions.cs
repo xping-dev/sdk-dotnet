@@ -701,9 +701,9 @@ public static class XpingServiceCollectionExtensions
             && XpingConfiguration.IsDefinedLogLevel(parsedLogLevel))
             config.LogLevel = parsedLogLevel;
 
-        if (GetEnv("CAPTURESTACKTRACES") is { } captureStackTraces
-            && bool.TryParse(captureStackTraces, out var cst))
-            config.CaptureStackTraces = cst;
+        if (GetEnv("UPLOADSTACKTRACES") is { } uploadStackTraces
+            && bool.TryParse(uploadStackTraces, out var ust))
+            config.UploadStackTraces = ust;
 
         if (GetEnv("ENABLECOMPRESSION") is { } enableCompression
             && bool.TryParse(enableCompression, out var ec))
@@ -852,7 +852,7 @@ public static class XpingServiceCollectionExtensions
         target.Enabled = source.Enabled;
         target.Mode = source.Mode;
         target.LogLevel = source.LogLevel;
-        target.CaptureStackTraces = source.CaptureStackTraces;
+        target.UploadStackTraces = source.UploadStackTraces;
         target.EnableCompression = source.EnableCompression;
         target.MaxRetries = source.MaxRetries;
         target.RetryDelay = source.RetryDelay;

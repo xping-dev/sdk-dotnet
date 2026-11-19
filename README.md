@@ -338,7 +338,7 @@ export XPING_PROJECTID="your-project-id"
 # Optional, either way
 export XPING_ENABLED="true"
 export XPING_BATCHSIZE="100"
-export XPING_CAPTURESTACKTRACES="true"
+export XPING_UPLOADSTACKTRACES="false"
 ```
 
 Without `XPING_APIKEY`, the SDK writes to `.xping/` and makes no network calls. Full
@@ -375,7 +375,7 @@ delete the folder).
 ### Cloud
 
 Data is transmitted over HTTPS. Keep API keys in environment variables or CI secrets, never
-in source control. Stack trace capture is configurable, and retention is set
+in source control. Stack trace text is not uploaded unless you set `UploadStackTraces`, and retention is set
 per workspace. The SDK is MIT-licensed and open source — [read exactly what it
 sends](https://github.com/xping-dev/sdk-dotnet).
 

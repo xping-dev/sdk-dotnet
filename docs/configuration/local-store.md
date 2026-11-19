@@ -149,9 +149,7 @@ Each run also records how it was recorded, under the environment's custom proper
 
 The project path comes from an MSBuild file the Xping packages add to your test project's build. It stamps the path into the test assembly as `[assembly: AssemblyMetadata("Xping.ProjectPath", ...)]`. In a Git submodule the path is relative to the submodule, not the repository around it.
 
-**Stack traces, error message text, exception types, and source locations are not stored.** The store holds what local analysis needs and nothing more, which keeps it roughly ten times smaller than the uploaded payload.
-
-A consequence worth knowing: because the local record is reduced, it **cannot be re-uploaded** as a full session. It is a source of local analysis, not a backup of your uploaded data.
+**The store keeps the full session, stack traces included**, whatever `UploadStackTraces` says: that option only decides what is sent to Xping Cloud. `xping report` reads the stack traces to group failures. The store never leaves your machine; delete it with `xping clear`.
 
 ---
 

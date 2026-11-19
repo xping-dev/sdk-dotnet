@@ -164,7 +164,7 @@ public sealed class TestExecution
     /// </summary>
     /// <remarks>
     /// Will be <see langword="null"/> when the test passed, when no stack trace was available,
-    /// or when collection was intentionally disabled (see <see cref="StackTraceOmitted"/>).
+    /// or on the copy uploaded to Xping Cloud when it was left out (see <see cref="StackTraceOmitted"/>).
     /// </remarks>
     public string? StackTrace { get; init; }
 
@@ -186,16 +186,15 @@ public sealed class TestExecution
     /// numbers are left out, so the hash survives a different checkout path or an edit above the
     /// failing line.
     /// Will be <see langword="null"/> when the test passed, when the trace had no frame outside the
-    /// test framework and the runtime, or when collection was intentionally disabled (see
-    /// <see cref="StackTraceOmitted"/>).
+    /// test framework and the runtime. Kept on the uploaded copy when the trace itself is left out.
     /// </remarks>
     public string? StackTraceHash { get; init; }
 
     /// <summary>
-    /// Gets a value indicating whether stack trace capture was explicitly disabled
-    /// via <see cref="Xping.Sdk.Core.Configuration.XpingConfiguration.CaptureStackTraces"/>.
-    /// When <see langword="true"/>, <see cref="StackTrace"/> and <see cref="StackTraceHash"/> are
-    /// <see langword="null"/> because the user opted out — not because no stack trace existed.
+    /// Gets a value indicating whether a failure's stack trace was left out of the upload, because
+    /// <see cref="Xping.Sdk.Core.Configuration.XpingConfiguration.UploadStackTraces"/> is off.
+    /// When <see langword="true"/>, <see cref="StackTrace"/> is <see langword="null"/> although a
+    /// trace existed; <see cref="StackTraceHash"/> is still set. Never set in the local store.
     /// </summary>
     public bool StackTraceOmitted { get; init; }
 
@@ -254,4 +253,32 @@ public sealed class TestExecution
     /// some shared code broke.
     /// </remarks>
     public string? FailureSiteMember { get; init; }
+
+    /// <summary>
+    /// A copy without the raw stack trace, for an upload that must not carry it.
+    /// </summary>
+    /// <returns>This execution when it has no trace; otherwise a copy marked as omitted.</returns>
+    internal TestExecution WithoutStackTrace() => StackTrace is null
+        ? this
+        : new TestExecution(
+            ExecutionId,
+            Identity,
+            Metadata,
+            TestOrchestrationRecord,
+            TestName,
+            Outcome,
+            Duration,
+            StartTimeUtc,
+            EndTimeUtc,
+            Retry,
+            ExceptionType,
+            ErrorMessage,
+            stackTrace: null,
+            ErrorMessageHash,
+            StackTraceHash,
+            stackTraceOmitted: true,
+            TimeoutBudget,
+            TimeoutBudgetSource,
+            Site,
+            FailureSiteMember);
 }

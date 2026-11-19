@@ -128,7 +128,6 @@ public sealed class XpingMessageSinkConcurrencyTests : IAsyncLifetime
             tracker,
             new Mock<IRetryDetector<ITest>>().Object,
             identityGenerator.Object,
-            captureStackTraces: true,
             assemblyName: "SampleApp.XUnit");
 
         return (sink, tracker);

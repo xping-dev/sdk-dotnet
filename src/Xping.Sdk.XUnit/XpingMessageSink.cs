@@ -31,7 +31,6 @@ public sealed class XpingMessageSink(
     IExecutionTracker executionTracker,
     IRetryDetector<ITest> retryDetector,
     ITestIdentityGenerator identityGenerator,
-    bool captureStackTraces,
     string assemblyName) : IMessageSink
 {
     private readonly IMessageSink _innerSink = innerSink.RequireNotNull();
@@ -341,11 +340,9 @@ public sealed class XpingMessageSink(
         RetryMetadata? retryMetadata = attemptNumber is int attempt && _retryDetector is IXUnitRetryDetector detector
             ? detector.DetectRetryMetadata(test, outcome, attempt)
             : _retryDetector.DetectRetryMetadata(test, outcome);
-        (string? configuredStackTrace, bool stackTraceOmitted) = ResolveStackTrace(outcome, stackTrace, captureStackTraces);
+        stackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace;
         (TimeSpan? timeoutBudget, TimeoutBudgetSource? timeoutBudgetSource) = ResolveTimeoutBudget(testCase);
 
-        // Resolved from the raw trace, before ResolveStackTrace nulls it for a user who opted out of
-        // capture. The site is a classification rather than the trace itself, so it survives that.
         (FailureSite? failureSite, string? failureSiteMember) = ResolveFailureSite(
             outcome, testClass.Class.Name, testMethod.Method.Name, exceptionType, errorMessage, stackTrace);
         // xUnit has no separate worker concept, so the collection name doubles as both
@@ -365,10 +362,9 @@ public sealed class XpingMessageSink(
             .WithStartTime(startTime)
             .WithEndTime(endTime)
             .WithMetadata(metadata)
-            .WithException(exceptionType, errorMessage, configuredStackTrace)
+            .WithException(exceptionType, errorMessage, stackTrace)
             .WithErrorMessageHash(_identityGenerator.GenerateErrorMessageHash(errorMessage))
-            .WithStackTraceHash(_identityGenerator.GenerateStackTraceHash(configuredStackTrace))
-            .WithStackTraceOmitted(stackTraceOmitted)
+            .WithStackTraceHash(_identityGenerator.GenerateStackTraceHash(stackTrace))
             .WithTimeoutBudget(timeoutBudget, timeoutBudgetSource)
             .WithFailureSite(failureSite, failureSiteMember)
             .WithTestOrchestrationRecord(orchestrationRecord)
@@ -570,23 +566,6 @@ public sealed class XpingMessageSink(
             return (null, null);
 
         return (TimeSpan.FromMilliseconds(xunitTestCase.Timeout), TimeoutBudgetSource.Declared);
-    }
-
-    private static (string? stackTrace, bool stackTraceOmitted) ResolveStackTrace(
-        TestOutcome outcome,
-        string? stackTrace,
-        bool captureStackTraces)
-    {
-        string? normalizedStackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace;
-        bool stackTraceAvailable = normalizedStackTrace != null;
-        bool stackTraceOmitted = !captureStackTraces && outcome.IsFailure() && stackTraceAvailable;
-
-        if (!captureStackTraces)
-        {
-            return (null, stackTraceOmitted);
-        }
-
-        return (normalizedStackTrace, false);
     }
 
     private static TestMetadata ExtractMetadata(ITest test, string output)

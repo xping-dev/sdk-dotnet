@@ -190,11 +190,11 @@ public sealed class TestExecutionBuilder
     }
 
     /// <summary>
-    /// Marks that stack trace capture was intentionally disabled by configuration.
+    /// Marks that the stack trace was left out on purpose.
     /// </summary>
     /// <param name="omitted">
-    /// <see langword="true"/> when <c>CaptureStackTraces</c> is <see langword="false"/>
-    /// and the test failed; otherwise <see langword="false"/>.
+    /// <see langword="true"/> when a failure's trace existed and was not uploaded because
+    /// <c>UploadStackTraces</c> is <see langword="false"/>; otherwise <see langword="false"/>.
     /// </param>
     /// <returns>The builder instance for method chaining.</returns>
     public TestExecutionBuilder WithStackTraceOmitted(bool omitted)

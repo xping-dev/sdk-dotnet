@@ -676,18 +676,18 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
     }
 
     [Fact]
-    public void BindEnvVars_CAPTURESTACKTRACES_ShouldParseBool()
+    public void BindEnvVars_UPLOADSTACKTRACES_ShouldParseBool()
     {
         using var _key = WithEnv("XPING_APIKEY", "k");
         using var _proj = WithEnv("XPING_PROJECTID", "p");
-        using var _ = WithEnv("XPING_CAPTURESTACKTRACES", "false");
+        using var _ = WithEnv("XPING_UPLOADSTACKTRACES", "true");
 
         var services = new ServiceCollection();
         services.AddXpingConfigurationFromConfiguration(InMemoryXpingConfig());
         var bound = services.BuildServiceProvider()
             .GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
-        Assert.False(bound.CaptureStackTraces);
+        Assert.True(bound.UploadStackTraces);
     }
 
     [Fact]
