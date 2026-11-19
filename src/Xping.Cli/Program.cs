@@ -279,8 +279,8 @@ internal static class Program
 
     private static Command BuildReportCommand(IServiceProvider services)
     {
-        // `--last` is the name this option shipped under. Kept as an alias so existing scripts and
-        // muscle memory keep working; `--runs` is what the report itself calls the window.
+        // `--last 50` reads naturally as "the last 50 runs"; `--runs` is what the report itself calls
+        // the window.
         Option<int?> runsOption = new("--runs", "--last")
         {
             Description = "Recent runs to analyse (default: 20, or 14 days, whichever is fewer)",
@@ -339,7 +339,7 @@ internal static class Program
             DefaultValueFactory = _ => ReportFormat.Text
         };
 
-        // Superseded by `--format json`, kept so existing scripts keep working.
+        // A shorter spelling of `--format json`, the form agents and scripts ask for most.
         Option<bool> jsonOption = new("--json")
         {
             Description = "Alias for --format json"
