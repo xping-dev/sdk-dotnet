@@ -84,9 +84,9 @@ changing a line of test code.
 ### 1. Install both pieces
 
 ```bash
-dotnet add package Xping.Sdk.XUnit    # xUnit v2; or Xping.Sdk.XUnit.V3 / Xping.Sdk.NUnit / Xping.Sdk.MSTest
+dotnet add package Xping.Sdk.XUnit --prerelease    # xUnit v2; or Xping.Sdk.XUnit.V3 / Xping.Sdk.NUnit / Xping.Sdk.MSTest
 
-dotnet tool install -g Xping.Cli      # puts `xping` on your PATH
+dotnet tool install -g Xping.Cli --prerelease      # puts `xping` on your PATH
 ```
 
 For xUnit, match the xUnit package your project references: `xunit` (v2) takes `Xping.Sdk.XUnit`,

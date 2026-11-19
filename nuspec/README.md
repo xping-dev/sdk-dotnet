@@ -23,7 +23,7 @@ Choose the package for your test framework:
 
 ### NUnit
 ```bash
-dotnet add package Xping.Sdk.NUnit
+dotnet add package Xping.Sdk.NUnit --prerelease
 ```
 
 ### xUnit
@@ -31,13 +31,13 @@ dotnet add package Xping.Sdk.NUnit
 Match the xUnit package your project references:
 
 ```bash
-dotnet add package Xping.Sdk.XUnit      # xUnit v2: the project references xunit
-dotnet add package Xping.Sdk.XUnit.V3   # xUnit v3: the project references xunit.v3
+dotnet add package Xping.Sdk.XUnit --prerelease      # xUnit v2: the project references xunit
+dotnet add package Xping.Sdk.XUnit.V3 --prerelease   # xUnit v3: the project references xunit.v3
 ```
 
 ### MSTest
 ```bash
-dotnet add package Xping.Sdk.MSTest
+dotnet add package Xping.Sdk.MSTest --prerelease
 ```
 
 ## Quick Start

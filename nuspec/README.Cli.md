@@ -17,10 +17,10 @@
 > your test projects can stay on any supported .NET version.
 
 ```bash
-dotnet tool install -g Xping.Cli
+dotnet tool install -g Xping.Cli --prerelease
 ```
 
-This puts an `xping` command on your `PATH`. To pin the version alongside a repo instead, install it into a tool manifest (`dotnet new tool-manifest && dotnet tool install Xping.Cli`) and invoke it as `dotnet xping`.
+This puts an `xping` command on your `PATH`. To pin the version alongside a repo instead, install it into a tool manifest (`dotnet new tool-manifest && dotnet tool install Xping.Cli --prerelease`) and invoke it as `dotnet xping`.
 
 ## Use
 

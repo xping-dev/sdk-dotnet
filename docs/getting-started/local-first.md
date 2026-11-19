@@ -1,29 +1,31 @@
 ---
 uid: getting-started-local-first
-title: Running Without an Account
+title: Run without an account
 ---
 
-# Running Without an Account
+# Run without an account
 
-Xping works with no API key, no signup, and no network access. Add the SDK to your test project, run your tests a few times, and `xping report` will tell you which of your tests are unreliable.
+This page shows how to record your test runs and read a reliability report with no Xping account,
+no API key and no network access. It is for anyone who wants to try Xping on their own machine first.
 
-This is **local-only mode**. Everything stays on your machine.
+Without an API key, the SDK runs in **local-only mode**. Everything stays on your machine.
 
 ---
 
-## What You'll Learn
+## What you will learn
 
-- How to collect test history with no Xping account
-- How to read the local flakiness report
-- Where local data is stored and how to remove it
+- How to record test history with no Xping account
+- How to read the local report
+- Where the local data is stored and how to delete it
 - What local-only mode can and cannot tell you
 
 ---
 
 ## Prerequisites
 
-- An existing test project using **NUnit**, **xUnit**, or **MSTest**
-- The .NET SDK
+- A test project that uses **NUnit**, **xUnit** (v2 or v3) or **MSTest** 3.8 or later
+- A test project that targets .NET Framework 4.6.2 or later, or .NET 8 or later
+- The .NET 10 SDK or runtime, for the CLI
 
 No account. No API key.
 
@@ -34,42 +36,51 @@ No account. No API key.
 Install the adapter for your test framework:
 
 ```bash
-dotnet add package Xping.Sdk.NUnit     # or Xping.Sdk.XUnit (xUnit v2) / Xping.Sdk.XUnit.V3 (xUnit v3) / Xping.Sdk.MSTest
+dotnet add package Xping.Sdk.NUnit --prerelease   # or Xping.Sdk.XUnit (xUnit v2), Xping.Sdk.XUnit.V3 (xUnit v3), Xping.Sdk.MSTest
 ```
 
-Wire it up exactly as the framework quickstart describes ([NUnit](quickstart-nunit.md), [xUnit](quickstart-xunit.md), [MSTest](quickstart-mstest.md)) — but skip the API key step.
+All Xping packages are prereleases, so the command needs `--prerelease`.
 
-With no `ApiKey` configured, the SDK starts in local-only mode:
+Set up the adapter as the quick start for your framework describes
+([NUnit](quickstart-nunit.md), [xUnit](quickstart-xunit.md), [MSTest](quickstart-mstest.md)).
+Skip the API key step.
+
+With no API key, the SDK starts in local-only mode. To see its start line, run
+`dotnet test --logger "console;verbosity=normal"`:
 
 ```
-[Xping] Initialized in local-only mode. No API key configured - results stay on this machine.
+[Xping 17:28:04 INF] Initialized in local-only mode. SessionId: "6bec32b0-922b-4b9b-bcb9-fb4e1056180f", Environment: Default. No API key configured - results stay on this machine.
 ```
 
 ---
 
-## Step 2: Run your tests a few times
+## Step 2: Run your tests several times
 
 ```bash
 dotnet test
 ```
 
-Each run is recorded to a local store. Cross-run flakiness detection needs at least **three runs**, because two runs cannot distinguish a flaky test from a test that just broke.
+The SDK writes each run to a local store. `xping report` shows no findings until the store holds at
+least **5 runs**, and each test needs at least 5 runs of its own. With fewer runs, the report shows
+the counts but no findings. Fewer runs cannot tell a flaky test from a test that just broke.
 
 ---
 
 ## Step 3: Install the CLI
 
-> **Requires the .NET 10 SDK or runtime.** The tool targets `net10.0` and will not launch on
-> older runtimes. The Xping SDK packages themselves target `netstandard2.0` and are unaffected —
-> your test projects can stay on any supported .NET version.
+> **The CLI needs the .NET 10 SDK or runtime.** The tool targets `net10.0` and does not start on
+> older runtimes. The SDK packages target `netstandard2.0`, so your test projects do not need
+> .NET 10.
 
 ```bash
-dotnet tool install -g Xping.Cli
+dotnet tool install -g Xping.Cli --prerelease
 ```
 
-This puts an `xping` command on your `PATH`, usable from any repository. If your shell answers `command not found: xping`, add `~/.dotnet/tools` to your `PATH` and reopen the terminal.
+This adds the `xping` command to your `PATH`, for every repository. If your shell answers
+`command not found: xping`, add `~/.dotnet/tools` to your `PATH` and open a new terminal.
 
-To pin the CLI version alongside your repo instead, install it into a tool manifest — see [Installation](../cli/command-reference.md#installation) in the CLI reference.
+To pin the CLI version in your repository instead, install it into a tool manifest. See
+[Installation](../cli/command-reference.md#installation) in the command reference.
 
 ---
 
@@ -114,54 +125,64 @@ Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests
 
 ### How to read it
 
-Each finding is four things: a **severity**, a **kind**, the **test**, and the **evidence** behind
-the claim.
+Each finding has four parts: a **severity**, a **kind**, the **test**, and the **evidence** behind it.
 
-| Part | Means |
+| Part | Meaning |
 |---|---|
-| `HIGH` / `MED` / `LOW` | Impact ranking. Findings are ordered most severe first, so the top of the block is the part worth reading. |
-| `flaky`, `slower`, `stopped running` | The *kind* — what the finding claims. There are sixteen; the [CLI reference](../cli/command-reference.md#finding-kinds) lists them all. |
-| The counts line | The measurement the claim rests on, in plain numbers. |
-| `evidence sparse\|adequate\|robust` | How many runs stand behind *this claim* — which is not always every run the test appeared in, since a finding can only count the runs it could measure. A `sparse`-evidence finding is a lead, not a verdict. |
-| `f_2a91c0de` | A stable id for that finding, so you can refer to it in a ticket or diff two reports. |
+| `HIGH` / `MED` / `LOW` | The severity. The report lists the most severe findings first. |
+| `flaky`, `slower`, `stopped running` | The *kind*: what the report observed. There are 13 kinds. The [command reference](../cli/command-reference.md#finding-kinds) lists them all. |
+| The counts line | The measurement behind the finding, in plain numbers. |
+| `evidence sparse\|adequate\|robust` | How many runs support *this finding*. A finding can count only the runs it could measure, so this is not always every run of the test. Treat a finding with `sparse` evidence as a lead, not a verdict. |
+| `f_2a91c0de` | The finding id. It stays the same between reports, so you can use it in a ticket or compare two reports. |
 
-The report body sits inside a fenced code block and stays under 72 columns, so pasting it into
-Slack, a PR, or a ticket keeps its columns. Only the top ten findings show by default —
-`--all` shows the rest.
+The report sits inside a fenced code block and is at most 72 columns wide. When you paste it into
+Slack, a pull request or a ticket, the columns stay aligned. The report shows the top ten findings.
+Add `--all` to see the rest.
 
-Separating **flaky** from **always failing** is deliberate. A test that never passes is not
-unreliable, it is broken, and the fix is completely different.
+The report keeps **flaky** and **always failing** apart on purpose. A test that never passes is
+not unreliable. It is broken, and it needs a different fix.
 
 ---
 
 ## What gets flagged
 
-The report distinguishes sixteen finding kinds. The ones you meet first:
+The report has 13 finding kinds. These are the ones you see most often:
 
-| Printed as | `--kind` value | Claims |
+| Printed as | `--kind` value | What the report observed |
 |---|---|---|
-| masked by retry | `RetryMasked` | The test failed and passed on retry, never reaching the run's outcome. The strongest flakiness signal, and the only one available from a single run. |
-| flaky | `Flaky` | The test both passes and fails, or fails in varying ways. |
-| always failing | `AlwaysFailing` | The test fails almost always, in one dominant way — a likely real bug, not flake. |
-| timing out | `TimingOut` | The test is mostly killed for overrunning its timeout rather than failing. |
-| slower | `DurationRegression` | The test's recent runs are slower than its earlier ones by more than the variation it already had. The headline states the factor and the interval around it, and the evidence states each side's spread — see [known limitations](../troubleshooting/known-limitations.md). |
-| stopped running | `Vanished` | The test ran habitually through the baseline and has stopped. |
+| masked by retry | `RetryMasked` | The test failed, then passed on a retry, so the run's outcome hid the failure. |
+| flaky | `Flaky` | The test both passes and fails, or fails in different ways. |
+| always failing | `AlwaysFailing` | The test fails in almost every run, in one main way. This is more likely a real bug than a flaky test. |
+| timing out | `TimingOut` | The framework stops the test for running past its timeout in most runs. |
+| slower | `DurationRegression` | The recent runs of the test are slower than its earlier runs, by more than its usual variation. The headline gives the factor and its interval, and the evidence gives the spread on each side. See [Known limitations](../troubleshooting/known-limitations.md). |
+| stopped running | `Vanished` | The test ran regularly in the earlier runs and has stopped. |
 
-The rest — order dependence, concurrency sensitivity, broken fixtures, shared failures, time-of-day
-and network clustering — are in the [CLI reference](../cli/command-reference.md#finding-kinds).
-Restrict the report to one or more with `--kind`:
+The other kinds are deeper retries (`RetryDeepening`), out of retries (`RetryExhausted`), unstable
+timing (`DurationUnstable`), concurrency (`ParallelSensitive`), broken fixture (`BrokenFixture`),
+shared failure (`SharedFailure`) and time sensitive (`TimeSensitive`). The
+[command reference](../cli/command-reference.md#finding-kinds) describes each one.
+
+Every kind needs the 5-run minimum. Before that, the SDK still tells you about a retry in the run
+that just finished. Outside CI, it writes this line to your terminal when the run ends:
+
+```
+[Xping] 1 test flaked on retry this run - run `xping report` for local history
+```
+
+To show only some kinds, use `--kind`. With a store that holds one test assembly:
 
 ```bash
 xping report --kind Flaky --kind AlwaysFailing
 ```
 
-Skipped and not-executed tests are ignored; they carry no reliability signal.
+The report ignores skipped tests and tests that did not run. They say nothing about reliability.
 
 ---
 
 ## Multiple test projects
 
-Every test project in a solution shares one store. When it holds more than one, `xping report` lists them, one row each, most severe first:
+All test projects in a repository share one store. When the store holds more than one assembly,
+`xping report` lists them, one row each, most severe first:
 
 ```
 Xping · 3 assemblies
@@ -176,15 +197,21 @@ Search.Tests                                                   no findings
 Details: xping report --assembly Checkout.Tests
 ```
 
-To see one suite's findings:
+To see the findings of one assembly:
 
 ```bash
 xping report --assembly Billing.Tests
 ```
 
-`--fail-on` judges every suite, so a CI step fails when any of them has a finding at the threshold.
+`--kind`, `--top` and `--all` select findings from one assembly, so they need `--assembly` when the
+store holds several. Without it, the CLI writes `--kind needs --assembly` to stderr and exits with
+code 2.
 
-Each assembly is analysed against **its own** run history, so a suite that has run 3 times is never described against another suite's 12-run window. `--all` is not the way to see every suite — it shows every finding, and every row of the latest run, instead of the first ten of each.
+`--fail-on` checks every assembly. A CI step fails when any assembly has a finding at the
+threshold.
+
+The CLI analyses each assembly against **its own** run history. An assembly with 3 runs is never
+compared with the 12-run window of another assembly.
 
 ---
 
@@ -201,79 +228,91 @@ xping where
   Billing.Tests                               12 runs  last 2026-08-08 09:13 UTC
 ```
 
-The store lives in a `.xping` folder at your repository root and **ignores itself** — it contains a `.gitignore` that hides the whole directory, so nothing appears in `git status` and your own `.gitignore` is never modified.
+The store is the `.xping` folder at the root of your repository. It **ignores itself**: it contains
+a `.gitignore` that hides the whole folder. Nothing appears in `git status`, and the SDK does not
+change your own `.gitignore`.
 
-It keeps the last 50 runs of each test project and prunes automatically. See [Local Store](../configuration/local-store.md) for retention settings and how to relocate it.
+The store keeps at most 50 runs of each test assembly, runs up to 30 days old, and 100 MB in
+total. It deletes older runs automatically. These limits are fixed. To move the store, see
+[Local store](../configuration/local-store.md).
 
 To delete history:
 
 ```bash
-xping clear                              # prompts before deleting
-xping clear --assembly Billing.Tests     # only one suite
+xping clear                              # asks before it deletes
+xping clear --assembly Billing.Tests     # only one assembly
 ```
 
 ---
 
 ## What local-only mode cannot tell you
 
-Local history contains only **your** runs, on **your** machine. It structurally cannot include:
+The local history holds only **your** runs, on **your** machine. It cannot include:
 
 - CI runs
-- Your teammates' runs
-- Behaviour differences across operating systems or environments
-- More history than your retention window holds
+- the runs of your teammates
+- differences between operating systems or environments
+- more history than the store keeps
 
-This is why the local report does not show a confidence score. The [confidence score](../cloud/confidence-scores.md) weighs six factors, several of which — environment consistency in particular — need data that does not exist on one developer's machine. Showing a number here that looked like Xping Cloud's but disagreed with it would be worse than showing none.
+This is why the local report shows no confidence score. The
+[confidence score](../cloud/confidence-scores.md) of Xping Cloud uses data that one machine does not
+have, such as how a test behaves in different environments. A local number that looked like the
+Xping Cloud score but did not match it would mislead you.
 
-Local-only mode answers *"what is unstable on my machine, in my last N runs"*. Xping Cloud answers *"what is unstable across CI, every branch, and everyone's machines, over months"*.
+Local-only mode answers the question *"what is unstable on my machine, in my last runs?"*. Xping
+Cloud answers *"what is unstable across CI, every branch and every machine, over months?"*.
 
 ---
 
-## Connecting later
+## Connect later
 
-Nothing is lost by starting local. Add an API key whenever you want — that is the only variable
-you need, and no test code changes:
+You lose nothing by starting locally. Add an API key when you want to. It is the only variable you
+need, and your test code stays the same:
 
 ```bash
 export XPING_APIKEY="your-key"
 ```
 
-You do not name a project. Xping derives one per test assembly, created on first upload.
-`XPING_PROJECTID` is optional and only pins several assemblies into a single project — see
+Create the key in Xping Cloud under **Settings → API keys**, with only the Upload scope.
+
+You do not name a project. Xping Cloud creates one project for each test assembly, on the first
+upload. `XPING_PROJECTID` is optional. It sends several assemblies to one project. See
 [ProjectId](../configuration/configuration-reference.md#projectid).
 
-Keep the key out of your repository: export it from your shell or a secret store, never
-`appsettings.json`, which is committed and copied into build output.
+Keep the key out of your repository. Set it in your shell or in a secret store, never in
+`appsettings.json`. That file is committed and copied into the build output.
 
-The SDK switches to Cloud mode and uploads as normal. It **keeps writing the local store**, so `xping report` continues to work offline and on your own machine.
+With the key, the SDK switches to Cloud mode and uploads each run. It **keeps writing the local
+store**, so `xping report` still works offline on your own machine.
 
-To see Cloud's view in the same report, sign in once on your machine:
+To see the Xping Cloud data in the same report, sign in once on your machine:
 
 ```bash
 xping login
 ```
 
-`xping report` then adds Xping Cloud's confidence score to the rows it already prints, labelled so
-it is never mistaken for a local number, and lists the tests Cloud calls known flaky, broken or
-unstable that passed here under `FLAGGED IN CLOUD`. Neither changes the local counts or the exit
-code. Offline, it prints the local report as before. See
+`xping report` then adds the Xping Cloud confidence score to the rows it prints, with a label so you
+cannot mistake it for a local number. Under `FLAGGED IN CLOUD`, it lists the tests that Xping Cloud
+calls flaky, broken or unstable but that passed here. Neither changes the local counts or the exit
+code. When you are offline, it prints the local report. See
 [Cloud data](../cli/command-reference.md#cloud-data).
 
-To keep the SDK from uploading even with credentials present, set the mode explicitly:
+To stop the SDK from uploading when credentials are present, set the mode:
 
 ```bash
 export XPING_MODE=LocalOnly
 ```
 
-`XPING_MODE` is an SDK setting; the CLI does not read it. Without a sign-in, `xping report` tries
-the `XPING_APIKEY` in your shell, and an upload key answers that it cannot read: the report stays
-local and, at a terminal, says so in one line. `xping login` replaces that line with Cloud data.
+`XPING_MODE` is an SDK setting. The CLI does not read it. Without a sign-in, `xping report` tries
+the `XPING_APIKEY` in your shell. A key with only the Upload scope cannot read Xping Cloud data, so
+the report stays local. In a terminal, the report says so in one line. After `xping login`, the
+report shows the Xping Cloud data instead.
 
 ---
 
-## See Also
+## See also
 
-- [Xping CLI Reference](../cli/command-reference.md) — every command and option
-- [Local Store](../configuration/local-store.md) — location, retention, and settings
-- [Configuration Reference](../configuration/configuration-reference.md) — all SDK settings
-- [Identifying Flaky Tests](../flaky-tests/finding-flaky-tests.md)
+- [Command reference](../cli/command-reference.md): every command and option
+- [Local store](../configuration/local-store.md): the location and the limits
+- [Configuration reference](../configuration/configuration-reference.md): every SDK setting
+- [Finding flaky tests](../flaky-tests/finding-flaky-tests.md)
