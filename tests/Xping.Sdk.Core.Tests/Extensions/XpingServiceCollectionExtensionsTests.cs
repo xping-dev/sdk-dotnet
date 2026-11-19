@@ -861,6 +861,19 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
         Assert.True(LogsAt(services, LogLevel.Warning, "Microsoft.Extensions.Http.DefaultHttpClientFactory"));
     }
 
+    // A section the binder cannot read must not stop the SDK from collecting locally or from saying
+    // why: registration falls back to local-only at the default level, and validation reports the rest.
+    [Fact]
+    public void AnUnreadableSectionRegistersLocalOnlyAtTheDefaultLevel()
+    {
+        var services = new ServiceCollection();
+        services.AddXping(InMemoryXpingConfig(new() { ["Xping:BatchSize"] = "lots" }));
+
+        Assert.True(LogsAt(services, LogLevel.Information));
+        Assert.False(LogsAt(services, LogLevel.Debug));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(System.Net.Http.IHttpClientFactory));
+    }
+
     [Fact]
     public void AnUnknownXpingLogLevelIsIgnored()
     {
