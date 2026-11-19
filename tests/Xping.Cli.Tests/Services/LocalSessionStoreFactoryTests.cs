@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Xping.Cli.Services;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Sdk.Core.Services.LocalStore.Internals;
 
 namespace Xping.Cli.Tests.Services;
 
@@ -52,6 +53,23 @@ public sealed class LocalSessionStoreFactoryTests : IDisposable
         ILocalSessionStore store = Factory(variables).Create(startDirectory: Path.Combine(_temp, "repo"));
 
         Assert.Equal(Path.Combine(_temp, "repo", ".xping"), store.StorePath);
+    }
+
+    // The SDK's store starts from the test assembly's directory, the CLI's from where `xping` runs.
+    // Outside a repository they used to resolve different fallback folders.
+    [Fact]
+    public void WithoutARepositoryTheCliFindsTheStoreTheSdkWrites()
+    {
+        string project = Path.Combine(_temp, "loose", "Shop.Tests");
+        string output = Path.Combine(project, "bin", "Debug", "net10.0");
+        Directory.CreateDirectory(output);
+        File.WriteAllText(Path.Combine(project, "Shop.Tests.csproj"), "<Project />");
+
+        var sdk = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance, startDirectory: output);
+        ILocalSessionStore cli = Factory(new()).Create(startDirectory: project);
+
+        Assert.NotNull(sdk.StorePath);
+        Assert.Equal(sdk.StorePath, cli.StorePath);
     }
 
     private static LocalSessionStoreFactory Factory(Dictionary<string, string?> variables) =>

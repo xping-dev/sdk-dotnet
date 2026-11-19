@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Runtime.InteropServices;
 using Xping.Sdk.Core.Services.LocalStore.Internals;
 
 namespace Xping.Sdk.Core.Tests.LocalStore;
@@ -152,6 +153,87 @@ public sealed class LocalStorePathResolverTests : IDisposable
         // Assert — unrelated projects must not pool their history into one meaningless store.
         Assert.Equal(firstA, secondA);
         Assert.NotEqual(firstA, forB);
+    }
+
+    // The SDK starts from the test assembly's output directory and the CLI from the current
+    // directory. Keyed by the start directory, the two resolved different fallback folders, so
+    // `xping report` and `xping where` never found what the SDK wrote.
+    [Fact]
+    public void WithoutARepositoryTheSdkAndTheCliShareTheProjectsFallback()
+    {
+        string project = Path.Combine(_temp, "Shop.Tests");
+        string output = Path.Combine(project, "bin", "Debug", "net10.0");
+        Directory.CreateDirectory(output);
+        File.WriteAllText(Path.Combine(project, "Shop.Tests.csproj"), "<Project />");
+
+        string? sdk = LocalStorePathResolver.Resolve(output);
+        string? cli = LocalStorePathResolver.Resolve(project);
+
+        Assert.NotNull(sdk);
+        Assert.Equal(sdk, cli);
+    }
+
+    [Theory]
+    [InlineData("Shop.Tests.fsproj")]
+    [InlineData("Shop.Tests.vbproj")]
+    public void AnyProjectFileKeysTheFallback(string projectFile)
+    {
+        string project = Path.Combine(_temp, "Shop.Tests");
+        string output = Path.Combine(project, "bin", "Release", "net10.0");
+        Directory.CreateDirectory(output);
+        File.WriteAllText(Path.Combine(project, projectFile), "<Project />");
+
+        Assert.Equal(LocalStorePathResolver.Resolve(project), LocalStorePathResolver.Resolve(output));
+    }
+
+    [Fact]
+    public void TwoProjectsWithoutARepositoryKeepSeparateFallbacks()
+    {
+        foreach (string name in new[] { "A.Tests", "B.Tests" })
+        {
+            Directory.CreateDirectory(Path.Combine(_temp, name, "bin"));
+            File.WriteAllText(Path.Combine(_temp, name, name + ".csproj"), "<Project />");
+        }
+
+        Assert.NotEqual(
+            LocalStorePathResolver.Resolve(Path.Combine(_temp, "A.Tests", "bin")),
+            LocalStorePathResolver.Resolve(Path.Combine(_temp, "B.Tests", "bin")));
+    }
+
+    // A read-only checkout: the root is found from both sides but cannot hold the store, so the
+    // fallback is keyed by the root, which the CLI finds from anywhere inside it.
+    [Fact]
+    public void AnUnwritableRepositoryKeysTheFallbackByItsRoot()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return; // chmod semantics differ; the behaviour is verified on Unix CI.
+
+        string repo = Path.Combine(_temp, "readonly-repo");
+        Directory.CreateDirectory(Path.Combine(repo, ".git"));
+        string project = Path.Combine(repo, "tests", "Shop.Tests");
+        string output = Path.Combine(project, "bin", "Debug", "net10.0");
+        Directory.CreateDirectory(output);
+        File.WriteAllText(Path.Combine(project, "Shop.Tests.csproj"), "<Project />");
+
+        File.SetUnixFileMode(
+            repo,
+            UnixFileMode.UserRead | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+
+        try
+        {
+            string? sdk = LocalStorePathResolver.Resolve(output);
+
+            Assert.NotNull(sdk);
+            Assert.NotEqual(Path.Combine(repo, LocalStorePathResolver.StoreDirectoryName), sdk);
+            Assert.Equal(sdk, LocalStorePathResolver.Resolve(repo));
+            Assert.Equal(sdk, LocalStorePathResolver.Resolve(Path.Combine(repo, "tests")));
+        }
+        finally
+        {
+            File.SetUnixFileMode(repo, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     [Fact]

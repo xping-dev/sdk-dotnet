@@ -42,7 +42,23 @@ internal static class RepositoryRoot
     /// holding a path recorded elsewhere — the build agent's copy of a source file, say — gets
     /// <see langword="null"/> and must have somewhere else to go.
     /// </remarks>
-    public static string? Find(string? startDirectory)
+    public static string? Find(string? startDirectory) =>
+        FindNearest(startDirectory, directory =>
+            // ".git" is a directory in an ordinary clone and a file in a worktree or submodule,
+            // where it holds "gitdir: <path>". Both mark a root.
+            Directory.Exists(Path.Combine(directory.FullName, ".git")) ||
+            File.Exists(Path.Combine(directory.FullName, ".git")) ||
+            directory.EnumerateFiles("*.sln").Any() ||
+            directory.EnumerateFiles("*.slnx").Any());
+
+    /// <summary>
+    /// Returns the nearest existing ancestor of <paramref name="startDirectory"/>, the directory
+    /// itself included, that <paramref name="isMatch"/> accepts, or <see langword="null"/>.
+    /// </summary>
+    /// <param name="startDirectory">The directory to walk up from.</param>
+    /// <param name="isMatch">Tests one directory; it may enumerate it.</param>
+    /// <returns>The absolute path of the match, or <see langword="null"/>.</returns>
+    public static string? FindNearest(string? startDirectory, Func<DirectoryInfo, bool> isMatch)
     {
         if (string.IsNullOrEmpty(startDirectory))
             return null;
@@ -61,22 +77,12 @@ internal static class RepositoryRoot
         {
             try
             {
-                if (!current.Exists)
-                    continue;
-
-                // ".git" is a directory in an ordinary clone and a file in a worktree or submodule,
-                // where it holds "gitdir: <path>". Both mark a root.
-                if (Directory.Exists(Path.Combine(current.FullName, ".git")) ||
-                    File.Exists(Path.Combine(current.FullName, ".git")) ||
-                    current.EnumerateFiles("*.sln").Any() ||
-                    current.EnumerateFiles("*.slnx").Any())
-                {
+                if (current.Exists && isMatch(current))
                     return current.FullName;
-                }
             }
             catch (UnauthorizedAccessException)
             {
-                // A directory we cannot enumerate is not a repository root we can use; keep walking.
+                // A directory we cannot enumerate is not one we can use; keep walking.
             }
             catch (IOException)
             {

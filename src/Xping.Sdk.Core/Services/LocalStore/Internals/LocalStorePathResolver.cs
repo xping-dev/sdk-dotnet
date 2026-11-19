@@ -21,6 +21,14 @@ namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 /// <item><description>A per-repository folder under the user's local application data.</description></item>
 /// </list>
 /// <para>
+/// The SDK and the CLI must land on the same fallback folder, although the SDK starts from the test
+/// assembly's output directory and the CLI from the current directory. So the folder is keyed by
+/// something both walks find, never by the start directory itself: the repository root when there
+/// is one (it was found but is not writable), else the nearest directory holding a project file
+/// (the test project, for both the SDK's <c>bin/</c> folder and a CLI run from the project).
+/// Only a start directory with neither above it keys the folder by itself.
+/// </para>
+/// <para>
 /// An explicit path (<c>XPING_LOCAL_STORE</c> or <see cref="Configuration.XpingConfiguration.LocalStorePath"/>)
 /// never reaches this class: callers read it once and hand it to the store. The store resolves its
 /// root lazily, on the first write at the end of the run, and a test suite that sets the variable
@@ -65,8 +73,19 @@ internal static class LocalStorePathResolver
                 return candidate;
         }
 
-        return GetProfileFallback(origin);
+        return GetProfileFallback(repoRoot ?? FindProjectDirectory(origin) ?? origin);
     }
+
+    private static readonly string[] ProjectFilePatterns = ["*.csproj", "*.fsproj", "*.vbproj"];
+
+    /// <summary>
+    /// Returns the nearest ancestor of <paramref name="startDirectory"/> (or the directory itself)
+    /// that holds a project file, or <see langword="null"/> when there is none.
+    /// </summary>
+    private static string? FindProjectDirectory(string? startDirectory) =>
+        RepositoryRoot.FindNearest(
+            startDirectory,
+            directory => ProjectFilePatterns.Any(pattern => directory.EnumerateFiles(pattern).Any()));
 
     /// <summary>
     /// Returns whether a store can actually be created and written at the given path.
@@ -158,7 +177,7 @@ internal static class LocalStorePathResolver
         }
     }
 
-    private static string? GetProfileFallback(string? origin)
+    private static string? GetProfileFallback(string? key)
     {
         try
         {
@@ -168,11 +187,11 @@ internal static class LocalStorePathResolver
             if (string.IsNullOrEmpty(baseDirectory))
                 return null;
 
-            // Key the folder by origin path so unrelated projects falling back to the profile do not
-            // pool their history into one meaningless store.
-            string key = ComputeShortHash(origin ?? "default");
+            // Keyed so unrelated projects falling back to the profile do not pool their history into
+            // one meaningless store. A trailing separator must not make a second folder.
+            string normalized = key?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ?? "default";
 
-            return Path.Combine(baseDirectory, "Xping", "stores", key);
+            return Path.Combine(baseDirectory, "Xping", "stores", ComputeShortHash(normalized));
         }
         catch (PlatformNotSupportedException)
         {
