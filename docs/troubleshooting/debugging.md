@@ -15,38 +15,44 @@ The Xping SDK includes built-in diagnostic logging to help troubleshoot integrat
 
 ### Console Logging (Default)
 
-Enable logging programmatically during SDK initialization:
+The SDK writes its messages to the console at `Information` and above. To see more, raise the
+level with the `XPING_LOGLEVEL` environment variable:
+
+```bash
+XPING_LOGLEVEL=Debug dotnet test
+```
+
+Or set [`LogLevel`](../configuration/configuration-reference.md#loglevel) in the `"Xping"` section of
+`appsettings.json`, or in code:
 
 ```csharp
+using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Diagnostics;
 
 var config = new XpingConfiguration
 {
-    ApiKey = "your-api-key",
-    ProjectId = "your-project",
-    LogLevel = XpingLogLevel.Debug  // Enable debug logging
+    LogLevel = LogLevel.Debug
 };
 
 XpingContext.Initialize(config);
 ```
 
+The environment variable wins over both.
+
 ### Log Levels
 
-The SDK supports four log levels, each including all levels below it:
+`LogLevel` takes the `Microsoft.Extensions.Logging.LogLevel` values. Each one includes every level
+above it:
 
-| Level | Description | Use Case |
-|-------|-------------|----------|
-| `XpingLogLevel.None` | No logging output | Production when logs aren't needed |
-| `XpingLogLevel.Error` | Errors and critical failures only | Production when you only want failure notifications |
-| `XpingLogLevel.Warning` | Warnings and errors | Production to track potential issues |
-| `XpingLogLevel.Info` | Informational, warnings, errors (default) | Development and CI/CD to track activity |
-| `XpingLogLevel.Debug` | All messages including detailed diagnostics | Troubleshooting and debugging SDK issues |
-
-**Recommended settings:**
-- **Development/Local:** `XpingLogLevel.Debug` or `XpingLogLevel.Info`
-- **CI/CD:** `XpingLogLevel.Info`
-- **Production:** `XpingLogLevel.Warning` or `XpingLogLevel.Error`
+| Level | What you see | Use case |
+|-------|--------------|----------|
+| `Trace` | Everything | Rarely needed |
+| `Debug` | Detailed diagnostics, including failures the SDK absorbs (a local store it could not write, PR detection it skipped) | Troubleshooting the SDK |
+| `Information` | Start-up, the run summary, warnings and errors (default) | Day to day, and CI |
+| `Warning` | Warnings and errors | Quieter CI logs |
+| `Error` | Errors only | Quietest useful setting |
+| `Critical` | Nothing today: the SDK writes no message at this level | Rarely needed |
+| `None` | Nothing | Silencing the SDK |
 
 ### Filtering Xping Logs
 
@@ -101,96 +107,6 @@ dotnet test --logger "console;verbosity=detailed" 2>&1 | findstr /R "^ *\[Xping\
 ```
 
 **Note:** For **MSTest** projects, you must use `--logger "console;verbosity=detailed"` to see SDK logs, as MSTest captures console output by default. For **NUnit** and **xUnit** projects, standard verbosity is sufficient as their logs appear in normal test output.
-
----
-
-## Custom Logger Implementation
-
-For integration with your existing logging infrastructure (Serilog, NLog, log4net, etc.), implement the `IXpingLogger` interface:
-
-### Example: Serilog Integration
-
-```csharp
-using Xping.Sdk.Core.Diagnostics;
-using Serilog;
-
-public class SerilogXpingLogger : IXpingLogger
-{
-    private readonly ILogger _logger;
-
-    public SerilogXpingLogger(ILogger logger)
-    {
-        _logger = logger;
-    }
-
-    public void LogError(string message) => _logger.Error("[Xping] {Message}", message);
-
-    public void LogWarning(string message) => _logger.Warning("[Xping] {Message}", message);
-
-    public void LogInfo(string message) => _logger.Information("[Xping] {Message}", message);
-
-    public void LogDebug(string message) => _logger.Debug("[Xping] {Message}", message);
-
-    public bool IsEnabled(XpingLogLevel level)
-    {
-        return level switch
-        {
-            XpingLogLevel.Error => _logger.IsEnabled(Serilog.Events.LogEventLevel.Error),
-            XpingLogLevel.Warning => _logger.IsEnabled(Serilog.Events.LogEventLevel.Warning),
-            XpingLogLevel.Info => _logger.IsEnabled(Serilog.Events.LogEventLevel.Information),
-            XpingLogLevel.Debug => _logger.IsEnabled(Serilog.Events.LogEventLevel.Debug),
-            _ => false
-        };
-    }
-}
-
-// Usage
-var config = new XpingConfiguration
-{
-    ApiKey = "your-api-key",
-    ProjectId = "your-project",
-    Logger = new SerilogXpingLogger(Log.Logger)
-};
-
-XpingContext.Initialize(config);
-```
-
-### Example: NLog Integration
-
-```csharp
-using Xping.Sdk.Core.Diagnostics;
-using NLog;
-
-public class NLogXpingLogger : IXpingLogger
-{
-    private readonly ILogger _logger;
-
-    public NLogXpingLogger()
-    {
-        _logger = LogManager.GetLogger("Xping");
-    }
-
-    public void LogError(string message) => _logger.Error(message);
-
-    public void LogWarning(string message) => _logger.Warn(message);
-
-    public void LogInfo(string message) => _logger.Info(message);
-
-    public void LogDebug(string message) => _logger.Debug(message);
-
-    public bool IsEnabled(XpingLogLevel level)
-    {
-        return level switch
-        {
-            XpingLogLevel.Error => _logger.IsErrorEnabled,
-            XpingLogLevel.Warning => _logger.IsWarnEnabled,
-            XpingLogLevel.Info => _logger.IsInfoEnabled,
-            XpingLogLevel.Debug => _logger.IsDebugEnabled,
-            _ => false
-        };
-    }
-}
-```
 
 ---
 
@@ -316,7 +232,7 @@ To verify what configuration values the SDK is using:
 
 ### Using Debug Logging
 
-Enable `XpingLogLevel.Debug` and check the initialization messages:
+Set `XPING_LOGLEVEL=Debug` and check the initialization messages:
 
 ```
 [Info] Xping SDK initialized (v1.0.4)
@@ -525,14 +441,12 @@ Share your configuration **without exposing your API key**:
 
 ### 4. SDK Logs
 
-Enable `XpingLogLevel.Debug` and capture logs:
+Set `XPING_LOGLEVEL=Debug` and capture logs:
 
-**Option 1: Redirect console output to file:**
+Redirect console output to a file:
 ```bash
-dotnet test > test-output.log 2>&1
+XPING_LOGLEVEL=Debug dotnet test > test-output.log 2>&1
 ```
-
-**Option 2: Use custom logger to write to file**
 
 ---
 
@@ -564,7 +478,7 @@ public class XpingSetup
         {
             ApiKey = "xpg_test_key",
             ProjectId = "test-project",
-            LogLevel = Xping.Sdk.Core.Diagnostics.XpingLogLevel.Debug
+            LogLevel = Microsoft.Extensions.Logging.LogLevel.Debug
         };
         XpingContext.Initialize(config);
     }
@@ -600,15 +514,11 @@ Follow this systematic approach when debugging issues:
 
 ### Step 1: Enable Debug Logging
 
-```csharp
-var config = new XpingConfiguration
-{
-    ApiKey = "your-api-key",
-    ProjectId = "your-project",
-    LogLevel = XpingLogLevel.Debug
-};
-XpingContext.Initialize(config);
+```bash
+export XPING_LOGLEVEL=Debug
 ```
+
+Or set [`LogLevel`](../configuration/configuration-reference.md#loglevel) to `Debug` in configuration.
 
 ### Step 2: Run Tests and Capture Output
 
@@ -692,16 +602,8 @@ dotnet-trace collect --process-id <test-process-id> --providers Microsoft-Window
 
 If you suspect thread safety issues:
 
-1. **Enable debug logging** to see thread IDs (if logged)
-2. **Add thread identifiers** to your custom logger:
-   ```csharp
-   public void LogDebug(string message)
-   {
-       var threadId = Thread.CurrentThread.ManagedThreadId;
-       _logger.Debug($"[Thread {threadId}] {message}");
-   }
-   ```
-3. **Look for race conditions** or lock contention in logs
+1. **Enable debug logging** (`XPING_LOGLEVEL=Debug`)
+2. **Look for race conditions** or lock contention in logs
 
 ---
 
@@ -709,9 +611,9 @@ If you suspect thread safety issues:
 
 ### 1. Use Appropriate Log Levels
 
-- **Development:** `Debug` or `Info` to see everything
-- **CI/CD:** `Info` to track activity without overwhelming logs
-- **Production:** `Warning` or `Error` to minimize noise
+- **Default:** `Information` shows start-up, the run summary, warnings and errors
+- **Troubleshooting:** `Debug` shows the failures the SDK absorbs
+- **Quieter CI logs:** `Warning` or `Error`
 
 ### 2. Log to Files in CI/CD
 
@@ -723,19 +625,7 @@ dotnet test > test-output.log 2>&1
 
 Or configure your CI/CD to capture test output.
 
-### 3. Use Custom Loggers
-
-Integrate with your existing logging infrastructure:
-
-```csharp
-var config = new XpingConfiguration
-{
-    Logger = new SerilogXpingLogger(Log.Logger),
-    // ... other settings
-};
-```
-
-### 4. Test Locally First
+### 3. Test Locally First
 
 Before debugging in CI/CD:
 1. Reproduce the issue locally
@@ -743,14 +633,14 @@ Before debugging in CI/CD:
 3. Verify configuration
 4. Test connectivity
 
-### 5. Isolate the Problem
+### 4. Isolate the Problem
 
 Create a minimal test project that reproduces the issue:
 - Remove unnecessary dependencies
 - Use simple test cases
 - Simplify configuration
 
-### 6. Check SDK Version
+### 5. Check SDK Version
 
 Ensure you're using the latest SDK version:
 

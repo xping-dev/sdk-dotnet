@@ -5,6 +5,8 @@
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xping.Sdk.Core.Configuration;
@@ -731,6 +733,158 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
             .GetRequiredService<IOptions<XpingConfiguration>>().Value;
 
         Assert.True(bound.CollectCiActorEmail);
+    }
+
+    // ---------------------------------------------------------------------------
+    // LogLevel — reaches the console logger on every path
+    // ---------------------------------------------------------------------------
+
+    private static bool LogsAt(IServiceCollection services, LogLevel level, string category = "Xping.Tests")
+    {
+        using ServiceProvider provider = services.BuildServiceProvider();
+        return provider.GetRequiredService<ILoggerFactory>().CreateLogger(category).IsEnabled(level);
+    }
+
+    private static XpingConfiguration LocalConfig(LogLevel level) =>
+        new() { Mode = XpingMode.LocalOnly, LogLevel = level };
+
+    // Debug messages, such as a local store that could not be written, used to be dropped whatever
+    // was configured: the level was fixed at Information.
+    [Fact]
+    public void AConfiguredDebugLevelShowsDebugMessages()
+    {
+        var services = new ServiceCollection();
+        services.AddXping(LocalConfig(LogLevel.Debug));
+
+        Assert.True(LogsAt(services, LogLevel.Debug));
+    }
+
+    [Fact]
+    public void TheDefaultLevelShowsInformationButNotDebug()
+    {
+        var services = new ServiceCollection();
+        services.AddXping(new XpingConfiguration { Mode = XpingMode.LocalOnly });
+
+        Assert.True(LogsAt(services, LogLevel.Information));
+        Assert.False(LogsAt(services, LogLevel.Debug));
+    }
+
+    [Fact]
+    public void NoneSilencesTheSdk()
+    {
+        var services = new ServiceCollection();
+        services.AddXping(LocalConfig(LogLevel.None));
+
+        Assert.False(LogsAt(services, LogLevel.Critical));
+    }
+
+    [Fact]
+    public void XpingLogLevelWinsOverTheInstance()
+    {
+        using var _ = WithEnv("XPING_LOGLEVEL", "debug");
+
+        var services = new ServiceCollection();
+        services.AddXping(LocalConfig(LogLevel.Warning));
+
+        Assert.True(LogsAt(services, LogLevel.Debug));
+    }
+
+    [Fact]
+    public void XpingLogLevelWinsOverTheBuilder()
+    {
+        using var _ = WithEnv("XPING_LOGLEVEL", "Error");
+
+        var services = new ServiceCollection();
+        services.AddXping(builder => builder.WithMode(XpingMode.LocalOnly).WithLogLevel(LogLevel.Debug));
+
+        Assert.True(LogsAt(services, LogLevel.Error));
+        Assert.False(LogsAt(services, LogLevel.Warning));
+    }
+
+    [Fact]
+    public void TheConfigurationSectionSetsTheLevel()
+    {
+        var services = new ServiceCollection();
+        services.AddXping(InMemoryXpingConfig(new() { ["Xping:Mode"] = "LocalOnly", ["Xping:LogLevel"] = "Debug" }));
+
+        Assert.True(LogsAt(services, LogLevel.Debug));
+    }
+
+    [Fact]
+    public void XpingLogLevelWinsOverTheConfigurationSection()
+    {
+        using var _ = WithEnv("XPING_LOGLEVEL", "Trace");
+
+        var services = new ServiceCollection();
+        services.AddXping(InMemoryXpingConfig(new() { ["Xping:Mode"] = "LocalOnly", ["Xping:LogLevel"] = "Warning" }));
+
+        Assert.True(LogsAt(services, LogLevel.Trace));
+    }
+
+    // The SDK runs inside Host.CreateDefaultBuilder, which binds the test project's "Logging"
+    // section. Its rules configure the user's app, and any of them would win over the SDK's level.
+    [Fact]
+    public void TheTestProjectsLoggingSectionDoesNotCapTheSdk()
+    {
+        using IHost host = Host.CreateDefaultBuilder()
+            .ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Logging:LogLevel:Default"] = "Warning" }))
+            .ConfigureServices(services => services.AddXping(LocalConfig(LogLevel.Debug)))
+            .Build();
+
+        ILogger logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Xping.Tests");
+
+        Assert.True(logger.IsEnabled(LogLevel.Debug));
+    }
+
+    // An undefined level disables the SDK through validation; the error that says so must still print,
+    // so the filter falls back to Information rather than filtering on the undefined value.
+    [Fact]
+    public void AnUndefinedLevelInTheSectionStillShowsErrors()
+    {
+        var services = new ServiceCollection();
+        services.AddXping(InMemoryXpingConfig(new() { ["Xping:Mode"] = "LocalOnly", ["Xping:LogLevel"] = "42" }));
+
+        Assert.True(LogsAt(services, LogLevel.Error));
+        Assert.False(LogsAt(services, LogLevel.Debug));
+    }
+
+    // Below Information, the HTTP client factory alone prints a handler-cleanup line every few seconds.
+    [Fact]
+    public void FrameworkNoiseStaysOutAtDebug()
+    {
+        var services = new ServiceCollection();
+        services.AddXping(LocalConfig(LogLevel.Debug));
+
+        Assert.False(LogsAt(services, LogLevel.Debug, "Microsoft.Extensions.Http.DefaultHttpClientFactory"));
+        Assert.False(LogsAt(services, LogLevel.Error, "System.Net.Http.HttpClient.Default.LogicalHandler"));
+        Assert.True(LogsAt(services, LogLevel.Warning, "Microsoft.Extensions.Http.DefaultHttpClientFactory"));
+    }
+
+    // A section the binder cannot read must not stop the SDK from collecting locally or from saying
+    // why: registration falls back to local-only at the default level, and validation reports the rest.
+    [Fact]
+    public void AnUnreadableSectionRegistersLocalOnlyAtTheDefaultLevel()
+    {
+        var services = new ServiceCollection();
+        services.AddXping(InMemoryXpingConfig(new() { ["Xping:BatchSize"] = "lots" }));
+
+        Assert.True(LogsAt(services, LogLevel.Information));
+        Assert.False(LogsAt(services, LogLevel.Debug));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(System.Net.Http.IHttpClientFactory));
+    }
+
+    [Fact]
+    public void AnUnknownXpingLogLevelIsIgnored()
+    {
+        using var _ = WithEnv("XPING_LOGLEVEL", "loud");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromConfiguration(InMemoryXpingConfig());
+        using ServiceProvider provider = services.BuildServiceProvider();
+        var bound = provider.GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal(LogLevel.Information, bound.LogLevel);
     }
 
     // ---------------------------------------------------------------------------

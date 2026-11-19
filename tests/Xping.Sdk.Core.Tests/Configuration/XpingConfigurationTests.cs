@@ -5,6 +5,7 @@
 
 namespace Xping.Sdk.Core.Tests.Configuration;
 
+using Microsoft.Extensions.Logging;
 using Xping.Sdk.Core.Configuration;
 
 public sealed class XpingConfigurationTests
@@ -29,6 +30,26 @@ public sealed class XpingConfigurationTests
         Assert.Equal(3, config.MaxRetries);
         Assert.Equal(TimeSpan.FromSeconds(2), config.RetryDelay);
         Assert.Equal(TimeSpan.FromSeconds(30), config.UploadTimeout);
+        Assert.Equal(LogLevel.Information, config.LogLevel);
+    }
+
+    // LogLevel is bindable from configuration as a number too, so an out-of-range value can arrive.
+    [Fact]
+    public void ValidateRejectsAnUndefinedLogLevel()
+    {
+        var config = new XpingConfiguration { LogLevel = (LogLevel)42 };
+
+        IReadOnlyList<string> errors = config.Validate();
+
+        Assert.Contains(errors, error => error.StartsWith("LogLevel has an undefined value (42).", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ValidateAcceptsNoneAsALogLevel()
+    {
+        var config = new XpingConfiguration { LogLevel = LogLevel.None };
+
+        Assert.DoesNotContain(config.Validate(), error => error.StartsWith("LogLevel", StringComparison.Ordinal));
     }
 
     [Fact]

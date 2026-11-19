@@ -3,6 +3,8 @@
  * License: [MIT]
  */
 
+using Microsoft.Extensions.Logging;
+
 namespace Xping.Sdk.Core.Configuration;
 
 /// <summary>
@@ -134,6 +136,18 @@ public sealed class XpingConfigurationBuilder
     public XpingConfigurationBuilder WithMode(XpingMode mode)
     {
         _configuration.Mode = mode;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the lowest level of SDK message written to the console.
+    /// </summary>
+    /// <param name="level">The minimum level. <see cref="LogLevel.None"/> silences the SDK.</param>
+    /// <returns>The builder instance for method chaining.</returns>
+    /// <seealso cref="XpingConfiguration.LogLevel"/>
+    public XpingConfigurationBuilder WithLogLevel(LogLevel level)
+    {
+        _configuration.LogLevel = level;
         return this;
     }
 
