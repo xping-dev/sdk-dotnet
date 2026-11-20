@@ -4,8 +4,10 @@
  */
 
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Moq;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.XUnit.Probe;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
@@ -26,6 +28,7 @@ public sealed class XpingTestFrameworkTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         await XpingContext.ShutdownAsync().ConfigureAwait(false);
+        AppContext.SetData(ModuleInitializerProbe.StoreKey, null);
 
         if (Directory.Exists(_scratchStore))
             Directory.Delete(_scratchStore, recursive: true);
@@ -72,22 +75,48 @@ public sealed class XpingTestFrameworkTests : IAsyncLifetime
         Assert.Equal(1, SessionCount());
     }
 
+    /// <summary>
+    /// xUnit v2 creates the framework, and the framework starts the session, before any code in the test
+    /// assembly runs. A configuration passed from the assembly's <c>[ModuleInitializer]</c> must still be
+    /// the one the session uses.
+    /// </summary>
+    [Fact]
+    public void TheSessionUsesTheConfigurationFromTheTestAssemblysModuleInitializer()
+    {
+        AppContext.SetData(ModuleInitializerProbe.StoreKey, _scratchStore);
+
+        // By name: naming a probe type in this method would run the probe's initializer when the method
+        // is compiled, before the store is set.
+        Assembly probe = Assembly.Load("Xping.Sdk.XUnit.Probe");
+
+        List<IMessageSinkMessage> messages = Run(
+            new XpingTestFramework(new RecordingSink()),
+            probe,
+            "Xping.Sdk.XUnit.Probe.ModuleInitializerProbeTests");
+
+        Assert.Single(messages.OfType<ITestPassed>());
+        Assert.Equal(1, SessionCount());
+    }
+
     private static XpingTestFramework FailingToStart(IMessageSink diagnostics) =>
         new(diagnostics, _ => throw new InvalidOperationException("host failed to start"));
 
-    private static List<IMessageSinkMessage> Run(XpingTestFramework framework)
+    private static List<IMessageSinkMessage> Run(XpingTestFramework framework) =>
+        Run(framework, typeof(XpingTestFrameworkProbe).Assembly, typeof(XpingTestFrameworkProbe).FullName!);
+
+    private static List<IMessageSinkMessage> Run(XpingTestFramework framework, Assembly assembly, string testClass)
     {
         using (framework)
         {
             var discovery = new RecordingSink();
-            using (ITestFrameworkDiscoverer discoverer = framework.GetDiscoverer(Reflector.Wrap(typeof(XpingTestFrameworkProbe).Assembly)))
+            using (ITestFrameworkDiscoverer discoverer = framework.GetDiscoverer(Reflector.Wrap(assembly)))
             {
-                discoverer.Find(typeof(XpingTestFrameworkProbe).FullName, false, discovery, Mock.Of<ITestFrameworkDiscoveryOptions>());
+                discoverer.Find(testClass, false, discovery, Mock.Of<ITestFrameworkDiscoveryOptions>());
                 discovery.WaitFor<IDiscoveryCompleteMessage>();
             }
 
             var run = new RecordingSink();
-            using ITestFrameworkExecutor executor = framework.GetExecutor(typeof(XpingTestFrameworkProbe).Assembly.GetName());
+            using ITestFrameworkExecutor executor = framework.GetExecutor(assembly.GetName());
             executor.RunTests(
                 discovery.Messages.OfType<ITestCaseDiscoveryMessage>().Select(m => m.TestCase).ToList(),
                 run,
