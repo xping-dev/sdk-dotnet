@@ -1,215 +1,95 @@
-# Quick Start: xUnit
-
-Get started with Xping SDK in your xUnit test projects in less than 5 minutes. This guide will walk you through installation, configuration, and your first tracked test.
-
+---
+uid: getting-started-quickstart-xunit
+title: "Quick start: xUnit"
 ---
 
-## What You'll Learn
+# Quick start: xUnit
 
-- Which Xping package your xUnit version needs, and how to install it
-- How to run local-only, and how to add cloud upload later
-- How to enable automatic test tracking
-- How to verify results in Xping Cloud
+This page shows how to add the Xping SDK to an xUnit test project and read your first report. It
+is for developers who use xUnit v2 (2.9.2 or later) or xUnit v3 (4.0.2 or later).
 
 ---
 
 ## Prerequisites
 
-Before you begin, make sure you have:
+- A test project that uses **xUnit v2** 2.9.2 or later, or **xUnit v3** 4.0.2 or later.
+  `dotnet new xunit -n MyTestProject` creates an xUnit v2 project. For xUnit v3, run
+  `dotnet new install xunit.v3.templates`, then `dotnet new xunit3 -n MyTestProject`.
+- A test project that targets .NET Framework 4.6.2 or later, or .NET 8 or later. xUnit v3 itself
+  needs .NET Framework 4.7.2 or later.
+- The .NET 10 SDK or runtime, for the `xping` CLI.
 
-- **.NET Framework 4.6.1+**, **.NET Core 2.0+**, or **.NET 5+** installed ([Download](https://dotnet.microsoft.com/download))
-  - Xping SDK targets .NET Standard 2.0 for broad compatibility
-- **No Xping account needed.** Without an API key the SDK runs [local-only](local-first.md): every run is recorded to `.xping/` in your repo and no network call is made. An account is required only to upload to Xping Cloud, which is currently invite-only.
-- An existing **xUnit test project**, v2 or v3, or a new one.
-
-> **New to xUnit?** `dotnet new xunit -n MyTestProject` creates an xUnit v2 project. For xUnit v3,
-> install the templates with `dotnet new install xunit.v3.templates`, then run
-> `dotnet new xunit3 -n MyTestProject`.
+You do not need an Xping account. Without an API key, the SDK runs in
+[local-only mode](local-first.md): it writes every run to `.xping/` in your repository and makes no
+network calls.
 
 ---
 
-## Which Package?
+## Which package
 
-Xping has one adapter per xUnit version. **Match the xUnit package your test project references:**
+Xping has one adapter for each xUnit version. Choose the one that matches the xUnit package your
+test project references:
 
-| Your project references | Install | xUnit runs on |
-|-------------------------|---------|---------------|
+| Your project references | Install | Test runner |
+|---|---|---|
 | `xunit` (2.x) | `Xping.Sdk.XUnit` | vstest |
-| `xunit.v3` (or `xunit.v3.mtp-off`, `xunit.v3.mtp-v1`, …) | `Xping.Sdk.XUnit.V3` | Microsoft.Testing.Platform or vstest |
+| `xunit.v3`, `xunit.v3.mtp-off` or another `xunit.v3.*` package | `Xping.Sdk.XUnit.V3` | Microsoft.Testing.Platform or vstest |
 
-To check which one you have:
+To check, look for `<PackageReference Include="xunit"` or `Include="xunit.v3` in the `.csproj`
+file, or run:
 
 ```bash
 dotnet list package | grep -i xunit
 ```
 
-or look for `<PackageReference Include="xunit"` or `Include="xunit.v3"` in the `.csproj`.
-
-If you install the wrong one, the build stops with `XPING001` or `XPING002` and names the package
-to use instead. See [Wrong xUnit adapter](../troubleshooting/common-issues.md#wrong-xunit-adapter-xping001-xping002).
+With the wrong adapter, the build stops with `XPING001` or `XPING002`, and the message names the
+package to use. See
+[Wrong xUnit adapter](../troubleshooting/common-issues.md#wrong-xunit-adapter-xping001-xping002).
 
 ---
 
-## Step 1: Installation
+## Step 1: Install the package
 
-Install the adapter that matches your xUnit version:
+The tabs on this page stay in sync: choose your xUnit version once.
 
 # [xUnit v2](#tab/xunit-v2)
 
 ```bash
-dotnet add package Xping.Sdk.XUnit
+dotnet add package Xping.Sdk.XUnit --prerelease
 ```
 
-Or in your `.csproj`:
+Or in the `.csproj` file:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Xping.Sdk.XUnit" Version="1.0.*" />
+  <PackageReference Include="Xping.Sdk.XUnit" Version="1.0.0-rc.*" />
 </ItemGroup>
 ```
 
 # [xUnit v3](#tab/xunit-v3)
 
 ```bash
-dotnet add package Xping.Sdk.XUnit.V3
+dotnet add package Xping.Sdk.XUnit.V3 --prerelease
 ```
 
-Or in your `.csproj`:
+Or in the `.csproj` file:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Xping.Sdk.XUnit.V3" Version="1.0.*" />
+  <PackageReference Include="Xping.Sdk.XUnit.V3" Version="1.0.0-rc.*" />
 </ItemGroup>
 ```
 
----
+***
+
+All Xping packages are prereleases, so the command needs `--prerelease`.
 
 ---
 
-## Step 2: Configuration
+## Step 2: Turn on the Xping test framework
 
-**Skip this step if you are starting local-only.** With no API key configured, the SDK records
-every run to `.xping/` in your repository and makes no network calls — see
-[Running Without an Account](local-first.md). Come back here when you want to upload to Xping Cloud.
-
-### Option A: Environment Variable (Recommended)
-
-The API key is a credential. Keep it out of your repository — set it in your shell on a dev
-machine, and as a secret in CI:
-
-```bash
-# Linux/macOS
-export XPING_APIKEY="your-api-key-here"
-
-# Windows (PowerShell)
-$env:XPING_APIKEY="your-api-key-here"
-
-# Windows (Command Prompt)
-set XPING_APIKEY=your-api-key-here
-```
-
-That is the whole setup. Every other setting has a working default.
-
-> **Getting Your API Key:**
-> 1. Log in to [Xping Cloud](https://app.xping.io)
-> 2. Navigate to **Account** → **Settings** → **API & Integration**
-> 3. Click **Create API Key** and copy it
->
-> Xping Cloud is currently invite-only. [Request access](https://xping.io/contact?pilot=True), or
-> keep working locally — that stays free and account-free.
-
-For CI, store it as a pipeline secret rather than a plain variable. See
-[CI/CD Integration](ci-cd-setup.md).
-
-### Option B: appsettings.json (Non-Secret Settings Only)
-
-`appsettings.json` is the right place for tuning — batch size, flush interval, environment name —
-and the wrong place for the API key:
-
-```json
-{
-  "Xping": {
-    "Enabled": true,
-    "BatchSize": 100,
-    "UploadStackTraces": false
-  }
-}
-```
-
-> **⚠️ Do not put `ApiKey` here.** `appsettings.json` is committed to source control and copied
-> into your build output, so a key placed in it leaks to everyone with repository access and into
-> every build artifact. The SDK *will* read it from there — it just should not have to. Use
-> `XPING_APIKEY` instead.
-
-Make sure the file is copied to output directory by adding this to your `.csproj`:
-
-```xml
-<ItemGroup>
-  <None Update="appsettings.json">
-    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-  </None>
-</ItemGroup>
-```
-
-Settings resolve in this order, highest first: `XPING_*` environment variables →
-`Xping__*` environment variables → `appsettings.{Environment}.json` → `appsettings.json`.
-
-### About your project
-
-You do not name it. Xping derives the project from the test assembly each execution belongs to, so
-a test project called `PaymentService.Tests` reports into a project of that name, created
-automatically on the first run. A solution with several test projects gets one Xping project each.
-
-`ProjectId` is **optional** and exists only to override that — set it when several test assemblies
-should report into a single project, for example in a monorepo. It is a hard pin: every execution
-in the session lands in that project regardless of which assembly it came from.
-
-```bash
-export XPING_PROJECTID="payment-platform"   # optional; only to merge assemblies
-```
-
-See [ProjectId](../configuration/configuration-reference.md#projectid) in the Configuration
-Reference.
-
-### Option C: Programmatic Configuration
-
-Pass a configuration object to `Initialize` from a module initializer. Read the key from the
-environment — never a literal. On xUnit v3, the namespace is `Xping.Sdk.XUnit.V3`:
-
-```csharp
-using System.Runtime.CompilerServices;
-using Xping.Sdk.XUnit; // Xping.Sdk.XUnit.V3 on xUnit v3
-using Xping.Sdk.Core.Configuration;
-
-namespace MyTestProject;
-
-internal static class ModuleInitializer
-{
-    [ModuleInitializer]
-    public static void Initialize()
-    {
-        var config = new XpingConfiguration
-        {
-            ApiKey = Environment.GetEnvironmentVariable("XPING_APIKEY"),
-            BatchSize = 200
-        };
-
-        XpingContext.Initialize(config);
-    }
-}
-```
-
-> Passing a configuration object replaces the file-and-environment pipeline for that session — the
-> SDK uses exactly what you hand it. Only reach for this when you need settings computed at
-> runtime; `XPING_APIKEY` alone covers the normal case.
-
----
-
-## Step 3: Enable Xping Test Framework
-
-To enable automatic test tracking, configure your test project to use the Xping test framework.
-Add this to an `AssemblyInfo.cs` file at the root of your test project (create it if you don't
-have one):
+Add one line to an `AssemblyInfo.cs` file at the root of your test project. Create the file if you
+do not have one.
 
 # [xUnit v2](#tab/xunit-v2)
 
@@ -227,175 +107,56 @@ using Xunit;
 [assembly: TestFramework(typeof(Xping.Sdk.XUnit.V3.XpingTestFramework))]
 ```
 
-xUnit v3 takes the framework's type rather than its name.
+xUnit v3 takes the type of the framework, not its name.
+
+***
+
+xUnit then runs your tests through the Xping test framework, which records every test in the
+assembly. You do not add attributes to your tests, and you do not write a setup class: the
+framework starts the session before the first test and ends it after the last one.
 
 ---
 
-> **What does this do?** This tells xUnit to use the Xping test framework instead of the default one. The Xping framework wraps xUnit and automatically tracks all test executions.
-
----
-
-## Step 4: Write Your Tests
-
-With Xping configured, all your xUnit tests are automatically tracked—no attributes required!
-
-### Basic Tests
-
-```csharp
-using Xunit;
-
-namespace MyTestProject;
-
-public class CalculatorTests
-{
-    [Fact]
-    public void Add_TwoPositiveNumbers_ReturnsSum()
-    {
-        // Arrange
-        var calculator = new Calculator();
-
-        // Act
-        var result = calculator.Add(2, 3);
-
-        // Assert
-        Assert.Equal(5, result);
-    }
-
-    [Fact]
-    public void Divide_ByZero_ThrowsException()
-    {
-        // Arrange
-        var calculator = new Calculator();
-
-        // Act & Assert
-        Assert.Throws<DivideByZeroException>(() => 
-            calculator.Divide(10, 0));
-    }
-}
-```
-
-### Theory Tests
-
-Xping automatically tracks parameterized theory tests:
-
-```csharp
-public class MathTests
-{
-    [Theory]
-    [InlineData(1, 1, 2)]
-    [InlineData(2, 3, 5)]
-    [InlineData(-1, 1, 0)]
-    [InlineData(100, -50, 50)]
-    public void Add_VariousInputs_ReturnsExpectedSum(int a, int b, int expected)
-    {
-        var result = Calculator.Add(a, b);
-        Assert.Equal(expected, result);
-    }
-}
-```
-
-Each theory iteration is tracked separately with its parameter values captured.
-
-### Async Tests
-
-Xping fully supports async test methods:
-
-```csharp
-public class ApiTests
-{
-    [Fact]
-    public async Task FetchData_ValidEndpoint_ReturnsData()
-    {
-        var client = new HttpClient();
-        var response = await client.GetAsync("https://api.example.com/data");
-        
-        Assert.True(response.IsSuccessStatusCode);
-    }
-
-    [Theory]
-    [InlineData("https://api.example.com/users/1")]
-    [InlineData("https://api.example.com/users/2")]
-    public async Task FetchUser_ValidId_ReturnsUser(string url)
-    {
-        var client = new HttpClient();
-        var response = await client.GetStringAsync(url);
-
-        Assert.NotEmpty(response);
-    }
-}
-```
-
-### Pinning a Stable Test Fingerprint
-
-By default, Xping identifies each test by a SHA256 hash of its fully qualified name. Renaming a method, class, or namespace causes the platform to treat it as a brand-new test, losing all historical trend data.
-
-`XpingFingerprintAttribute` lets you pin a stable identifier to a test method. When present, Xping uses that value instead of computing a hash. The fingerprint value must use only URL-safe characters (`[a-zA-Z0-9_-]`):
-
-```csharp
-using Xping.Sdk.Core.Attributes;
-
-[XpingFingerprint("checkout-happy-path-v1")]
-[Fact]
-public void PlaceOrder_WithValidCart_Succeeds() { ... }
-```
-
-For parameterized tests, the pinned value is automatically combined with a value of the inline data parameters, keeping each variant distinct on the platform:
-
-```csharp
-[XpingFingerprint("login-v1")]
-[Theory]
-[InlineData("admin", true)]
-[InlineData("user", false)]
-public void Login_ShouldSucceed(string role, bool expected) { ... }
-// Automatically produces: "login-v1:admin,true" and "login-v1:user,false"
-```
-
-> **Important:** Once you publish a run with a pinned fingerprint, treat that value as permanent. Renaming the method is safe—that is the whole point—but changing the attribute value itself severs the link to all historical data for that test.
-
----
-
-## Step 5: Run Your Tests
-
-Run your tests as you normally would:
+## Step 3: Run your tests
 
 ```bash
 dotnet test
 ```
 
-You should see output similar to:
+When you run `dotnet test` in a terminal, the SDK prints one line when the session starts:
 
 ```
-Starting test execution, please wait...
-A total of 1 test files matched the specified pattern.
-
-Passed!  - Failed:     0, Passed:     3, Skipped:     0, Total:     3, Duration: 156 ms
+[Xping 17:28:04 INF] Initialized in local-only mode. SessionId: "6bec32b0-922b-4b9b-bcb9-fb4e1056180f", Environment: Default. No API key configured - results stay on this machine.
 ```
 
-Xping SDK runs silently in the background, tracking execution data without affecting your test results.
+When the output goes to a file or a pipe, for example in a CI log, `dotnet test` shows the SDK's
+lines only with `--logger "console;verbosity=normal"`.
 
-**xUnit v3 runners.** An xUnit v3 test project is an executable, and Xping records it on every way
-it can run:
+On xUnit v3, `dotnet test` does not show the SDK's lines. To see them, run the test project
+itself with `dotnet run`.
 
-- **Microsoft.Testing.Platform**: `dotnet test` with `"test": { "runner": "Microsoft.Testing.Platform" }`
-  in `global.json`, or the project itself with `dotnet run` when it sets
-  `<UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>`.
-- **vstest**: `dotnet test` without that `global.json` setting, through `xunit.runner.visualstudio`.
-  On the .NET 10 SDK, vstest refuses a Microsoft.Testing.Platform app, so reference
-  `xunit.v3.mtp-off` instead of `xunit.v3`.
+### xUnit v3 test runners
+
+An xUnit v3 test project is an executable. The SDK records it on each runner:
+
+- **Microsoft.Testing.Platform**: run `dotnet test` with
+  `{ "test": { "runner": "Microsoft.Testing.Platform" } }` in `global.json`. Or run the project with
+  `dotnet run` when it sets `<UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>`.
+- **vstest**: run `dotnet test` without that `global.json` setting, through
+  `xunit.runner.visualstudio`. On the .NET 10 SDK, vstest does not run a Microsoft.Testing.Platform
+  app, so reference `xunit.v3.mtp-off` instead of `xunit.v3`.
 
 ---
 
-## Step 6: Read the Results
+## Step 4: Read the report
 
-Run your suite **more than once** before reading anything. One run tells you nothing about
-reliability; cross-run flakiness detection needs at least three.
+Run your tests at least **5 times**. Each test also needs at least 5 runs of its own. With fewer
+runs, the report shows the counts but no findings.
 
-### Locally — `xping report`
-
-Install the CLI once, then ask what happened:
+Install the CLI, then read the report:
 
 ```bash
-dotnet tool install -g Xping.Cli      # puts `xping` on your PATH; needs .NET 10
+dotnet tool install -g Xping.Cli --prerelease
 xping report
 ```
 
@@ -427,204 +188,114 @@ https://docs.xping.io/cli/command-reference.html#the-population-marker
 Detail of row 1: xping report --id f_2b84a621 --assembly MyTestProject
 ````
 
-`xping report --format json` emits the same findings as a versioned envelope, which is what you
-hand an agent. See the [CLI Command Reference](../cli/command-reference.md) for every flag and
-finding kind.
-
-### In Xping Cloud — with an API key
-
-1. Open [Xping Cloud](https://app.xping.io)
-2. Explore your test data across multiple tabs:
-   - **Test Sessions** - View uploaded test runs with execution statistics, environment details, and duration
-   - **Tests** - Browse all tests with confidence scores, success rates, and execution history
-   - **Flaky Tests** - Identify unreliable tests that need attention
-
-Cloud adds what a single machine cannot supply: confidence scores, evidence sufficiency,
-root-cause categorisation, and trends across CI, branches, and teammates.
+[Run without an account](local-first.md#how-to-read-it) explains each part of a finding.
+`xping report --format json` gives the same findings as JSON, for a script or a coding agent. The
+[command reference](../cli/command-reference.md) lists every option.
 
 ---
 
-## Common Patterns
+## Upload to Xping Cloud
 
-### Using Traits for Categorization
+Xping Cloud adds confidence scores, flaky-test detection and pull request comments, across CI and
+every machine. Access is by invitation.
 
-Use xUnit's `[Trait]` attribute to organize tests:
+1. In Xping Cloud, open **Settings → API keys** and create a key with only the Upload scope.
+2. Set the key as an environment variable:
+
+   ```bash
+   export XPING_APIKEY="your-api-key"        # Linux and macOS
+   $env:XPING_APIKEY="your-api-key"          # PowerShell
+   set XPING_APIKEY=your-api-key             # Command Prompt
+   ```
+
+3. Run `dotnet test`. The start line no longer says local-only:
+
+   ```
+   [Xping 09:14:02 INF] Initialized. SessionId: "0f3c9a1e-5b7d-4c2a-9e61-2d8b4f7a3c10", Environment: Default
+   ```
+
+   The SDK prints one line for each upload that Xping Cloud accepts. The upload at the end of the
+   session prints:
+
+   ```
+   [Xping 09:14:05 INF] Finalization receipt 7c1e04b2 (312ms, 4.6 KB)
+   ```
+
+   An upload during the session prints `Published 100 tests in 287ms (38.2 KB) · receipt 3a9d51f0`.
+   When an upload fails, the SDK prints an error that says why. The test run does not fail, unless
+   you turn on [strict mode](../configuration/configuration-reference.md#strictmode).
+
+Keep the key out of your repository. Do not put it in `appsettings.json`: that file is committed
+and copied into the build output. In CI, store it as a secret. See [Set up CI](ci-cd-setup.md).
+
+The SDK keeps writing the local store in Xping Cloud mode, so `xping report` still works.
+
+You do not name a project. Xping Cloud creates one project for each test assembly, on the first
+upload. To send several assemblies to one project, set
+[ProjectId](../configuration/configuration-reference.md#projectid).
+
+### Configure in code
+
+The Xping test framework calls `XpingContext.Initialize()` itself. To pass a configuration object
+instead, call `Initialize` first, from a module initializer:
 
 ```csharp
-public class DatabaseTests
-{
-    [Fact]
-    [Trait("Category", "Integration")]
-    [Trait("Priority", "High")]
-    public void Connection_DatabaseAvailable_Connects()
-    {
-        // Test implementation
-        Assert.True(true);
-    }
+using System.Runtime.CompilerServices;
+using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.XUnit; // Xping.Sdk.XUnit.V3 on xUnit v3
 
-    [Theory]
-    [InlineData("SELECT * FROM Users")]
-    [InlineData("SELECT * FROM Orders")]
-    [Trait("Category", "Integration")]
-    [Trait("Type", "Query")]
-    public void ExecuteQuery_ValidSql_ReturnsResults(string sql)
+internal static class XpingModuleInitializer
+{
+    [ModuleInitializer]
+    internal static void Initialize() => XpingContext.Initialize(new XpingConfiguration
     {
-        // Test implementation
-        Assert.NotNull(sql);
-    }
+        BatchSize = 200,
+    });
 }
 ```
 
-Traits are automatically captured and visible in Xping Cloud for filtering and analysis.
+`[ModuleInitializer]` needs .NET 5 or later. With a configuration object, the SDK reads no
+`appsettings.json` file. `XPING_*` environment variables still win over the values you pass. See
+[Configuration methods](../configuration/configuration-reference.md#configuration-methods).
 
-### Collection Fixtures
+---
 
-Xping supports xUnit's collection fixtures for shared context:
+## What the adapter records
+
+- **Theories**: each data row is a separate test, with its arguments.
+- **Traits**: `[Trait]` values are stored with each execution.
+- **Collections**: each execution records the name of its test collection.
+- **Skipped tests**: a test with `Skip` is recorded as skipped.
+- **xRetry.v3 retries**: xRetry.v3 reports only the attempt that a retried test ended on, so the SDK
+  records only that attempt. See
+  [Known limitations](../troubleshooting/known-limitations.md#xunit-v3-records-only-the-last-retry-attempt).
+
+### Keep a test's history when you rename it
+
+Xping identifies a test by a hash of its fully qualified name. When you rename the method, the
+class or the namespace, Xping sees a new test, and the history of the old name stops.
+
+To keep the history, pin a fingerprint. Use only letters, digits, `_` and `-`, at most 100
+characters:
 
 ```csharp
-// Define a collection
-[CollectionDefinition("Database collection")]
-public class DatabaseCollection : ICollectionFixture<DatabaseFixture>
-{
-    // This class has no code, and is never created. Its purpose is simply
-    // to be the place to apply [CollectionDefinition] and all the
-    // ICollectionFixture<> interfaces.
-}
+using Xping.Sdk.Core.Attributes;
 
-// Use the collection
-[Collection("Database collection")]
-public class DatabaseTests1
-{
-    private readonly DatabaseFixture _fixture;
-
-    public DatabaseTests1(DatabaseFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
-    [Fact]
-    public void Test1()
-    {
-        // Use _fixture
-        Assert.NotNull(_fixture);
-    }
-}
-
-[Collection("Database collection")]
-public class DatabaseTests2
-{
-    private readonly DatabaseFixture _fixture;
-
-    public DatabaseTests2(DatabaseFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
-    [Fact]
-    public void Test2()
-    {
-        // Use _fixture
-        Assert.NotNull(_fixture);
-    }
-}
+[XpingFingerprint("checkout-happy-path-v1")]
+[Fact]
+public void PlaceOrder_WithValidCart_Succeeds() { }
 ```
 
-All tests using the same collection are tracked with their collection context.
-
-### Skip Tests
-
-Xping tracks skipped tests as well:
-
-```csharp
-public class ExperimentalTests
-{
-    [Fact(Skip = "Not yet implemented")]
-    public void NewFeature_WhenEnabled_Works()
-    {
-        // This test will be tracked as skipped
-    }
-
-    [Theory(Skip = "Waiting for API v2")]
-    [InlineData(1)]
-    [InlineData(2)]
-    public void ApiV2Feature_ValidInput_ReturnsResult(int input)
-    {
-        // This test will be tracked as skipped
-    }
-}
-```
+For a theory, the SDK adds the arguments to the fingerprint, so each data row stays a separate
+test. Do not change the value after the first run: a new value starts a new history.
 
 ---
 
-## Known Limitations
+## See also
 
-> **✅ Good News:** Unlike NUnit and MSTest, xUnit's skipped tests (using `Skip` parameter) **are properly tracked** by Xping.
->
-> The xUnit adapter uses a message sink pattern that captures all test lifecycle events, including skipped tests.
-> No workarounds needed!
->
-> For framework comparison and other limitations, see [Known Limitations](../troubleshooting/known-limitations.md).
-
-**xUnit v3 retries.** xRetry.v3 reports only the attempt a retried test ended on. Xping records that
-attempt with its number, so a test that passed on a retry shows as one, but the attempts before it
-are not recorded and the duration is that of all attempts together. See
-[Known Limitations](../troubleshooting/known-limitations.md#xunit-v3-records-only-the-last-retry-attempt).
-
----
-
-## Troubleshooting
-
-If you encounter issues while integrating or using the Xping SDK with xUnit, we have comprehensive troubleshooting resources available:
-
-### Common Issues
-
-- **Tests not appearing in Xping Cloud** - Configuration, test framework setup, and connectivity checks
-- **"Could not find test framework" error** - Package installation and AssemblyInfo configuration
-- **Build error `XPING001` or `XPING002`** - The adapter does not match your xUnit version; see [Which Package?](#which-package)
-- **Data looks incomplete** - Network stability and flush timing
-- **Performance concerns** - Impact measurement and optimization
-
-### Get Help
-
-For detailed troubleshooting steps and solutions:
-
-- **[Common Issues](../troubleshooting/common-issues.md)** - Frequently encountered problems and solutions
-- **[Debugging Guide](../troubleshooting/debugging.md)** - Enable logging and diagnose SDK behavior
-
-Still stuck? Reach out through our support channels listed in the "Need Help?" section below.
-
----
-
-## Next Steps
-
-🎉 **Congratulations!** You've successfully integrated Xping SDK with xUnit.
-
-Now explore more features:
-
-- **[CI/CD Integration](ci-cd-setup.md)** - Integrate with GitHub Actions, Azure DevOps, and more
-- **[Configuration Reference](../configuration/configuration-reference.md)** - Advanced configuration options
-- **[Understanding Confidence Scores](../cloud/confidence-scores.md)** - Learn about test reliability scoring
-- **[Performance Overview](../performance/performance.md)** - Understanding performance, optimization, and tuning settings
-- **[Known Limitations](../troubleshooting/known-limitations.md)** - Framework-specific constraints and comparisons
-
----
-
-## Sample Project
-
-For a complete working example, check out our sample project:
-
-- xUnit v2: 📂 [samples/SampleApp.XUnit](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.XUnit)
-- xUnit v3: 📂 [samples/SampleApp.XUnitV3](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.XUnitV3)
-
----
-
-## Need Help?
-
-- 📚 [Documentation](https://docs.xping.io)
-- 💬 [Community Discussions](https://github.com/xping-dev/sdk-dotnet/discussions)
-- 🐛 [Report an Issue](https://github.com/xping-dev/sdk-dotnet/issues)
-- 📧 [Email Support](mailto:support@xping.io)
-
----
-
-**Happy Testing!** 🚀
+- [Set up CI](ci-cd-setup.md)
+- [Configuration reference](../configuration/configuration-reference.md)
+- [Known limitations](../troubleshooting/known-limitations.md)
+- [Common issues](../troubleshooting/common-issues.md)
+- Sample projects: [samples/SampleApp.XUnit](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.XUnit) (v2),
+  [samples/SampleApp.XUnitV3](https://github.com/xping-dev/sdk-dotnet/tree/main/samples/SampleApp.XUnitV3) (v3)
