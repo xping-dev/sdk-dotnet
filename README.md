@@ -96,7 +96,7 @@ The SDK records each run, and the CLI reads what it recorded. You need both.
 
 ```csharp
 [assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")] // xUnit v2
-[assembly: TestFramework(typeof(Xping.Sdk.XUnit.V3.XpingTestFramework))]           // xUnit v3
+// [assembly: TestFramework(typeof(Xping.Sdk.XUnit.V3.XpingTestFramework))]       // xUnit v3
 ```
 
 **NUnit**: add one file. It tracks every test in the assembly, and its setup fixture starts and
@@ -230,7 +230,8 @@ xping auth status               # which Xping Cloud credential the CLI uses
 ```
 
 With several test projects, `xping report` prints one row per assembly, most severe first.
-`--assembly <name>` opens the full report of one assembly. `--top`, `--all` and `--kind` need it.
+`--assembly <name>` opens the full report of one assembly. When the store holds several
+assemblies, `--top`, `--all` and `--kind` need it.
 [Scoping →](https://docs.xping.io/cli/command-reference.html#scoping)
 
 `xping report --help` lists the other options, such as `--directory`, `--ascii` and `--no-color`.
@@ -357,14 +358,15 @@ variable, so it never reaches source control.
 export XPING_APIKEY="your-api-key"
 export XPING_PROJECTID="your-project-id"   # optional: one project for every test assembly
 export XPING_BATCHSIZE="100"               # optional: results per upload batch
-export XPING_UPLOADSTACKTRACES="false"     # optional: upload the stack trace text
+export XPING_UPLOADSTACKTRACES="true"      # optional: also upload the stack trace text (off by default)
 
 # Local and Xping Cloud
 export XPING_ENABLED="true"
 export XPING_LOGLEVEL="Information"
 ```
 
-Without `XPING_APIKEY`, the SDK writes to `.xping/` and makes no network calls. For every option,
+Without an API key from any source, and without StrictMode, the SDK writes to `.xping/` and makes
+no network calls. For every option,
 see the [Configuration reference](https://docs.xping.io/configuration/configuration-reference.html).
 
 ---
@@ -374,12 +376,13 @@ see the [Configuration reference](https://docs.xping.io/configuration/configurat
 ### What Xping records
 
 **Each test execution**: the name and fully qualified name, the outcome, the duration, the start
-and end times (UTC), the error message and stack trace of a failure, the declared timeout, and the
-categories and traits. When the framework stops a test because it ran past its timeout, Xping
+and end times (UTC), the error message and stack trace of a failure, the declared timeout, the
+categories and traits, and the source file path and line number of the test. When the framework stops a test because it ran past its timeout, Xping
 records a timeout, not a failure.
 
 **Each run's environment**: the operating system, the .NET runtime version, the machine name, the
-CI platform, the build and branch details from CI, and the time zone and UTC offset at the start
+CI platform, the build, branch and commit from CI (outside CI, from your local git repository),
+and the time zone and UTC offset at the start
 of the run. The time zone lets Xping place a failure at a local time of day.
 
 **Who ran the tests**:
@@ -387,6 +390,7 @@ of the run. The time zone lets Xping place a failure at a local time of day.
 - The machine name, always.
 - On CI: the login and id of the person who started the run, always. Their email address only when
   you turn on `CollectCiActorEmail`.
+  On GitLab, the commit author is always recorded, and GitLab gives it as name and email.
 - Outside CI: the git author name only when you turn on `CollectLocalGitAuthor`.
 
 **Error text**: Xping stores the error message word for word, and uploads it word for word to

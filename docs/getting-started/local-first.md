@@ -66,6 +66,8 @@ dotnet test
 The SDK writes each run to a local store. `xping report` shows no findings until the store holds at
 least **5 runs**, and each test needs at least 5 runs of its own. With fewer runs, the report shows
 the counts but no findings. Fewer runs cannot tell a flaky test from a test that just broke.
+From the second run on, the report does show the failures of the latest run. See
+[The latest run](../cli/command-reference.md#the-latest-run).
 
 ---
 
@@ -229,6 +231,7 @@ xping where
   36 runs · 1.2 MB on disk
   Checkout.Tests                              12 runs  last 2026-08-08 09:14 UTC
   Billing.Tests                               12 runs  last 2026-08-08 09:13 UTC
+  Api.Tests                                   12 runs  last 2026-08-08 09:11 UTC
 ```
 
 The store is the `.xping` folder at the root of your repository. It **ignores itself**: it contains
