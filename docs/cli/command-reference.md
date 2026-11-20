@@ -1664,4 +1664,4 @@ run store, which lives in `.xping/` in your repository.
 - [Running Without an Account](../getting-started/local-first.md)
 - [Local Store](../configuration/local-store.md)
 - [Configuration Reference](../configuration/configuration-reference.md)
-- [Connecting to Xping Cloud](../index.md#connecting-to-xping-cloud)
+- [Connect to Xping Cloud](../index.md#connect-to-xping-cloud)
