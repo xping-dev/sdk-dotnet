@@ -8,6 +8,7 @@ using System.Reflection;
 using Moq;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.XUnit.Probe;
+using Xping.Sdk.XUnit.ThrowingProbe;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
@@ -95,6 +96,34 @@ public sealed class XpingTestFrameworkTests : IAsyncLifetime
             "Xping.Sdk.XUnit.Probe.ModuleInitializerProbeTests");
 
         Assert.Single(messages.OfType<ITestPassed>());
+        Assert.Equal(1, SessionCount());
+    }
+
+    /// <summary>
+    /// A module initializer that throws is the test assembly's error, not the SDK's: the SDK says so in
+    /// the runner's diagnostics and still starts, and xUnit reports the failure when it runs the tests.
+    /// </summary>
+    [Fact]
+    public void AThrowingModuleInitializerIsReportedAndTheRunStillCompletes()
+    {
+        XpingContext.Initialize(ScratchConfiguration());
+        var diagnostics = new RecordingSink();
+
+        // By name, for the same reason as the probe above.
+        Assembly probe = Assembly.Load("Xping.Sdk.XUnit.ThrowingProbe");
+
+        List<IMessageSinkMessage> messages = Run(
+            new XpingTestFramework(diagnostics),
+            probe,
+            "Xping.Sdk.XUnit.ThrowingProbe.ThrowingModuleInitializerProbeTests");
+
+        Assert.Contains(
+            diagnostics.Messages.OfType<IDiagnosticMessage>(),
+            m => m.Message.StartsWith(
+                "[Xping] The module initializer of Xping.Sdk.XUnit.ThrowingProbe failed: ",
+                StringComparison.Ordinal));
+        ITestFailed failed = Assert.Single(messages.OfType<ITestFailed>());
+        Assert.Contains(ThrowingModuleInitializerProbe.Message, string.Join(" ", failed.Messages), StringComparison.Ordinal);
         Assert.Equal(1, SessionCount());
     }
 

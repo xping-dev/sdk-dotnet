@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A test assembly whose module initializer throws, which the xUnit v2 adapter's tests run through a
+    real xUnit v2 pipeline. A class library, not a test project, so no runner picks its tests up, and
+    its module initializer runs only when a test of the adapter runs it.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.core" Version="2.9.2" />
+  </ItemGroup>
+
+
+</Project>
