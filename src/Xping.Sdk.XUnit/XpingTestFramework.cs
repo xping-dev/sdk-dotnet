@@ -4,8 +4,10 @@
  */
 
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Services.Statistics;
+using Xping.Sdk.Shared;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
@@ -62,6 +64,8 @@ public sealed class XpingTestFramework : XunitTestFramework
     /// <returns>The test framework executor.</returns>
     protected override ITestFrameworkExecutor CreateExecutor(AssemblyName assemblyName)
     {
+        RunModuleInitializers(assemblyName.RequireNotNull());
+
         XpingExecutorServices? services;
         try
         {
@@ -90,6 +94,27 @@ public sealed class XpingTestFramework : XunitTestFramework
             services.IdentityGenerator,
             services.StatisticsAccumulator,
             _census);
+    }
+
+    /// <summary>
+    /// Runs the test assembly's module initializers before the session starts. xUnit v2 creates this
+    /// framework from the assembly's attribute, before any code in the test assembly has run, so a
+    /// <c>[ModuleInitializer]</c> that calls <c>XpingContext.Initialize(config)</c> would otherwise run
+    /// after the session had started from the default configuration, and its configuration would be
+    /// ignored. The runtime runs a module constructor once per process, so this is safe to repeat.
+    /// </summary>
+    private void RunModuleInitializers(AssemblyName assemblyName)
+    {
+        try
+        {
+            RuntimeHelpers.RunModuleConstructor(Assembly.Load(assemblyName).ManifestModule.ModuleHandle);
+        }
+#pragma warning disable CA1031 // A failing module initializer is the test assembly's error, and xUnit reports it when it runs the tests; it must not stop the SDK from starting.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            ReportToRunner($"[Xping] The module initializer of {assemblyName.Name} failed: {ex.Message}");
+        }
     }
 
     // Shown with diagnosticMessages enabled in xunit.runner.json.
