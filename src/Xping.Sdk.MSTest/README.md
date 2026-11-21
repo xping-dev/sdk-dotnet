@@ -133,6 +133,8 @@ variables, which win over the file. See the
 To build the configuration in code, pass it to `Initialize` in the `[AssemblyInitialize]` method:
 
 ```csharp
+using Xping.Sdk.Core.Configuration;
+
 [AssemblyInitialize]
 public static void AssemblyInit(TestContext context) =>
     XpingContext.Initialize(new XpingConfiguration { BatchSize = 200 });

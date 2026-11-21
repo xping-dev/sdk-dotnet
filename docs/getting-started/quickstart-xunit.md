@@ -208,7 +208,8 @@ every machine. Access is by invitation.
    set XPING_APIKEY=your-api-key             # Command Prompt
    ```
 
-3. Run `dotnet test`. The start line no longer says local-only:
+3. Run `dotnet test`. On xUnit v3, run `dotnet run` instead, to see the SDK's lines. The start line
+   no longer says local-only:
 
    ```
    [Xping 09:14:02 INF] Initialized. SessionId: "0f3c9a1e-5b7d-4c2a-9e61-2d8b4f7a3c10", Environment: Default

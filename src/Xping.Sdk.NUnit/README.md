@@ -38,7 +38,8 @@ public class XpingSetup
   a test class or a test method instead.
 - The setup fixture has no namespace, so it runs once for the whole assembly.
 - `FinalizeAndShutdownAsync` ends the session, writes it to the local store and uploads what is
-  left. Without the `[OneTimeTearDown]` method, the SDK records nothing.
+  left. Without the `[OneTimeTearDown]` method, the session never ends: the local store gets
+  nothing, and Xping Cloud gets only the batches the SDK uploaded during the run.
 
 When you run `dotnet test` in a terminal, the SDK prints a line when the session starts, and with
 an API key one line for each upload that Xping Cloud accepts:
@@ -77,10 +78,14 @@ and pass `--report-trx`.
   |---|---|
   | Success | Passed |
   | Failure, Error, SetUpFailure, SetUpError, TearDownError, ChildFailure | Failed |
-  | Failure from a `[Timeout]` or `[CancelAfter]` budget, Cancelled | Timeout |
+  | Failure from a `[CancelAfter]` budget, or from `[Timeout]` on an async test; Cancelled | Timeout |
   | Skipped, Ignored, Explicit | Skipped |
   | Inconclusive | Inconclusive |
   | Any other state | NotExecuted |
+
+  NUnit's `[Timeout]` on a synchronous test abandons the test thread, and the SDK records nothing
+  for that test. Use `[CancelAfter]` instead. See
+  [Known limitations](https://docs.xping.io/troubleshooting/known-limitations.html#nunits-blocking-timeout-is-not-tracked).
 
 - The duration, the start and end times, and the error message and stack trace of a failure. The
   stack trace text is uploaded only with `UploadStackTraces`.
@@ -113,6 +118,8 @@ variables, which win over the file. See the
 To build the configuration in code, pass it to `Initialize` in the setup fixture:
 
 ```csharp
+using Xping.Sdk.Core.Configuration;
+
 [OneTimeSetUp]
 public void BeforeAllTests() => XpingContext.Initialize(new XpingConfiguration { BatchSize = 200 });
 ```

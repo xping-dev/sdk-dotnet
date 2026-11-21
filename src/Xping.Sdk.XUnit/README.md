@@ -47,8 +47,8 @@ The full guide is [Quick start: xUnit](https://docs.xping.io/getting-started/qui
 - The duration, the start and end times, and the error message and stack trace of a failure. The
   stack trace text is uploaded only with `UploadStackTraces`.
 - Each theory row as a separate test, with its arguments
-- Traits: `Category` as categories, the first `Description` as the description, and the others as
-  `key:value` tags
+- Traits: `Category` as categories, the first `Description` as the description, and every other
+  trait as a `key:value` tag. Later `Description` values are dropped.
 - The name of the test collection
 - The output the test wrote to `ITestOutputHelper`
 - The source file and line of the test

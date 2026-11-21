@@ -65,7 +65,8 @@ public class XpingSetup
 - `[assembly: XpingTrack]` tracks every test in the assembly.
 - The setup fixture has no namespace, so it runs once for the whole assembly.
 - `FinalizeAndShutdownAsync` ends the session, writes it to the local store and uploads what is
-  left. **Without the `[OneTimeTearDown]` method, the SDK records nothing.**
+  left. **Without the `[OneTimeTearDown]` method, the session never ends:** the local store gets
+  nothing, and Xping Cloud gets only the batches the SDK uploaded during the run.
 
 The project includes the file by default. Do not add a `<Compile Include="..." />` item for it: an
 SDK-style project already compiles every `.cs` file, and a second item stops the build with
