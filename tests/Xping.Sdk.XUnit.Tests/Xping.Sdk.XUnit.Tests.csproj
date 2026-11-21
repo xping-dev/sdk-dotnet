@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Xping.Sdk.XUnit\Xping.Sdk.XUnit.csproj" />
+    <ProjectReference Include="..\Xping.Sdk.XUnit.Probe\Xping.Sdk.XUnit.Probe.csproj" />
+    <ProjectReference Include="..\Xping.Sdk.XUnit.ThrowingProbe\Xping.Sdk.XUnit.ThrowingProbe.csproj" />
   </ItemGroup>
 
   <ItemGroup>
