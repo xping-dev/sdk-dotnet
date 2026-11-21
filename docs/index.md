@@ -377,28 +377,18 @@ see the [Configuration reference](configuration/configuration-reference.md).
 
 ## Your data
 
-**Each test execution**: the name and fully qualified name, the outcome, the duration, the start
-and end times (UTC), the error message and stack trace of a failure, the declared timeout, the
-categories and traits, and the source file path and line number of the test. When the framework stops a test because it ran past its timeout, Xping
-records a timeout, not a failure.
-
-**Each run's environment**: the operating system, the .NET runtime version, the machine name, the
-CI platform, the build, branch and commit from CI (outside CI, from your local git repository),
-and the time zone and UTC offset at the start
-of the run. The time zone lets Xping place a failure at a local time of day.
-
-**Who ran the tests**:
-
-- The machine name, always.
-- On CI: the login and id of the person who started the run, always. Their email address only when
-  you turn on [CollectCiActorEmail](configuration/configuration-reference.md#collectciactoremail).
-  On GitLab, the commit author is always recorded, and GitLab gives it as name and email.
-- Outside CI: the git author name only when you turn on
-  [CollectLocalGitAuthor](configuration/configuration-reference.md#collectlocalgitauthor).
+For each test execution, Xping records the test's name, outcome, duration and times, the error
+message and stack trace of a failure, its categories and traits, and its source file and line. For
+each run, it records the machine, the operating system, the .NET runtime, the time zone, and the CI
+build, branch, commit and the person behind the run. Outside CI, it records the branch and commit of
+your local git repository.
 
 **Error text**: Xping stores the error message word for word, and uploads it word for word to
 Xping Cloud. It contains whatever your test or your code put in it. Xping does not read your source
 code.
+
+[Data Xping collects](configuration/collected-data.md) lists every field, the personal data among them, and the switch for
+each one. The CI email and the local git author are off by default.
 
 **Locally**, the history stays in `.xping/`. The folder contains its own `.gitignore`, so git
 ignores it. To delete the history, run `xping clear`.

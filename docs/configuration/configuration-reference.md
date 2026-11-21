@@ -824,7 +824,7 @@ committer to a workspace member automatically; it never counts committers by it.
 committers are still counted from `CI.Actor`. On Azure Pipelines, GitLab, Jenkins and AppVeyor an
 Owner or Admin then links them to members by hand. GitHub Actions links by actor id and login, so it
 is not affected. See
-[Who Is Behind the Run](../getting-started/ci-cd-setup.md#who-is-behind-the-run).
+[Who is behind the run](collected-data.md#who-is-behind-the-run).
 
 **This setting has no effect on:**
 - Local runs, which never send `CI.ActorEmail`
