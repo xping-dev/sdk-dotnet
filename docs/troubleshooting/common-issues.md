@@ -445,7 +445,8 @@ dotnet remove package Xping.Sdk.XUnit.V3
 dotnet add package Xping.Sdk.XUnit
 ```
 
-See [Which Package?](../getting-started/quickstart-xunit.md#which-package) for the attribute each one needs.
+See [Step 2: Turn on the Xping test framework](../getting-started/quickstart-xunit.md#step-2-turn-on-the-xping-test-framework)
+for the attribute each one needs.
 
 **`CS0433: The type 'FactAttribute' exists in both 'xunit.core' and 'xunit.v3.core'`** is the same
 mistake in a build that skips the check above, for example one that does not import NuGet's
