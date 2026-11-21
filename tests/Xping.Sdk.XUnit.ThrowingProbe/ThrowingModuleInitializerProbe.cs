@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Xunit;
 
@@ -14,6 +15,7 @@ namespace Xping.Sdk.XUnit.ThrowingProbe;
 /// must not name a type of this assembly in code: the runtime runs the initializer as soon as a method
 /// that does is compiled.
 /// </summary>
+[ExcludeFromCodeCoverage(Justification = "A test fixture the adapter's tests run, not code under test.")]
 public static class ThrowingModuleInitializerProbe
 {
     /// <summary>The message the initializer throws with.</summary>
@@ -27,6 +29,7 @@ public static class ThrowingModuleInitializerProbe
 }
 
 /// <summary>The test the adapter's test runs in this assembly.</summary>
+[ExcludeFromCodeCoverage(Justification = "A test fixture the adapter's tests run, not code under test.")]
 public sealed class ThrowingModuleInitializerProbeTests
 {
     /// <summary>Would pass, if its module had initialized.</summary>

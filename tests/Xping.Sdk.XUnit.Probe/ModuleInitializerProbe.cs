@@ -3,6 +3,7 @@
  * License: [MIT]
  */
 
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Xping.Sdk.Core.Configuration;
 using Xunit;
@@ -15,6 +16,7 @@ namespace Xping.Sdk.XUnit.Probe;
 /// The test must not name a type of this assembly in code: the runtime runs the initializer as soon as
 /// a method that does is compiled.
 /// </summary>
+[ExcludeFromCodeCoverage(Justification = "A test fixture the adapter's tests run, not code under test.")]
 public static class ModuleInitializerProbe
 {
     /// <summary>The <see cref="AppContext"/> key that holds the local store path to configure.</summary>
@@ -32,6 +34,7 @@ public static class ModuleInitializerProbe
 }
 
 /// <summary>The test the adapter's test runs in this assembly.</summary>
+[ExcludeFromCodeCoverage(Justification = "A test fixture the adapter's tests run, not code under test.")]
 public sealed class ModuleInitializerProbeTests
 {
     /// <summary>Passes.</summary>
