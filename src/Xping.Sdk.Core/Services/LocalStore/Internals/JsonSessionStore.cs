@@ -52,7 +52,7 @@ internal sealed class JsonSessionStore : ILocalSessionStore
         _storePath = new Lazy<string?>(() =>
             string.IsNullOrWhiteSpace(storePath)
                 ? LocalStorePathResolver.Resolve(startDirectory)
-                : storePath);
+                : LocalStorePathResolver.ResolveExplicit(storePath!, startDirectory));
     }
 
     public bool IsAvailable => _storePath.Value != null;

@@ -77,6 +77,34 @@ internal static class LocalStorePathResolver
         return GetProfileFallback(repoRoot ?? FindProjectDirectory(origin) ?? origin);
     }
 
+    /// <summary>
+    /// Makes an explicit store path (<c>XPING_LOCAL_STORE</c> or <c>LocalStorePath</c>) absolute.
+    /// </summary>
+    /// <param name="storePath">The path as configured.</param>
+    /// <param name="startDirectory">
+    /// Directory the walk starts from. Defaults to the location of the calling assembly.
+    /// </param>
+    /// <returns>The absolute path of the store root.</returns>
+    /// <remarks>
+    /// A relative path is read from the repository root, else from the nearest project folder, the
+    /// same anchors the profile fallback is keyed by. Read from the current directory instead, the
+    /// SDK would put it under the test project's output folder and the CLI under wherever it was
+    /// run, so one exported variable would name two stores.
+    /// </remarks>
+    public static string ResolveExplicit(string storePath, string? startDirectory = null)
+    {
+        if (Path.IsPathRooted(storePath))
+            return Path.GetFullPath(storePath);
+
+        string? origin = startDirectory ?? GetAssemblyDirectory();
+        string anchor = RepositoryRoot.Find(origin)
+            ?? FindProjectDirectory(origin)
+            ?? origin
+            ?? Directory.GetCurrentDirectory();
+
+        return Path.GetFullPath(Path.Combine(anchor, storePath));
+    }
+
     private static readonly string[] ProjectFileExtensions = [".csproj", ".fsproj", ".vbproj"];
 
     /// <summary>

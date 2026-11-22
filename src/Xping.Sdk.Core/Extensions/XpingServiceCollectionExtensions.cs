@@ -671,14 +671,8 @@ public static class XpingServiceCollectionExtensions
         if (GetEnv("BATCHSIZE") is { } batchSize && int.TryParse(batchSize, out var bs))
             config.BatchSize = bs;
 
-        if (GetEnv("FLUSHINTERVAL") is { } flushInterval)
-        {
-            // Try parsing as seconds first, then as TimeSpan
-            if (int.TryParse(flushInterval, out var seconds))
-                config.FlushInterval = TimeSpan.FromSeconds(seconds);
-            else if (TimeSpan.TryParse(flushInterval, out var ts))
-                config.FlushInterval = ts;
-        }
+        if (GetEnv("FLUSHINTERVAL") is { } flushInterval && TryParseDuration(flushInterval, out TimeSpan fi))
+            config.FlushInterval = fi;
 
         // Environment Options
         if (GetEnv("ENVIRONMENT") is { } environment)
@@ -710,22 +704,12 @@ public static class XpingServiceCollectionExtensions
         if (GetEnv("MAXRETRIES") is { } maxRetries && int.TryParse(maxRetries, out var mr))
             config.MaxRetries = mr;
 
-        if (GetEnv("RETRYDELAY") is { } retryDelay)
-        {
-            if (int.TryParse(retryDelay, out var seconds))
-                config.RetryDelay = TimeSpan.FromSeconds(seconds);
-            else if (TimeSpan.TryParse(retryDelay, out var ts))
-                config.RetryDelay = ts;
-        }
+        if (GetEnv("RETRYDELAY") is { } retryDelay && TryParseDuration(retryDelay, out TimeSpan rd))
+            config.RetryDelay = rd;
 
         // Timeout Options
-        if (GetEnv("UPLOADTIMEOUT") is { } uploadTimeout)
-        {
-            if (int.TryParse(uploadTimeout, out var seconds))
-                config.UploadTimeout = TimeSpan.FromSeconds(seconds);
-            else if (TimeSpan.TryParse(uploadTimeout, out var ts))
-                config.UploadTimeout = ts;
-        }
+        if (GetEnv("UPLOADTIMEOUT") is { } uploadTimeout && TryParseDuration(uploadTimeout, out TimeSpan ut))
+            config.UploadTimeout = ut;
 
         // PR Detection Options
         if (GetEnv("ENABLEPULLREQUESTDETECTION") is { } enablePr
@@ -769,6 +753,30 @@ public static class XpingServiceCollectionExtensions
             && !string.IsNullOrWhiteSpace(value)
                 ? value.Trim()
                 : null;
+    }
+
+    /// <summary>
+    /// Reads an <c>XPING_*</c> duration: whole seconds (<c>30</c>) or a time with colons
+    /// (<c>00:00:30</c>, <c>1.00:00:00</c>).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="TimeSpan.TryParse(string, out TimeSpan)"/> alone reads <c>1.5</c> as one day and five
+    /// hours, not a second and a half, so a value without a colon is accepted only as whole seconds.
+    /// Anything else is ignored, as every other unparsable <c>XPING_*</c> value is.
+    /// </remarks>
+    internal static bool TryParseDuration(string value, out TimeSpan duration)
+    {
+        if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int seconds))
+        {
+            duration = TimeSpan.FromSeconds(seconds);
+            return true;
+        }
+
+        if (value.IndexOf(':') >= 0 && TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out duration))
+            return true;
+
+        duration = default;
+        return false;
     }
 
     /// <summary>

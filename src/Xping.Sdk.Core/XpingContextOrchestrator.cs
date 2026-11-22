@@ -288,8 +288,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             }
             else
             {
+                // Name the setting that turned the SDK off: Enabled=false and Mode=Disabled both land here.
                 _logger.LogWarning(
-                    "SDK is disabled via configuration (Enabled=false). Tests will run without observability tracking.");
+                    "SDK is disabled via configuration ({Setting}). Tests will run without observability tracking.",
+                    configuration.Enabled ? "Mode=Disabled" : "Enabled=false");
             }
         }
         catch (OptionsValidationException ex)

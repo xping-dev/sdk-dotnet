@@ -1192,6 +1192,41 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
         Assert.Contains(ex.Failures, f => f.Contains("BatchSize", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("30", 0, 0, 30)]
+    [InlineData("00:00:30", 0, 0, 30)]
+    [InlineData("00:01:00", 0, 1, 0)]
+    [InlineData("1.00:00:00", 24, 0, 0)]
+    public void TryParseDuration_ReadsWholeSecondsOrATimeWithColons(string value, int hours, int minutes, int seconds)
+    {
+        Assert.True(XpingServiceCollectionExtensions.TryParseDuration(value, out TimeSpan duration));
+        Assert.Equal(new TimeSpan(hours, minutes, seconds), duration);
+    }
+
+    [Theory]
+    [InlineData("1.5")]
+    [InlineData("0.5")]
+    [InlineData("-5")]
+    [InlineData("30s")]
+    public void TryParseDuration_RejectsAValueThatIsNeitherWholeSecondsNorATime(string value)
+    {
+        // TimeSpan.TryParse read "1.5" as one day and five hours.
+        Assert.False(XpingServiceCollectionExtensions.TryParseDuration(value, out _));
+    }
+
+    [Fact]
+    public void BindEnvVars_AFractionalRetryDelayIsIgnored()
+    {
+        using var _ = WithEnv("XPING_RETRYDELAY", "1.5");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration());
+
+        var bound = services.BuildServiceProvider().GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal(TimeSpan.FromSeconds(2), bound.RetryDelay);
+    }
+
     [Fact]
     public void OptionsValidation_ReportsEachOutOfRangeSettingOnce()
     {
