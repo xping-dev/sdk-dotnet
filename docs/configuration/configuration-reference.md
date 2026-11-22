@@ -1,722 +1,322 @@
-# Configuration Reference
+---
+uid: configuration-reference
+title: Configuration reference
+---
 
-Complete reference guide for configuring Xping SDK. This document covers all available configuration options, their purposes, valid values, and best practices.
+# Configuration reference
+
+This page lists every setting of the Xping SDK and the `xping` CLI, with its environment variable,
+its default and its rules. It is for developers who configure the SDK in a test project or in CI.
 
 ---
 
-## Configuration Methods
+## Configuration methods
 
-How you initialize decides which sources are read. There are two paths, and only one of them
-loads files.
+How you initialize decides which sources the SDK reads.
 
-**`XpingContext.Initialize()`** — no argument. Configuration is discovered:
+**`XpingContext.Initialize()`**, without an argument, reads these sources. The first one that sets
+a value wins:
 
-1. **`XPING_*` environment variables** - e.g. `XPING_APIKEY`, `XPING_BATCHSIZE`
-2. **`Xping__*` environment variables** - the standard .NET nested format, e.g. `Xping__ApiKey`
-3. **`appsettings.{Environment}.json`** - loaded after the base file, so it overrides it
-4. **`appsettings.json`**
-5. **Default values**
+1. `XPING_*` environment variables, for example `XPING_APIKEY`
+2. `Xping__*` environment variables, the .NET nested format, for example `Xping__ApiKey`
+3. The `"Xping"` section of `appsettings.{environment}.json`
+4. The `"Xping"` section of `appsettings.json`
+5. The defaults
 
-**`XpingContext.Initialize(config)`** — you supply the object. No files are read, and the nested
-`Xping__*` format does not apply, because there is no `IConfiguration` in this path at all:
+**`XpingContext.Initialize(configuration)`** reads these sources:
 
-1. **`XPING_*` environment variables**
-2. **The `XpingConfiguration` you passed**
-3. **Default values**
+1. `XPING_*` environment variables
+2. The `XpingConfiguration` object you pass
+3. The defaults
 
-The `XPING_*` variables sit at the top of **both**, which is the point: a pipeline can inject a
-secret or redirect an endpoint without the test assembly being rebuilt, and a value hardcoded in
-`Initialize(config)` does not shield the run from it. Your instance is not modified — the override
-is applied to the copy the SDK resolves.
+On this path, the SDK reads only one setting from `appsettings.json` and `Xping__*`:
+[StrictMode](#strictmode). It turns strict mode on when the object, `XPING_STRICTMODE`,
+`Xping__StrictMode` or `"Xping": { "StrictMode": true }` in `appsettings.json` asks for it.
+`XPING_STRICTMODE=false` turns it off whatever the other sources say.
 
-Once a process has called `Initialize(config)`, a later `Initialize()` in the same process reuses that
-configuration instead of discovering one. This matters in a long-lived process, such as an IDE's test
-server, that runs several sessions. Only a configuration a session actually started with is reused, and
-`XpingContext.ShutdownAsync()` forgets it.
+`XPING_*` variables win on both paths. A pipeline can change a value without a rebuild, even when
+the code passes a configuration object. The SDK applies them to its own copy, so your object does
+not change.
 
-If you configure in code and want `appsettings.json` or `Xping__*` honoured as well, build an
-`IConfiguration` yourself and call `services.AddXping(configuration)`.
+Once a process has called `Initialize(configuration)`, a later `Initialize()` in the same process
+reuses that configuration. This matters in a process that runs several sessions, such as an IDE's
+test server. `XpingContext.ShutdownAsync()` forgets it.
 
----
+You cannot combine a configuration object with `appsettings.json`. To use the file, call
+`Initialize()` and override values with `XPING_*` variables.
 
-## Quick Reference Table
+### Files and environment variables
 
-| Setting | Type | Default | Environment Variable | Description |
-|---------|------|---------|---------------------|-------------|
-| `ApiEndpoint` | string | `https://upload.xping.io/v1` | `XPING_APIENDPOINT` | Xping API base URL |
-| `ApiKey` | string | *(none)* | `XPING_APIKEY` | Authentication API key. Required in Cloud mode; omit it to run [local-only](local-store.md). The CLI uses it for Cloud reads when no stored login is available. `--api-key` on the command line takes precedence over a stored login; the environment variable does not. |
-| `ProjectId` | string | *(none)* | `XPING_PROJECTID` | Optional. Pins the whole session to one project; omit it to get one project per test assembly. The CLI uses it to bind local runs to a Cloud project. |
-| `Mode` | XpingMode | `Auto` | `XPING_MODE` | `Auto`, `LocalOnly`, `Cloud`, or `Disabled` |
-| `BatchSize` | int | `100` | `XPING_BATCHSIZE` | Tests per upload batch |
-| `FlushInterval` | TimeSpan | `30s` | `XPING_FLUSHINTERVAL` | Auto-flush interval |
-| `Environment` | string | `Default` | `XPING_ENVIRONMENT` | The deployed environment the tests target |
-| `Enabled` | bool | `true` | `XPING_ENABLED` | SDK enabled/disabled |
-| `UploadStackTraces` | bool | `false` | `XPING_UPLOADSTACKTRACES` | Upload failed tests' stack traces to Xping Cloud |
-| `EnableCompression` | bool | `true` | `XPING_ENABLECOMPRESSION` | Compress uploads |
-| `MaxRetries` | int | `3` | `XPING_MAXRETRIES` | Upload retry attempts |
-| `RetryDelay` | TimeSpan | `2s` | `XPING_RETRYDELAY` | Delay between retries |
-| `UploadTimeout` | TimeSpan | `30s` | `XPING_UPLOADTIMEOUT` | Timeout per upload attempt |
-| `EnablePullRequestDetection` | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Detect PR context for CI/CD comment posting |
-| `CollectLocalGitAuthor` | bool | `false` | `XPING_COLLECTLOCALGITAUTHOR` | Include git author name in local-run metadata (opt-in to avoid PII collection) |
-| `CollectCiActorEmail` | bool | `false` | `XPING_COLLECTCIACTOREMAIL` | Record the CI actor's email address as `CI.ActorEmail` |
-| `DefaultBranch` | string | *(none)* | `XPING_DEFAULTBRANCH` | The branch Xping Cloud treats as the default branch for this pipeline's CI runs. Replaces the value the platform reports |
-| `LogLevel` | LogLevel | `Information` | `XPING_LOGLEVEL` | Lowest level of SDK message written to the console: `Trace`, `Debug`, `Information`, `Warning`, `Error`, `Critical` or `None` |
-| `StrictMode` | bool | `false` | `XPING_STRICTMODE` | Throw on configuration errors instead of silently disabling |
-| `LocalStorePath` | string | repository root | `XPING_LOCAL_STORE` | Overrides the [local store](local-store.md) location |
-| `CloudUrl` | string | `https://app.xping.io` | `XPING_CLOUDURL` | CLI only. Xping Cloud (Portal) URL used by `xping login` and Cloud-enriched reports |
-| *(banner)* | string | *(unset)* | `XPING_NO_BANNER` | Suppresses the SDK's retry hint and the CLI's invitation. The invitation is written to stderr, so it never reaches a redirected report |
+- The SDK reads `appsettings.json` and `appsettings.{environment}.json` from the current directory
+  of the test process. With `dotnet test`, that is the test project's output folder, so set
+  `<CopyToOutputDirectory>` on the files.
+- `{environment}` is the value of `ASPNETCORE_ENVIRONMENT`, else `DOTNET_ENVIRONMENT`, else
+  `Production`. These variables only choose the file. They do not set the
+  [Environment](#environment) setting.
+- Section and key names are not case-sensitive: `"Xping"`, `"xping"` and `"XPING"` are the same
+  section.
+- In JSON, write a `TimeSpan` as `"hh:mm:ss"`. A bare number is days: `"30"` is 30 days.
+- In an `XPING_*` variable, write a `TimeSpan` as whole seconds (`"30"`) or as `"hh:mm:ss"`. Do not
+  use a fraction: a value with a dot is read as days and hours, so `"1.5"` is 1 day and 5 hours.
+- An `XPING_*` variable that is blank, or whose value does not parse, is ignored. So a missing
+  secret, such as `XPING_APIKEY: ${{ secrets.XPING_APIKEY }}`, does not clear a key set elsewhere.
 
 ---
 
-## Operating Mode
+## Quick reference
 
-Xping runs in one of three modes. The mode is resolved once at startup and determines whether the SDK uploads, stores locally, or does nothing.
+### SDK settings
+
+| Setting | Type | Default | Environment variable | Description |
+|---|---|---|---|---|
+| [`ApiEndpoint`](#apiendpoint) | string | `https://upload.xping.io/v1` | `XPING_APIENDPOINT` | The upload address of Xping Cloud |
+| [`ApiKey`](#apikey) | string | *(none)* | `XPING_APIKEY` | The key that authorizes uploads. Without it, the SDK runs local-only. |
+| [`ProjectId`](#projectid) | string | *(none)* | `XPING_PROJECTID` | Sends every test assembly to one project |
+| [`Mode`](#mode) | `XpingMode` | `Auto` | `XPING_MODE` | `Auto`, `LocalOnly`, `Cloud` or `Disabled` |
+| [`BatchSize`](#batchsize) | int | `100` | `XPING_BATCHSIZE` | Cloud mode only. Executions in each upload during the session. |
+| [`FlushInterval`](#flushinterval) | TimeSpan | `00:00:30` | `XPING_FLUSHINTERVAL` | Cloud mode only. Time between uploads during the session. |
+| [`UploadTimeout`](#uploadtimeout) | TimeSpan | `00:00:30` | `XPING_UPLOADTIMEOUT` | Time limit of one upload attempt |
+| [`MaxRetries`](#maxretries) | int | `3` | `XPING_MAXRETRIES` | Retries of a failed upload |
+| [`RetryDelay`](#retrydelay) | TimeSpan | `00:00:02` | `XPING_RETRYDELAY` | Base delay between retries |
+| [`EnableCompression`](#enablecompression) | bool | `true` | `XPING_ENABLECOMPRESSION` | Compresses uploads with gzip |
+| [`Environment`](#environment) | string | `Default` | `XPING_ENVIRONMENT` | The deployed environment the tests target |
+| [`DefaultBranch`](#defaultbranch) | string | *(none)* | `XPING_DEFAULTBRANCH` | The branch Xping Cloud treats as the default branch |
+| [`Enabled`](#enabled) | bool | `true` | `XPING_ENABLED` | Turns the SDK on or off |
+| [`UploadStackTraces`](#uploadstacktraces) | bool | `false` | `XPING_UPLOADSTACKTRACES` | Uploads the stack trace text of failed tests |
+| [`EnablePullRequestDetection`](#enablepullrequestdetection) | bool | `true` | `XPING_ENABLEPULLREQUESTDETECTION` | Records the pull request a CI build belongs to |
+| [`CollectLocalGitAuthor`](#collectlocalgitauthor) | bool | `false` | `XPING_COLLECTLOCALGITAUTHOR` | Records the git author name on local runs |
+| [`CollectCiActorEmail`](#collectciactoremail) | bool | `false` | `XPING_COLLECTCIACTOREMAIL` | Records the email of the person behind a CI run |
+| [`LogLevel`](#loglevel) | `LogLevel` | `Information` | `XPING_LOGLEVEL` | The lowest level of SDK message that is printed |
+| [`StrictMode`](#strictmode) | bool | `false` | `XPING_STRICTMODE` | Fails the test run when the SDK cannot record or upload |
+| [`LocalStorePath`](#localstorepath) | string | *(none)* | `XPING_LOCAL_STORE` | Moves the [local store](local-store.md) |
+
+### CLI and shared settings
+
+| Setting | Read by | Default | Description |
+|---|---|---|---|
+| [`CloudUrl`](#cloudurl) / `XPING_CLOUDURL` | CLI | `https://app.xping.io` | The Xping Cloud address for `xping login` and for Xping Cloud data in `xping report` |
+| `XPING_APIKEY`, `XPING_PROJECTID` | SDK and CLI | *(none)* | The CLI reads them for Xping Cloud data. See [Credentials](../cli/command-reference.md#credentials). |
+| [`XPING_LOCAL_STORE`](#localstorepath) | SDK and CLI | *(none)* | Moves the local store for both |
+| [`XPING_SHELL`](#xping_shell) | CLI | `powershell` on Windows, `posix` elsewhere | The shell syntax of the commands `xping report` prints |
+| `XPING_NO_BANNER` | SDK and CLI | *(unset)* | Any non-empty value hides the SDK's retry hint and the CLI's Xping Cloud invitation |
+
+---
+
+## Mode
 
 ### Mode
 
 **Type:** `XpingMode`
 **Default:** `Auto`
-**Environment Variable:** `XPING_MODE`
+**Environment variable:** `XPING_MODE` (not case-sensitive)
 
-| Value | Behaviour |
+The SDK resolves the mode once, when it starts. It decides whether the SDK uploads, writes the
+local store, or does nothing.
+
+| Value | What the SDK does |
 |---|---|
-| `Auto` | Resolves to `Cloud` when credentials are present, otherwise `LocalOnly`. |
-| `LocalOnly` | Collects and writes the [local store](local-store.md). No network calls at all. |
-| `Cloud` | Collects, uploads, **and** writes the local store. |
-| `Disabled` | Collects nothing. Equivalent to `Enabled = false`. |
+| `Auto` | Resolves to one of the modes below. See the next table. |
+| `LocalOnly` | Writes the [local store](local-store.md). It makes no network calls and creates no HTTP client. |
+| `Cloud` | Writes the local store and uploads to Xping Cloud |
+| `Disabled` | Records nothing. The same as `Enabled = false`. |
 
-### How `Auto` resolves
+`Auto` resolves in this order. The first row that matches wins:
 
 | Condition | Resolved mode |
 |---|---|
-| `Enabled = false` | `Disabled` |
-| `StrictMode = true` | `Cloud` |
-| `ApiKey` present | `Cloud` |
+| `Enabled` is `false` | `Disabled` |
+| `StrictMode` is `true` | `Cloud` |
+| `ApiKey` is set | `Cloud` |
 | Otherwise | `LocalOnly` |
 
-### Strict mode still requires credentials
+A `Mode` other than `Auto` wins over `StrictMode` and over the key. To keep a run local while a key
+is set in your environment, set `XPING_MODE=LocalOnly`.
 
-`StrictMode` exists to guarantee observability in CI, so it forces `Cloud`. A missing API key under strict mode remains a hard configuration error and will **not** silently degrade to local-only collection.
+**A missing key is not an error in `Auto` mode.** The SDK runs local-only, as on a developer
+machine without an account. See [Run without an account](../getting-started/local-first.md).
 
-This is the intended split: local-only is the default for an unconfigured developer, never a silent downgrade for a configured pipeline.
+**A missing key is an error in two cases:**
 
-```bash
-# CI: fail the build if observability is misconfigured
-export XPING_STRICTMODE=true
-export XPING_APIKEY="..."
-export XPING_PROJECTID="..."
-```
-
-### Local-only makes no network calls
-
-In `LocalOnly` mode the SDK does not create an HTTP client, retry pipeline, or circuit breaker. Nothing in the local path opens a socket.
-
-### Staying local with credentials present
-
-Setting `Mode` explicitly overrides credential detection:
-
-```bash
-export XPING_MODE=LocalOnly
-```
-
-Useful when a key is present in your environment for other reasons but you want a particular run kept off the platform.
+- `Mode` is `Cloud`. The SDK logs the error and records nothing, not even to the local store.
+- `StrictMode` is on and `Mode` is `Auto`. The test run fails. Strict mode does not fall back to
+  local-only, so a pipeline that must upload fails when its key is missing.
 
 ---
 
-## Core Settings
+## Upload settings
 
 ### ApiEndpoint
 
-**Type:** `string`  
-**Default:** `https://upload.xping.io/v1`  
-**Required:** No (uses default if not specified)  
-**Environment Variable:** `XPING_APIENDPOINT`
+**Type:** `string`
+**Default:** `https://upload.xping.io/v1`
+**Environment variable:** `XPING_APIENDPOINT`
 
-The base URL for the Xping API. Change this only if you're using a self-hosted or regional instance.
-
-**Valid values:**
-- Must be a valid HTTP or HTTPS URL
-- Must not include trailing slash
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "ApiEndpoint": "https://upload.xping.io/v1"
-  }
-}
-```
+The address the SDK uploads to. Change it only when you were given another Xping Cloud address. It
+must be an absolute `http` or `https` URL.
 
 ```bash
 export XPING_APIENDPOINT="https://upload.xping.io/v1"
 ```
 
-```csharp
-var config = new XpingConfiguration
-{
-    ApiEndpoint = "https://upload.xping.io/v1"
-};
-XpingContext.Initialize(config);
-```
-
----
-
 ### ApiKey
 
-**Type:** `string`  
-**Default:** *None*  
-**Required:** In Cloud mode only  
-**Environment Variable:** `XPING_APIKEY`
+**Type:** `string`
+**Default:** *(none)*
+**Environment variable:** `XPING_APIKEY`
 
-Your Xping authentication API key. This credential identifies your account and authorizes SDK operations.
+The key that authorizes uploads to Xping Cloud. Without a key, the SDK runs [local-only](#mode).
 
-Omitting it is a supported configuration: the SDK resolves to [`LocalOnly`](#operating-mode) and records test history to disk instead of uploading. See [Running Without an Account](../getting-started/local-first.md).
+To create one, open **Settings → API keys** in Xping Cloud. Create it with only the Upload scope.
 
-**Getting your API key:**
-1. Log in to [Xping Cloud](https://app.xping.io)
-2. Navigate to **Account** → **Settings** → **API & Integration**
-3. Click **Create API Key** and copy it
-
-**Security considerations:**
-- Never commit API keys to source control
-- Use environment variables or secret management in CI/CD
-- Rotate keys regularly as a security best practice
-- Each team member can use their own key for attribution
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "ApiKey": "xpg_live_productionkey"
-  }
-}
-```
+Set the key as an environment variable or a CI secret:
 
 ```bash
-# Recommended: Use environment variables
-export XPING_APIKEY="xpg_live_productionkey"
+export XPING_APIKEY="your-api-key"
 ```
 
-**In the `xping` CLI:** the CLI uses the key to read Cloud data when no stored login (`xping login`) is available. `--api-key` on the command line takes precedence over a stored login; the environment variable and `appsettings.json` do not, because on a developer machine they usually hold the SDK's upload key. Prefer `XPING_APIKEY` to `--api-key`, so the key does not land in shell history.
+Do not put it in `appsettings.json` or in code: the file is committed and copied into the build
+output.
 
-```csharp
-// Not recommended: Hard-coding in source
-var config = new XpingConfiguration
-{
-    ApiKey = "xpg_live_productionkey"
-};
-XpingContext.Initialize(config);
-```
-
----
+**In the `xping` CLI:** the CLI uses the key to read Xping Cloud data when you have not signed in
+with `xping login`. `--api-key` wins over a sign-in. `XPING_APIKEY` and `appsettings.json` do not,
+because on a developer machine they usually hold the upload key. A key with only the Upload scope
+cannot read. See [Credentials](../cli/command-reference.md#credentials).
 
 ### ProjectId
 
 **Type:** `string`
-**Default:** *None — the project is derived from the test assembly*
-**Required:** No
-**Environment Variable:** `XPING_PROJECTID`
+**Default:** *(none: one project for each test assembly)*
+**Environment variable:** `XPING_PROJECTID`
 
-**You usually do not need to set this.** When `ProjectId` is unset, Xping derives the project from the test assembly each execution belongs to. A test project called `PaymentService.Tests` reports into a project of that name, created automatically the first time your tests run.
-
-That means a solution-wide `dotnet test` produces **one project per test project**:
+You usually do not set this. Without it, Xping Cloud creates one project for each test assembly, on
+its first upload:
 
 | Test assembly | Project |
 |---|---|
 | `Billing.Tests` | `billing-tests` |
 | `Api.Tests` | `api-tests` |
-| `Web.Tests` | `web-tests` |
 
-This mirrors how the [`xping` CLI](local-store.md) already scopes local reports — `xping report --assembly Billing.Tests` — so local and cloud views agree on what a project is.
-
-**Set `ProjectId` only to override that.** It is a hard pin: every execution in the session lands in that one project regardless of which assembly it came from. The case for it is a monorepo where several test assemblies should report as a single project:
-
-```json
-{
-  "Xping": {
-    "ProjectId": "payment-service"
-  }
-}
-```
-
-**Validation Rules** (applied by the platform to a pinned value):
-- **Character Set:** ASCII alphanumeric characters, hyphens (`-`), and underscores (`_`) only
-- **Format:** Must start with an alphanumeric character (a-z, 0-9), followed by any combination of alphanumeric, hyphens, or underscores
-- **Whitespace:** No spaces or whitespace characters allowed (including internal whitespace)
-- **Maximum Length:** 128 characters
-- **Normalization:** Automatically converted to lowercase, so `"my-app"` and `"My-App"` are the same project
-- A blank value (`""`) is treated as unset, not as a pin
-
-> **Important:** A project is identified by its name, and there is no automated migration between projects. Renaming a test assembly therefore starts a *new* project and leaves the old history behind — as does changing a pinned `ProjectId`. Pin a value if you expect to rename the assembly.
-
-> **Note:** Because a solution-wide run can create several projects at once, a first run on a plan with a low project limit may hit that limit. Pin a `ProjectId` to report into a single project instead.
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "ProjectId": "payment-service"
-  }
-}
-```
+Set `ProjectId` to send every test assembly of the session to one project, for example in a
+monorepo where several test assemblies test one product:
 
 ```bash
 export XPING_PROJECTID="payment-service"
 ```
 
-```csharp
-var config = new XpingConfiguration
-{
-    ProjectId = "payment-service"
-};
-XpingContext.Initialize(config);
-```
+Xping Cloud applies these rules to the value:
 
-**In the `xping` CLI:** the CLI uses the same value to bind local runs to a Cloud project when it adds Cloud data to `xping report`.
+- Only ASCII letters, digits, `-` and `_`. It starts with a letter or a digit.
+- At most 128 characters. No spaces.
+- It is converted to lowercase, so `My-App` and `my-app` are one project.
+- A blank value counts as unset.
 
-**Project organization strategies:**
-- **Monorepo:** Use separate project IDs per component (`"web-api"`, `"web-ui"`, `"worker"`)
-- **Multi-repo:** Use repository name or service name
-- **Environment separation:** Include environment suffix (`"myapp-prod"`, `"myapp-staging"`)
+Xping Cloud identifies a project by its name. Renaming a test assembly, or changing `ProjectId`,
+starts a new project, and the old history stays in the old one. On a plan with a low project
+limit, a solution-wide run can reach the limit on its first upload. Set `ProjectId` to use one
+project instead.
 
----
-
-## Batching & Upload Settings
+**In the `xping` CLI:** the CLI uses the same value to find the Xping Cloud project of a local run.
 
 ### BatchSize
 
-**Type:** `int`  
-**Default:** `100`  
-**Valid Range:** `1` to `1000`  
-**Environment Variable:** `XPING_BATCHSIZE`
+**Type:** `int`
+**Default:** `100`
+**Valid range:** `1` to `1000`
+**Environment variable:** `XPING_BATCHSIZE`
 
-Number of test executions to accumulate before automatically uploading to Xping.
+**Cloud mode only.** In Cloud mode, the SDK uploads during the session as well as at its end:
 
-**Upload triggers:**
-1. When `BatchSize` test executions are collected (e.g., 100 tests)
-2. When `FlushInterval` timer fires (e.g., every 30 seconds)
-3. **When test session completes** (via `FinalizeAndShutdownAsync()`; automatic under xUnit)
+1. When `BatchSize` executions are waiting
+2. When the [FlushInterval](#flushinterval) timer fires
+3. When the session ends: the rest, in the final upload
 
-This means even small test suites (e.g., 10 tests) will upload immediately when the test session ends, regardless of batch size.
-
-**Performance considerations:**
-- **Small batches (10-50):** Faster mid-run visibility, more API calls, higher overhead
-- **Medium batches (100-200):** Balanced for most scenarios (recommended)
-- **Large batches (500-1000):** Fewer API calls during execution, higher memory usage
-
-**When to adjust:**
-- **Increase** for large test suites (1000+ tests) to reduce API call frequency during test execution
-- **Decrease** for real-time monitoring during development (see results before suite completes)
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "BatchSize": 200
-  }
-}
-```
+A smaller batch shows results in Xping Cloud sooner and makes more uploads. A larger batch makes
+fewer uploads. In every mode, the SDK keeps every execution in memory until the session ends,
+because it writes the whole session to the local store.
 
 ```bash
 export XPING_BATCHSIZE="200"
 ```
 
----
-
 ### FlushInterval
 
-**Type:** `TimeSpan`  
-**Default:** `00:00:30` (30 seconds)  
-**Valid Range:** Must be greater than zero  
-**Environment Variable:** `XPING_FLUSHINTERVAL`
+**Type:** `TimeSpan`
+**Default:** `00:00:30`
+**Valid range:** greater than zero
+**Environment variable:** `XPING_FLUSHINTERVAL` (whole seconds or `hh:mm:ss`)
 
-Maximum time to wait before uploading accumulated test executions, even if `BatchSize` hasn't been reached. This is a timer-based flush that runs periodically during test execution.
-
-**Important:** At the end of your test session, `FinalizeAndShutdownAsync()` will upload any remaining tests immediately, regardless of this interval.
-
-**Format:**
-- JSON: `"HH:MM:SS"` format (e.g., `"00:01:00"` for 1 minute)
-- Environment variable: Seconds as integer (e.g., `"60"`) or TimeSpan string
-- Programmatic: `TimeSpan` object
-
-**Usage scenarios:**
-- **Short intervals (5-15s):** See results quickly during development (uploads every 5-15s)
-- **Medium intervals (30-60s):** Standard CI/CD pipelines (balanced)
-- **Long intervals (2-5m):** Large batch jobs where you only need final results
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "FlushInterval": "00:01:00"
-  }
-}
-```
+**Cloud mode only.** The time between uploads during the session. The upload at the end of the
+session does not wait for it. In `LocalOnly` mode, the SDK starts no timer.
 
 ```bash
-# As seconds
 export XPING_FLUSHINTERVAL="60"
-
-# As TimeSpan
-export XPING_FLUSHINTERVAL="00:01:00"
 ```
-
-```csharp
-var config = new XpingConfiguration
-{
-    FlushInterval = TimeSpan.FromMinutes(1)
-};
-XpingContext.Initialize(config);
-```
-
----
 
 ### UploadTimeout
 
-**Type:** `TimeSpan`  
-**Default:** `00:00:30` (30 seconds)  
-**Valid Range:** `00:00:01` (1 second) to `1.00:00:00` (1 day)  
-**Environment Variable:** `XPING_UPLOADTIMEOUT`
+**Type:** `TimeSpan`
+**Default:** `00:00:30`
+**Valid range:** 1 second to 1 day
+**Environment variable:** `XPING_UPLOADTIMEOUT` (whole seconds or `hh:mm:ss`)
 
-Timeout for a single upload attempt. An attempt that doesn't complete within this time is retried according to `MaxRetries` and `RetryDelay`. The whole upload, retries included, gives up after `2 × UploadTimeout` (60 seconds by default), so a failing upload can't hold up the end of a test run. Each retry is cut short if that cap is reached first, and later retries are skipped.
-
-**When to adjust:**
-- **Increase** for slow network connections or large batches
-- **Decrease** for fast failure detection in reliable networks
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "UploadTimeout": "00:01:00"
-  }
-}
-```
+The time limit of one upload attempt. An attempt that takes longer is retried, as
+[MaxRetries](#maxretries) allows. The whole upload, retries and delays included, stops after
+`2 × UploadTimeout` (60 seconds by default), so a failing upload cannot hold up the end of a test
+run.
 
 ```bash
 export XPING_UPLOADTIMEOUT="60"
 ```
 
----
-
-## Reliability & Retry Settings
-
 ### MaxRetries
 
-**Type:** `int`  
-**Default:** `3`  
-**Valid Range:** `0` to `10`  
-**Environment Variable:** `XPING_MAXRETRIES`
+**Type:** `int`
+**Default:** `3`
+**Valid range:** `0` to `10`
+**Environment variable:** `XPING_MAXRETRIES`
 
-Maximum number of retry attempts for failed upload operations. Retries use exponential backoff based on `RetryDelay`.
+How many times the SDK retries a failed upload. `0` turns off retries.
 
-**Retry behavior:**
-- **0 retries:** Fail immediately on first error
-- **1-3 retries:** Standard resilience (recommended)
-- **4-10 retries:** High resilience for unreliable networks
+The SDK retries:
 
-**Retried errors:**
-- Network timeouts
-- HTTP 5xx errors (server errors)
-- HTTP 429 (rate limiting)
-- Transient network failures
+- HTTP 5xx responses and HTTP 429
+- Network errors and timeouts
 
-**Not retried:**
-- HTTP 4xx errors (except 429) - indicates client error
-- Authentication failures (401, 403)
-- Validation errors (400)
+It does not retry any other 4xx response, such as 400, 401 or 403.
 
-**Example:**
-
-```json
-{
-  "Xping": {
-    "MaxRetries": 5
-  }
-}
-```
+When at least half of the upload attempts in 30 seconds fail with a 5xx response, a network error
+or a timeout, and there were at least 10 attempts, the SDK stops uploading for 30 seconds. Retries
+count as attempts. It logs
+`Circuit breaker is open: Too many consecutive failures`.
 
 ```bash
 export XPING_MAXRETRIES="5"
 ```
 
----
-
 ### RetryDelay
 
-**Type:** `TimeSpan`  
-**Default:** `00:00:02` (2 seconds)  
-**Valid Range:** `00:00:00` to `1.00:00:00` (1 day)  
-**Environment Variable:** `XPING_RETRYDELAY`
+**Type:** `TimeSpan`
+**Default:** `00:00:02`
+**Valid range:** 0 to 1 day
+**Environment variable:** `XPING_RETRYDELAY` (whole seconds or `hh:mm:ss`)
 
-Base delay for exponential backoff between retry attempts. The delay roughly doubles with each retry, and jitter randomizes every delay so parallel runs don't retry in lockstep. Don't rely on exact retry times.
-
-With `RetryDelay = 2s` and `MaxRetries = 3`, the retries come after delays of roughly 2s, 4s and 8s.
-
-Each attempt is capped at `UploadTimeout`, and the whole upload, retries and delays included, at `2 × UploadTimeout`. Retries still due after that cap are skipped, so a long `RetryDelay` can leave fewer retries than `MaxRetries`.
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "RetryDelay": "00:00:05"
-  }
-}
-```
+The base delay between retries. The delay doubles with each retry, and the SDK adds a random part,
+so that parallel runs do not retry at the same moment. With the defaults, the retries come after
+about 2, 4 and 8 seconds. The `2 × UploadTimeout` limit still applies, so a long delay can leave
+fewer retries than `MaxRetries`.
 
 ```bash
 export XPING_RETRYDELAY="5"
 ```
 
----
-
-## Environment Settings
-
-### Environment
-
-**Type:** `string`  
-**Default:** `"Default"`  
-**Environment Variable:** `XPING_ENVIRONMENT`
-
-The **deployed environment your tests targeted** - `Staging`, `Production`, `QA`. Confidence
-scores are computed per (test, environment), so this is the axis along which Xping Cloud compares
-a test's behaviour between deployments.
-
-It is *not* a label for where the suite ran. A developer's laptop run and the CI run of the same
-suite belong to the same environment, because they *are* the same environment; what differs is how
-far the revision under test can be trusted, and Xping Cloud records that separately from the commit
-SHA and pull-request flag. Recording them as two environments would halve the evidence on both
-sides and produce a "gap between environments" finding that is really the gap between a laptop and
-a build agent.
-
-**Resolution:**
-
-1. The `Environment` setting - from `XPING_ENVIRONMENT`, `appsettings.json`, or code
-2. `"Default"` when nothing was set
-
-Two rungs, and nothing is inferred from the host. Every distinct environment name in your data
-traces to a decision somebody made.
-
-**Common values:**
-- `"Default"` - nothing configured; you have one environment and nothing to compare
-- `"Staging"` - the staging deployment
-- `"Production"` - the production deployment
-- `"QA"` - the QA deployment
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "Environment": "Staging"
-  }
-}
-```
-
-```bash
-export XPING_ENVIRONMENT="Staging"
-```
-
-#### Set one name per deployment, not per run
-
-Avoid names that vary run to run - one per pull request, per branch, or per build agent. Each new
-name permanently splits that test's scored history, and the distinction you are reaching for is
-already recorded. A handful of stable names is the goal; most projects need none at all.
-
-#### `ASPNETCORE_ENVIRONMENT` and `DOTNET_ENVIRONMENT` are not read
-
-These answer a different question: how the app under test should configure *itself*, not which
-deployment your suite pointed at. They also fire by accident. A CI job running inside a container
-whose base image carries `ENV ASPNETCORE_ENVIRONMENT=Production` would stamp every pipeline run
-`"Production"` while developer runs said otherwise - a CI-vs-local split wearing a
-Development-vs-Production costume, and a convincing one, because the resulting "Production gap"
-looks like a real finding.
-
-If you do want that value, pass it through explicitly. Do it in the shell, so the variable is read
-from the process the tests actually run in:
-
-```yaml
-- name: Run tests
-  run: XPING_ENVIRONMENT="$ASPNETCORE_ENVIRONMENT" dotnet test
-```
-
-Note that `${{ env.ASPNETCORE_ENVIRONMENT }}` will **not** work here. GitHub Actions' `env` context
-only exposes variables declared in a workflow, job or step `env:` block; it cannot see one set by
-the runner image, a container `ENV`, or an earlier step's `export` - which is exactly the case worth
-passing through. The expression would silently expand to nothing.
-
-One line, explicit, and it cannot fire by accident.
-
-#### CI detection still happens
-
-Dropping the CI-vs-local distinction from `Environment` does not stop Xping detecting CI. Every run
-still records `IsCIEnvironment`, an `ExecutionContext` custom property (`"CI"` or `"Local"`), the
-detected platform, and its build metadata - branch, commit SHA, run ID, actor. Those are
-diagnostics attached to the run rather than a second scoring axis.
-
----
-
-### DefaultBranch
-
-**Type:** `string`  
-**Default:** *(none)*  
-**Environment Variable:** `XPING_DEFAULTBRANCH`
-
-The branch Xping Cloud treats as the repository's default branch for this pipeline's runs. Xping
-Cloud counts a CI push to the default branch as a **Canonical** run, which carries full weight in
-confidence scoring; a push to any other branch counts for less.
-
-The SDK reads the default branch from the platform on GitHub Actions and GitLab CI. Other platforms
-don't report one, so Xping Cloud uses the project's default branch setting, then `main` or
-`master`. Set `DefaultBranch` when that guess is wrong and you'd rather configure it in the
-pipeline - a repository whose default branch is `develop` or `trunk` on Azure DevOps or Jenkins, for
-example - or when a pipeline should treat another branch as its baseline.
-
-The default branch of a run is resolved in this order:
-
-1. `DefaultBranch` / `XPING_DEFAULTBRANCH`
-2. The value the CI platform reports (GitHub Actions, GitLab CI)
-3. The project's default branch setting in Xping Cloud
-4. `main` or `master`
-
-Notes:
-
-- It is sent only from CI. Local runs are never Canonical, so it has no use there.
-- It is reduced to a bare branch name, as the branch of the run is: a leading `refs/heads/`,
-  `refs/remotes/origin/` or `origin/` is removed, so Jenkins' `GIT_BRANCH` (`origin/main`) can be
-  passed through as is. Branch names are compared case-sensitively.
-- It changes nothing on TeamCity: the SDK reports no branch there, so Xping Cloud can't place the run.
-- It applies to new runs only. Runs already recorded keep their classification.
-
-**Use with care.** On GitHub Actions and GitLab CI it replaces a value read from the platform itself.
-A stale setting - a repository renamed `master` to `main`, or a value copied into a shared pipeline
-template - silently stops every Canonical run. When the setting differs from what the platform
-reports, the SDK logs a warning naming both values, so check the build log. Two pipelines of one
-project with different values both produce Canonical runs, so the confidence evidence mixes both
-branches at full weight. The setting also beats the project setting in Xping Cloud, so it can't be
-overridden from there.
-
-**Examples:**
-
-```bash
-export XPING_DEFAULTBRANCH="develop"
-```
-
-```json
-{
-  "Xping": {
-    "DefaultBranch": "develop"
-  }
-}
-```
-
----
-
-## Feature Flags
-
-### Enabled
-
-**Type:** `bool`  
-**Default:** `true`  
-**Environment Variable:** `XPING_ENABLED`
-
-Master switch to enable or disable the entire SDK. When disabled, Xping operates as a no-op—tests run normally but no tracking occurs.
-
-**Use cases:**
-- Temporarily disable tracking without removing SDK code
-- Feature flags for gradual rollout
-- Debugging test failures potentially caused by SDK
-- Conditional enabling based on environment or configuration
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "Enabled": false
-  }
-}
-```
-
-```bash
-export XPING_ENABLED="false"
-```
-
-```csharp
-// Conditional configuration based on environment
-var config = new XpingConfiguration
-{
-    // Disable in development, enable in CI
-    Enabled = Environment.GetEnvironmentVariable("CI") != null
-};
-XpingContext.Initialize(config);
-```
-
----
-
-### UploadStackTraces
-
-**Type:** `bool`  
-**Default:** `false`  
-**Environment Variable:** `XPING_UPLOADSTACKTRACES`
-
-Whether failed tests' stack traces are sent to Xping Cloud. Off by default, because a stack trace can contain source paths, file names and details of your code.
-
-What happens either way:
-- **The local store always keeps the full stack trace.** It stays on your machine, and `xping report` needs it to group failures.
-- **The upload always carries a stack trace hash.** It is built from the method signatures of up to five of your own frames, with no file paths or line numbers. Xping Cloud uses it to group failures that share a cause.
-- **With `false` (the default),** a failed test with a trace is uploaded with `stackTraceOmitted: true` and no stack trace text. Xping Cloud can tell this apart from a failure that had no trace.
-- **With `true`,** the stack trace text is uploaded too. Xping Cloud features that read it, such as failure frames on pull requests and AI failure summaries, need it.
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "UploadStackTraces": true
-  }
-}
-```
-
-```bash
-export XPING_UPLOADSTACKTRACES="true"
-```
-
----
-
 ### EnableCompression
 
-**Type:** `bool`  
-**Default:** `true`  
-**Environment Variable:** `XPING_ENABLECOMPRESSION`
+**Type:** `bool`
+**Default:** `true`
+**Environment variable:** `XPING_ENABLECOMPRESSION`
 
-Compress upload payloads using gzip compression. Significantly reduces bandwidth usage with minimal CPU overhead.
-
-**Typical compression ratios:**
-- JSON test data: 60-80% size reduction
-- With stack traces: 70-85% size reduction
-
-**When to disable:**
-- Debugging network issues (inspect uncompressed payloads)
-- Very constrained CPU environments (rare)
-- Proxy/firewall issues with compressed content
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "EnableCompression": false
-  }
-}
-```
+Compresses each upload with gzip. Turn it off only to read the uploaded requests while you debug a
+network problem, or when a proxy rejects compressed requests.
 
 ```bash
 export XPING_ENABLECOMPRESSION="false"
@@ -724,638 +324,494 @@ export XPING_ENABLECOMPRESSION="false"
 
 ---
 
+## Environment and branches
+
+### Environment
+
+**Type:** `string`
+**Default:** `Default`
+**Environment variable:** `XPING_ENVIRONMENT`
+
+The **deployed environment your tests target**, such as `Staging` or `Production`. Xping Cloud
+scores each test separately for each environment.
+
+It is not a name for where the tests ran. A developer's run and the CI run of the same suite
+against the same deployment belong to one environment. The SDK records whether a run is on CI, and
+which branch and commit it tested, in other fields. See
+[Data Xping collects](collected-data.md#the-environment).
+
+- Set it only when a pipeline tests a different deployment.
+- Use a few stable names. Do not use a name that changes from run to run, such as one for each pull
+  request, branch or build agent: each new name splits the history of every test.
+- When you test one deployment, leave it unset.
+
+```bash
+export XPING_ENVIRONMENT="Staging"
+```
+
+**The SDK does not read `ASPNETCORE_ENVIRONMENT` or `DOTNET_ENVIRONMENT` for this setting.** These
+variables tell the application how to configure itself, and a container image often sets them. To
+use one, pass it in the shell of the test step:
+
+```yaml
+- name: Run tests
+  shell: bash
+  run: XPING_ENVIRONMENT="$ASPNETCORE_ENVIRONMENT" dotnet test
+```
+
+On GitHub Actions, `${{ env.ASPNETCORE_ENVIRONMENT }}` does not work for this. The `env` context
+holds only the variables that the workflow declares, not the ones the runner image or a container
+sets.
+
+### DefaultBranch
+
+**Type:** `string`
+**Default:** *(none)*
+**Environment variable:** `XPING_DEFAULTBRANCH`
+
+The branch Xping Cloud treats as the repository's default branch for this pipeline's runs. Xping
+Cloud counts a CI push to the default branch as a Canonical run, the strongest evidence behind a
+confidence score.
+
+The default branch of a run comes from the first of these that has a value:
+
+1. `DefaultBranch` / `XPING_DEFAULTBRANCH`
+2. The value the CI platform reports. Only GitHub Actions and GitLab CI/CD report one.
+3. The project's default branch setting in Xping Cloud
+4. `main` or `master`
+
+- The SDK sends it only from CI.
+- The SDK removes a leading `refs/heads/`, `refs/remotes/origin/` or `origin/`, so you can pass
+  Jenkins' `GIT_BRANCH` (`origin/main`) as it is. Branch names are case-sensitive.
+- On TeamCity it has no effect, because the SDK reports no branch there.
+- It applies to new runs only.
+
+**Use it with care.** It replaces the value GitHub Actions and GitLab CI/CD report, and it wins
+over the project's setting in Xping Cloud. A stale value, for example in a shared pipeline
+template, stops every Canonical run. When the value differs from what the platform reports, the SDK
+logs a warning that names both.
+
+```bash
+export XPING_DEFAULTBRANCH="develop"
+```
+
+---
+
+## What the SDK records
+
+[Data Xping collects](collected-data.md) lists every field, and which of these switches controls
+it.
+
+### Enabled
+
+**Type:** `bool`
+**Default:** `true`
+**Environment variable:** `XPING_ENABLED`
+
+Turns the SDK off without removing it from the test project. With `false`, the tests run as usual.
+The SDK records nothing and prints
+`SDK is disabled via configuration (Enabled=false). Tests will run without observability tracking.`
+It prints the same line for `Mode = Disabled`.
+
+```bash
+export XPING_ENABLED="false"
+```
+
+### UploadStackTraces
+
+**Type:** `bool`
+**Default:** `false`
+**Environment variable:** `XPING_UPLOADSTACKTRACES`
+
+Uploads the stack trace text of failed tests to Xping Cloud. It is off by default, because a stack
+trace can contain source paths, file names and details of your code.
+
+- The local store always keeps the full stack trace. `xping report` needs it to group failures.
+- The upload always carries a hash of the stack trace. The hash covers the method names of up to
+  five of your own frames, without file paths or line numbers. Xping Cloud groups failures by it.
+- With `false`, a failed test with a trace is uploaded with `stackTraceOmitted: true` and no trace
+  text.
+- With `true`, the SDK uploads the trace text too. The Xping Cloud features that read it, such as
+  the failure frames in pull request comments and AI failure summaries, need it.
+
+```bash
+export XPING_UPLOADSTACKTRACES="true"
+```
+
 ### EnablePullRequestDetection
 
 **Type:** `bool`
 **Default:** `true`
-**Environment Variable:** `XPING_ENABLEPULLREQUESTDETECTION`
+**Environment variable:** `XPING_ENABLEPULLREQUESTDETECTION`
 
-Detect pull request context from CI/CD environment variables and include it in session uploads. When enabled, Xping reads PR metadata (PR number, branch, platform) from the CI environment to enable automatic PR comment posting with test results.
+Records the pull request a CI build belongs to: its number, branches, head commit and author. Xping
+Cloud uses it to file the run under the PR and to post the
+[pull request comment](../cloud/reading-the-pr-comment.md). Turn it off to send no PR context.
 
-**Supported platforms:**
-- GitHub Actions on github.com, GHE.com and GitHub Enterprise Server (via `GITHUB_EVENT_NAME`, `GITHUB_REF`, etc.; the server comes from `GITHUB_SERVER_URL`). The commit is the PR head, read from `pull_request.head.sha` in the event payload at `GITHUB_EVENT_PATH`.
-- GitLab CI merge request pipelines on gitlab.com and self-managed instances (`CI_MERGE_REQUEST_IID` set; the server comes from `CI_SERVER_URL`). The commit is `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` in merged-results pipelines, otherwise `CI_COMMIT_SHA`.
-- Azure Pipelines PR builds (`BUILD_REASON=PullRequest`) for Azure Repos (Azure DevOps Services or Server, from `SYSTEM_COLLECTIONURI`) and GitHub repositories (github.com, GHE.com or GitHub Enterprise Server, from `BUILD_REPOSITORY_URI`). The commit is `SYSTEM_PULLREQUEST_SOURCECOMMITID`.
-- Jenkins multibranch (Branch Source) PR builds (`CHANGE_ID` set) for GitHub, GitLab and Azure DevOps repositories on any server, identified from `CHANGE_URL`. The commit is the PR head, read from `refs/remotes/origin/$BRANCH_NAME` in the workspace's `.git` directory and used only when it is `GIT_COMMIT` or its first parent, so both the merge and head strategies are supported. GHPRB jobs aren't supported.
+The SDK detects PR context on:
 
-Every PR context records the server it came from (`https://github.com`, `https://ghes.example.com`, …), so the same `owner/name` on two servers stays two repositories. Xping Cloud posts PR comments only for github.com repositories; on other servers the PR context still drives PR insights and links.
+- GitHub Actions, on github.com, GHE.com and GitHub Enterprise Server
+- GitLab CI/CD merge request pipelines, on gitlab.com and self-managed instances
+- Azure Pipelines PR builds, for Azure Repos and GitHub repositories
+- Jenkins multibranch PR builds, for GitHub, GitLab and Azure DevOps repositories
 
-**When to disable:**
-- You don't use PR comment posting and want to skip the detection overhead
-- You're running in a non-PR build and want to suppress any PR context association
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "EnablePullRequestDetection": false
-  }
-}
-```
+[Which commit is recorded](collected-data.md#which-commit-is-recorded) lists the variables each
+platform reads. [Set up CI](../getting-started/ci-cd-setup.md#jenkins) says what Jenkins needs.
 
 ```bash
 export XPING_ENABLEPULLREQUESTDETECTION="false"
 ```
 
-```csharp
-var config = new XpingConfigurationBuilder()
-    .WithPullRequestDetection(false)
-    .Build();
-XpingContext.Initialize(config);
-```
-
----
-
 ### CollectLocalGitAuthor
 
-**Type:** `bool`  
-**Default:** `false`  
-**Environment Variable:** `XPING_COLLECTLOCALGITAUTHOR`
+**Type:** `bool`
+**Default:** `false`
+**Environment variable:** `XPING_COLLECTLOCALGITAUTHOR`
 
-When running on a developer machine (not a CI environment) inside a git repository, controls whether the SDK reads the author name from `[user] name` in the repository's `.git/config`, or else in the user's global git config (`~/.gitconfig`, then `$XDG_CONFIG_HOME/git/config`), and includes it as the `Git.Actor` custom property in environment metadata.
+On a run outside CI, inside a git repository, records the git author name as the `Git.Actor`
+property. The SDK reads `[user] name` from the repository's `.git/config`, or else from your global
+git config (`~/.gitconfig`, then `$XDG_CONFIG_HOME/git/config`).
 
-This setting is **disabled by default** because `user.name` in `.git/config` is typically a developer's real full name — collecting and uploading it without explicit consent is a PII concern. Enable it only when your team is aware and has agreed to share this information.
+It is off by default, because the git author name is usually a person's full name. Turn it on only
+when your team agrees to share it.
 
-**When enabled, the following custom property is populated:**
-- `Git.Actor` — value of `[user] name` from the repository's `.git/config`, or else from the global git config
-
-**This setting has no effect when:**
-- Running in a CI environment (`IsCIEnvironment = true`) — CI actor comes from the CI provider's environment variables instead
-- Running outside a git repository
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "CollectLocalGitAuthor": true
-  }
-}
-```
+It has no effect on CI, where the person behind the run comes from the CI platform, or outside a
+git repository.
 
 ```bash
 export XPING_COLLECTLOCALGITAUTHOR="true"
 ```
 
-```csharp
-var config = new XpingConfiguration
-{
-    CollectLocalGitAuthor = true
-};
-XpingContext.Initialize(config);
-```
-
----
-
 ### CollectCiActorEmail
 
-**Type:** `bool`  
-**Default:** `false`  
-**Environment Variable:** `XPING_COLLECTCIACTOREMAIL`
+**Type:** `bool`
+**Default:** `false`
+**Environment variable:** `XPING_COLLECTCIACTOREMAIL`
 
-On a CI run, set this to `true` to record the email address the platform gives for the person
-behind the run as the `CI.ActorEmail` custom property. It is read from `BUILD_REQUESTEDFOREMAIL`
-(Azure Pipelines), `GITLAB_USER_EMAIL` (GitLab), `CHANGE_AUTHOR_EMAIL` or `ghprbPullAuthorEmail`
-(Jenkins) and `APPVEYOR_REPO_COMMIT_AUTHOR_EMAIL` (AppVeyor).
+On a CI run, records the email address that the platform gives for the person behind the run, as
+the `CI.ActorEmail` property. The SDK reads it from `BUILD_REQUESTEDFOREMAIL` (Azure Pipelines),
+`GITLAB_USER_EMAIL` (GitLab), `CHANGE_AUTHOR_EMAIL` or `ghprbPullAuthorEmail` (Jenkins) and
+`APPVEYOR_REPO_COMMIT_AUTHOR_EMAIL` (AppVeyor).
 
-It is off by default because an email address is personal data. Xping Cloud uses it only to link a
-committer to a workspace member automatically; it never counts committers by it. With it off,
-committers are still counted from `CI.Actor`. On Azure Pipelines, GitLab, Jenkins and AppVeyor an
-Owner or Admin then links them to members by hand. GitHub Actions links by actor id and login, so it
-is not affected. See
-[Who is behind the run](collected-data.md#who-is-behind-the-run).
+It is off by default, because an email address is personal data. Xping Cloud does not count
+committers by it. It uses it only to link a committer to a workspace member automatically on Azure
+Pipelines, GitLab, Jenkins and AppVeyor. Without it, an Owner or Admin links them by hand. GitHub
+Actions is not affected. See [Who is behind the run](collected-data.md#who-is-behind-the-run).
 
-**This setting has no effect on:**
-- Local runs, which never send `CI.ActorEmail`
-- `CI.Actor` and `CI.ActorId`, which are sent either way
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "CollectCiActorEmail": true
-  }
-}
-```
+It has no effect on local runs, or on `CI.Actor` and `CI.ActorId`, which the SDK sends either way.
 
 ```bash
 export XPING_COLLECTCIACTOREMAIL="true"
 ```
 
-```csharp
-var config = new XpingConfiguration
-{
-    CollectCiActorEmail = true
-};
-XpingContext.Initialize(config);
-```
-
 ---
 
-## Advanced Settings
+## Logging and errors
 
 ### LogLevel
 
-**Type:** `Microsoft.Extensions.Logging.LogLevel`  
-**Default:** `Information`  
-**Environment Variable:** `XPING_LOGLEVEL`
+**Type:** `Microsoft.Extensions.Logging.LogLevel`
+**Default:** `Information`
+**Environment variable:** `XPING_LOGLEVEL` (not case-sensitive)
 
-The lowest level of SDK message written to the console. The values are `Trace`, `Debug`,
-`Information`, `Warning`, `Error`, `Critical` and `None`. The environment variable is not case
-sensitive; a value it does not recognise is ignored.
+The lowest level of SDK message that is printed: `Trace`, `Debug`, `Information`, `Warning`,
+`Error`, `Critical` or `None`. The SDK prints messages below `Warning` to stdout, and `Warning` and
+higher to stderr.
 
-Set it to `Debug` when the SDK is quieter than you expect. Debug messages explain failures the SDK
-otherwise absorbs so it never breaks your test run, such as a local store that could not be written
-or a CI platform whose PR context was skipped. `None` silences the SDK.
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "LogLevel": "Debug"
-  }
-}
-```
+Set it to `Debug` when the SDK is quieter than you expect. Debug messages explain failures that the
+SDK absorbs so that it never breaks your test run, such as a local store that it could not write.
+`None` silences the SDK.
 
 ```bash
 export XPING_LOGLEVEL="Debug"
 ```
 
 ```csharp
-var config = new XpingConfiguration
-{
-    LogLevel = LogLevel.Debug // using Microsoft.Extensions.Logging;
-};
-XpingContext.Initialize(config);
-```
+using Microsoft.Extensions.Logging;
+using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.NUnit; // your adapter's namespace
 
----
+XpingContext.Initialize(new XpingConfiguration { LogLevel = LogLevel.Debug });
+```
 
 ### StrictMode
 
-**Type:** `bool`  
-**Default:** `false`  
-**Environment Variable:** `XPING_STRICTMODE`
+**Type:** `bool`
+**Default:** `false`
+**Environment variable:** `XPING_STRICTMODE`
 
-Controls how the SDK responds to errors that prevent proper test observability.
+By default, the SDK never fails your test run. When it cannot start or cannot upload, it logs the
+error and the tests run as usual. In strict mode, the same errors fail the test run, so a CI
+pipeline fails when it cannot record its tests.
 
-- **`false` (default — resilient mode):** Configuration and network errors are logged and the SDK silently continues or is disabled. Tests always run without interruption.
-- **`true` (strict mode):** In the core SDK, any error that prevents test data from being collected or uploaded is surfaced by throwing `XpingConfigurationException` or `XpingNetworkException`. The provided NUnit, xUnit, and MSTest adapters turn them into a failed run, so CI pipelines fail when observability cannot be guaranteed.
-
-Strict mode is recommended for production CI/CD pipelines where you want to guarantee observability is always active, rather than letting it silently degrade.
-
-How the run fails:
-
-| Error | Adapter | What you see |
+| What goes wrong | Default | Strict mode |
 |---|---|---|
-| Configuration error, at startup | all | The test process terminates (`Environment.FailFast`) before any test runs. |
-| SDK fails to start, such as an `appsettings.json` that does not parse | all | Same as a configuration error. Strict mode must then come from `XPING_STRICTMODE`, `Xping__StrictMode`, or code: the SDK cannot read it from the file that failed. |
-| Upload error, at the end of the run | xUnit | An error from the runner (`Catastrophic failure: XpingNetworkException`). |
-| | MSTest | `[AssemblyCleanup]` fails. MSTest reports it on the last test result, so that test shows as failed. |
-| | NUnit on vstest | The test process terminates once the test host has sent its results, about two seconds after the upload fails. `dotnet test` reports the run as aborted. |
-| | NUnit on Microsoft.Testing.Platform | The test executable exits with code 1 after writing its reports. `dotnet test` reports the run as failed. |
+| No API key, `Mode` is `Auto` | The SDK runs local-only | The test run fails before any test runs |
+| No API key, `Mode` is `Cloud` | The SDK logs the error and records nothing | The test run fails before any test runs |
+| An invalid setting, such as `BatchSize = 2000` | The SDK logs the error and records nothing. See [What the SDK prints](#what-the-sdk-prints). | The test run fails before any test runs |
+| The SDK fails to start, for example because `appsettings.json` does not parse | The SDK prints `[Xping] SDK initialization failed`, and the tests run unrecorded | The test run fails before any test runs |
+| An upload fails | The SDK logs the error. The local store still gets the session. | The test run fails at its end |
 
-In every case `dotnet test` exits non-zero, and every test that ran stays in TRX and other reports.
+When the SDK cannot start in strict mode, the test process stops (`Environment.FailFast`) before
+any test runs. Strict mode must then come from `XPING_STRICTMODE`, `Xping__StrictMode` or code,
+because the SDK cannot read it from a file that does not parse.
 
-> **NUnit and MSTest:** an upload error surfaces when the session ends, in your `[OneTimeTearDown]` or `[AssemblyCleanup]`. Call `XpingContext.FinalizeAndShutdownAsync()` there. Under NUnit it is what fails the run: `FinalizeAsync()` only throws, NUnit logs that as a warning, and `dotnet test` exits with code 0. Under MSTest an exception from `FinalizeAsync()` fails the run too, but it leaves the host running.
+When an upload fails in strict mode, each adapter fails the run in its own way. Every test that ran
+stays in the TRX file and the other reports, and `dotnet test` exits with a non-zero code.
 
-**When the SDK cannot start in resilient mode,** it prints `[Xping] SDK initialization failed: <reason>` once and the tests run untracked. Where that line shows up depends on the runner:
-
-| Runner | Where to look |
+| Adapter and runner | What you see |
 |---|---|
-| NUnit | `dotnet test` output, at the default verbosity. |
-| xUnit (v2 and v3) | `dotnet test -v n`, or the runner's diagnostics with `"diagnosticMessages": true` in `xunit.runner.json`. |
-| MSTest | The output of the first test that ran, kept in TRX (`dotnet test --logger trx`). |
+| xUnit v2 | An error from the runner: `Catastrophic failure: XpingNetworkException` |
+| xUnit v3 on vstest | An error from the runner, which fails the run |
+| xUnit v3 on Microsoft.Testing.Platform | The runner reports the error, and the test executable exits with code 1 after it writes its reports |
+| MSTest | `[AssemblyCleanup]` fails, and MSTest reports it on the last test result |
+| NUnit on vstest | The test process stops about two seconds after the upload fails, once every result has reached `dotnet test`. `dotnet test` reports the run as aborted. |
+| NUnit on Microsoft.Testing.Platform | The test executable exits with code 1 after it writes its reports |
 
-The next run in the same process tries again, so an IDE's test server recovers once the cause is fixed.
-
-**When to use strict mode:**
-- Production CI/CD pipelines where missing Xping configuration or network failures should be a build failure
-- Teams that have fully adopted Xping and want to enforce observability mandatorily
-- Security-sensitive environments where untracked test runs are unacceptable
-
-**When to use resilient mode (default):**
-- Local development and developer onboarding
-- Environments where tests must always run regardless of observability status
-- Gradual SDK adoption across a codebase
-
-**Behavior comparison:**
-
-| Scenario | Resilient Mode (default) | Strict Mode |
-|----------|--------------------------|-------------|
-| Missing `ApiKey` | Error logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
-| Invalid `ApiEndpoint` | Error logged, SDK disabled, tests run | `XpingConfigurationException` thrown, test run fails |
-| SDK fails to start (e.g. `appsettings.json` does not parse) | `[Xping] SDK initialization failed` printed, tests run untracked | Test run fails before any test runs |
-| Network error during upload | Error logged, tests complete without observability data | `XpingNetworkException` thrown, test run fails |
-| Valid configuration + upload succeeds | SDK active, tests tracked | SDK active, tests tracked |
-
-**Example:**
-
-```json
-{
-  "Xping": {
-    "StrictMode": true
-  }
-}
-```
+On NUnit and MSTest, the upload error appears when the session ends, so the `[OneTimeTearDown]` or
+`[AssemblyCleanup]` method must call `XpingContext.FinalizeAndShutdownAsync()`. On NUnit, that call
+is what fails the run: NUnit reports an exception from `[OneTimeTearDown]` only as a warning.
 
 ```bash
-# Enable via environment variable
-export XPING_STRICTMODE="true"
-```
-
-```bash
-# Inline for a single test run
 XPING_STRICTMODE=true dotnet test
 ```
 
-```csharp
-var config = new XpingConfigurationBuilder()
-    .WithApiKey("your-api-key")
-    .WithProjectId("your-project")
-    .WithStrictMode(true)
-    .Build();
-XpingContext.Initialize(config);
-```
+### What the SDK prints
 
-**GitHub Actions example:**
-
-```yaml
-- name: Run Tests
-  env:
-    XPING_APIKEY: ${{ secrets.XPING_APIKEY }}
-    XPING_PROJECTID: ${{ vars.XPING_PROJECTID }}
-    XPING_STRICTMODE: "true"
-  run: dotnet test
-```
-
-**What the SDK prints** (NUnit on vstest, `dotnet test --logger "console;verbosity=normal"`):
+These lines come from an NUnit project on vstest, with
+`dotnet test --logger "console;verbosity=normal"`:
 
 ```
-# Resilient mode (default): configuration error, here XPING_MODE=Cloud without a key
+# Default: a configuration error, here XPING_MODE=Cloud without a key
 [Xping 10:43:01 ERR] Configuration validation failed: ApiKey is required in Cloud mode. SDK disabled - tests will run without observability tracking.
 
-# Strict mode: configuration error
+# Strict mode: a configuration error
 [Xping] Strict mode configuration error: Xping configuration invalid: ApiKey is required when StrictMode is enabled.
 
-# Resilient mode (default): network error
+# Default: an upload error
 [Xping 10:00:08 ERR] Network error occurred → HttpRequestException: Connection refused (127.0.0.1:9)
 
-# Strict mode: network error
+# Strict mode: an upload error
 [Xping] Xping network error in strict mode: HTTP request failed: Connection refused (127.0.0.1:9)
 ```
 
+An invalid value in the configuration object you pass to `Initialize(configuration)` gives another
+line, because the SDK rejects the object before it starts:
+
+```
+[Xping] SDK initialization failed: Xping configuration invalid: BatchSize cannot exceed 1000. Tests run without Xping tracking.
+```
+
+An invalid value from an `XPING_*` variable or from `appsettings.json` gives the
+`Configuration validation failed:` line above.
+
+When the SDK fails to start for any other reason, and strict mode is off, it prints this line once
+and the tests run unrecorded:
+
+```
+[Xping] SDK initialization failed: <reason>. Tests run without Xping tracking.
+```
+
+Where that line appears depends on the runner:
+
+| Runner | Where to look |
+|---|---|
+| NUnit | The `dotnet test` output, at the default verbosity |
+| xUnit (v2 and v3) | `dotnet test -v n`, or the runner's diagnostics with `"diagnosticMessages": true` in `xunit.runner.json` |
+| MSTest | The output of the first test that ran, in the TRX file (`dotnet test --logger trx`) |
+
+The next run in the same process tries again, so an IDE's test server recovers once you fix the
+cause.
+
+### Validation rules
+
+The SDK checks the configuration when it starts. It reports every rule that fails, in one line:
+
+| Setting | Rule | Message |
+|---|---|---|
+| `Mode` | A defined value | `Mode has an undefined value (N). Valid values are Auto, LocalOnly, Cloud, and Disabled.` |
+| `LogLevel` | A defined value | `LogLevel has an undefined value (N). Valid values are Trace, Debug, Information, Warning, Error, Critical, and None.` |
+| `ApiKey` | Set, when the mode resolves to `Cloud` | `ApiKey is required in Cloud mode.` With `StrictMode` on and `Mode` set to `Auto`: `ApiKey is required when StrictMode is enabled.` |
+| `ApiEndpoint` | Set, and an absolute `http` or `https` URL | `ApiEndpoint is required.` / `ApiEndpoint must be a valid HTTP or HTTPS URL.` |
+| `BatchSize` | 1 to 1000 | `BatchSize must be greater than zero.` / `BatchSize cannot exceed 1000.` |
+| `FlushInterval` | Greater than zero | `FlushInterval must be greater than zero.` |
+| `MaxRetries` | 0 to 10 | `MaxRetries cannot be negative.` / `MaxRetries cannot exceed 10.` |
+| `RetryDelay` | 0 to 1 day | `RetryDelay cannot be negative.` / `RetryDelay cannot exceed 1 day.` |
+| `UploadTimeout` | 1 second to 1 day | `UploadTimeout must be at least 1 second.` / `UploadTimeout cannot exceed 1 day.` |
+
+To check a configuration in code, use `XpingConfigurationBuilder.TryBuild`:
+
+```csharp
+using System;
+using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.NUnit; // your adapter's namespace
+
+var builder = new XpingConfigurationBuilder()
+    .WithMode(XpingMode.Cloud)
+    .WithBatchSize(2000);
+
+if (builder.TryBuild(out XpingConfiguration? configuration, out string[] errors))
+{
+    XpingContext.Initialize(configuration!);
+}
+else
+{
+    foreach (string error in errors)
+        Console.WriteLine(error);
+}
+
+// Prints:
+// ApiKey is required in Cloud mode.
+// BatchSize cannot exceed 1000.
+```
+
+`TryBuild` and `Build` check only the values you set on the builder. They do not read `XPING_*`
+variables, which the SDK applies later. So `Build` fails for a builder that sets
+`WithStrictMode(true)` and relies on `XPING_APIKEY` for the key.
+
 ---
 
-## Configuration Examples
+## Local store and CLI
 
+### LocalStorePath
+
+**Type:** `string`
+**Default:** *(none: `.xping/` at the repository root)*
+**Environment variable:** `XPING_LOCAL_STORE`
+
+Moves the [local store](local-store.md). Leave it unset to use `.xping/` at the repository root,
+where `xping report` looks. Set it when the repository is not writable, or when the history must
+live outside a workspace that is deleted between builds.
+
+```bash
+export XPING_LOCAL_STORE="/var/tmp/xping-store"
+```
+
+- The SDK reads `XPING_LOCAL_STORE` once, when it starts. A change during the run does not move
+  where the run is recorded.
+- The CLI reads the same variable, so an exported `XPING_LOCAL_STORE` moves both. Use an absolute
+  path: the SDK and the CLI each read a relative path from their own current directory, and the
+  SDK's is the test project's output folder.
+- The SDK uses the path as it is. When it cannot write there, the run has no local history: the SDK
+  does not fall back to another folder.
+- A path set in code or in `appsettings.json` moves only the SDK. Export the variable for the CLI
+  too. The CLI's `--directory` option changes where the CLI starts looking for the repository. It
+  does not name a store.
 
 ### CloudUrl
 
-**Type:** `string`  
-**Default:** `https://app.xping.io`  
-**Environment Variable:** `XPING_CLOUDURL`
+**Type:** `string`
+**Default:** `https://app.xping.io`
+**Environment variable:** `XPING_CLOUDURL`
 
-CLI only; the SDK does not read it. The Xping Cloud (Portal) URL that `xping login` signs in to and that `xping report` reads Cloud data from. Leave it unset unless you were given another Xping Cloud address.
+CLI only. The Xping Cloud address that `xping login` signs in to, and that `xping report` reads
+Xping Cloud data from. Leave it unset unless you were given another address.
 
-Precedence, highest first: the `--cloud-url` option, `XPING_CLOUDURL`, `Xping__CloudUrl`, then `Xping:CloudUrl` in `appsettings.{environment}.json` and `appsettings.json` of the working directory.
+The first of these that has a value wins: the `--cloud-url` option, `XPING_CLOUDURL`,
+`Xping__CloudUrl`, then `Xping:CloudUrl` in `appsettings.{environment}.json` and `appsettings.json`.
+The CLI reads the files from the current directory, or from the folder that `--directory` names.
 
-The value must be an absolute `https` URL with no path, query or fragment; `http` is accepted only for `localhost` and `127.0.0.1`. Case, a default port and a trailing slash are ignored, so `https://App.Xping.io/` and `https://app.xping.io` are the same sign-in.
+The value must be an absolute `https` URL without a path, query or fragment. `http` is accepted
+only for `localhost` and `127.0.0.1`. Case, a default port and a trailing slash are ignored.
 
 ```bash
 export XPING_CLOUDURL="https://app.xping.io"
 ```
 
-### LocalStorePath
+### XPING_SHELL
 
-**Type:** `string`  
-**Default:** *(unset — resolved to the repository root)*  
-**Environment Variable:** `XPING_LOCAL_STORE`
+CLI only. The shell syntax of the commands that `xping report` prints, such as the command that
+runs a test again: `posix` or `powershell`. Without it, the CLI uses PowerShell syntax on Windows
+and POSIX syntax elsewhere. Set it when your shell differs, for example Git Bash on Windows. For
+any other value, the CLI prints a warning and uses the default. See
+[Known limitations](../troubleshooting/known-limitations.md).
 
-Overrides where the [local store](local-store.md) is kept. Leave it unset for the default — `.xping/` at the repository root, which is where `xping report` looks — and set it only when a run must keep its history somewhere else: a read-only checkout, a container whose source tree is not writable, or a test host that drives the SDK as its subject and must not write next to the real runs.
-
-```csharp
-XpingContext.Initialize(new XpingConfiguration
-{
-    LocalStorePath = Path.Combine(Path.GetTempPath(), "xping-scratch")
-});
+```bash
+export XPING_SHELL="posix"
 ```
 
-The SDK reads `XPING_LOCAL_STORE` once, when it initializes; changing it during the run does not move the run's own history. The CLI reads the same variable, so an exported `XPING_LOCAL_STORE` moves both sides together. A value set in code or `appsettings.json` moves only the SDK; export the variable when running the CLI against it (`--directory` starts the CLI's repository walk somewhere else, it does not name a store).
+---
 
-### Complete JSON Configuration
+## Examples
+
+### appsettings.json
+
+The SDK reads this file only with `XpingContext.Initialize()`, without an argument. Keep the API key
+out of it.
 
 ```json
 {
   "Xping": {
-    "ApiKey": "xpg_live_productionkey",
     "ProjectId": "my-application",
-    "ApiEndpoint": "https://upload.xping.io/v1",
-    "BatchSize": 100,
-    "FlushInterval": "00:00:30",
-    "Environment": "Production",
-    "Enabled": true,
+    "Environment": "Staging",
+    "BatchSize": 200,
+    "FlushInterval": "00:01:00",
     "UploadStackTraces": false,
-    "EnableCompression": true,
-    "MaxRetries": 3,
-    "RetryDelay": "00:00:02",
-    "UploadTimeout": "00:00:30",
-    "EnablePullRequestDetection": true,
-    "CollectLocalGitAuthor": false,
-    "CollectCiActorEmail": false,
     "LogLevel": "Information"
   }
 }
 ```
 
-### Environment-Specific Configuration
-
-**appsettings.Development.json:**
-```json
-{
-  "Xping": {
-    "ApiKey": "xpg_test_developmentkey",
-    "ProjectId": "my-app-dev",
-    "Environment": "Development",
-    "Enabled": true,
-    "BatchSize": 50,
-    "FlushInterval": "00:00:10"
-  }
-}
-```
-
-**appsettings.Production.json:**
-```json
-{
-  "Xping": {
-    "ApiKey": "xpg_live_productionkey",
-    "ProjectId": "my-app-prod",
-    "Environment": "Production",
-    "Enabled": true,
-    "BatchSize": 200,
-    "FlushInterval": "00:01:00"
-  }
-}
-```
-
-### CI/CD Environment Variables (GitHub Actions)
+### CI variables (GitHub Actions)
 
 ```yaml
 env:
   XPING_APIKEY: ${{ secrets.XPING_APIKEY }}
-  XPING_PROJECTID: "my-app"
-  XPING_ENVIRONMENT: "CI"
-  XPING_ENABLED: "true"
-  XPING_BATCHSIZE: "200"
-  XPING_FLUSHINTERVAL: "60"
+  XPING_PROJECTID: "my-application"
+  XPING_STRICTMODE: "true"
 ```
 
-### Programmatic Configuration
+[Set up CI](../getting-started/ci-cd-setup.md) has a full pipeline for each CI platform.
+
+### In code
 
 ```csharp
-using Xping.Sdk.Core;
+using System;
 using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.NUnit; // your adapter's namespace
 
-// Fluent builder pattern
-// XPING_APIKEY is applied automatically, so it does not need reading by hand here.
-var config = new XpingConfigurationBuilder()
-    .WithProjectId("my-application")
-    .WithBatchSize(200)
-    .WithFlushInterval(TimeSpan.FromMinutes(1))
-    .WithEnvironment("Staging")
-    .WithMaxRetries(5)
-    .Build();
-
-XpingContext.Initialize(config);
-
-// Direct configuration
-var directConfig = new XpingConfiguration
+// XPING_APIKEY still applies on top of this object.
+XpingContext.Initialize(new XpingConfiguration
 {
-    ApiKey = "xpg_live_productionkey",
-    ProjectId = "my-app",
-    BatchSize = 150,
-    EnableCompression = true
-};
-XpingContext.Initialize(directConfig);
+    ProjectId = "my-application",
+    BatchSize = 200,
+    FlushInterval = TimeSpan.FromMinutes(1),
+});
 ```
 
-### Minimal Configuration
-
-```json
-{
-  "Xping": {
-    "ApiKey": "xpg_live_productionkey",
-    "ProjectId": "my-app"
-  }
-}
-```
-
-All other settings use default values.
-
----
-
-## Configuration Loading Order
-
-See [Configuration Methods](#configuration-methods) above for the two resolution orders and which
-one applies to how you initialize. The short version: `XPING_*` beats everything, on both paths.
-
-**Example resolution** under `XpingContext.Initialize()`, which reads files:
-
-```
-ApiKey:
-  - Default: null
-  - appsettings.json: "xpg_test_key"
-  - Environment variable: "xpg_live_key"  <- Wins
-  - Programmatic: Not set
-
-BatchSize:
-  - Default: 100
-  - appsettings.json: 200  <- Wins
-  - Environment variable: Not set
-  - Programmatic: Not set
-```
-
-A blank variable counts as unset rather than as the empty string, on both formats. That matters
-because `XPING_APIKEY: ${{ secrets.XPING_APIKEY }}` expands to nothing when the secret is missing:
-treated as a value it would clear a key configured elsewhere and silently drop the run to
-local-only, so it is ignored instead.
-
----
-
-## Configuration Validation
-
-Xping SDK validates configuration on initialization and provides clear error messages for invalid settings.
-
-### Validation Rules
-
-| Setting | Validation |
-|---------|------------|
-| `ApiKey` | Must not be empty or whitespace |
-| `ApiEndpoint` | Must be valid HTTP/HTTPS URL |
-| `BatchSize` | Must be between 1 and 1000 |
-| `FlushInterval` | Must be greater than zero |
-| `MaxRetries` | Must be between 0 and 10 |
-| `RetryDelay` | Between 0 and 1 day |
-| `UploadTimeout` | Between 1 second and 1 day |
-| `LogLevel` | One of `Trace`, `Debug`, `Information`, `Warning`, `Error`, `Critical`, `None` |
-
-### Handling Validation Errors
-
-```csharp
-var builder = new XpingConfigurationBuilder()
-    .WithApiKey("")  // Invalid
-    .WithBatchSize(2000);  // Invalid
-
-if (builder.TryBuild(out var config, out var errors))
-{
-    XpingContext.Initialize(config);
-}
-else
-{
-    Console.WriteLine("Configuration errors:");
-    foreach (var error in errors)
-    {
-        Console.WriteLine($"  - {error}");
-    }
-}
-}
-
-// Output:
-// Configuration errors:
-//   - ApiKey is required.
-//   - BatchSize cannot exceed 1000.
-```
-
----
-
-## Best Practices
-
-### Security
-
-1. **Never commit API keys** to source control
-2. **Use environment variables** in CI/CD pipelines
-3. **Rotate API keys** regularly
-4. **Use different keys** per environment
-5. **Restrict key permissions** when available
-
-### Performance
-
-1. **Adjust batch size** based on test suite size:
-   - Small suites (<100 tests): `BatchSize = 50`
-   - Medium suites (100-1000 tests): `BatchSize = 100-200`
-   - Large suites (>1000 tests): `BatchSize = 500-1000`
-
-2. **Balance flush interval** with visibility needs:
-   - Real-time monitoring: `10-15 seconds`
-   - Standard CI: `30-60 seconds`
-   - Batch jobs: `2-5 minutes`
-
-3. **Enable compression** unless debugging network issues
-
-### Reliability
-
-1. **Keep default retry settings** unless you have specific requirements
-2. **Monitor retry rates** in Xping Cloud
-3. **Increase timeouts** for slow networks
-4. **Enable auto-detect CI** for consistent environment tracking
-
-### Development Workflow
-
-1. **Local development:**
-   ```json
-   {
-     "Xping": {
-       "Enabled": true,
-       "BatchSize": 50,
-       "FlushInterval": "00:00:10"
-     }
-   }
-   ```
-
-2. **CI/CD pipelines:**
-   ```yaml
-   env:
-     XPING_BATCHSIZE: "200"
-     XPING_FLUSHINTERVAL: "60"
-   ```
-
-3. **Production monitoring:**
-   ```json
-   {
-     "Xping": {
-       "BatchSize": 500,
-       "FlushInterval": "00:02:00"
-     }
-   }
-   ```
+`XpingContext` is in your adapter's namespace: `Xping.Sdk.NUnit`, `Xping.Sdk.XUnit`,
+`Xping.Sdk.XUnit.V3` or `Xping.Sdk.MSTest`. Each [quick start](../getting-started/quickstart-nunit.md)
+shows where to call it.
 
 ---
 
 ## Troubleshooting
 
-### Configuration not loading
+**The SDK ignores `appsettings.json`:**
 
-**Problem:** Settings from `appsettings.json` are ignored.
+- Check that the SDK starts with `XpingContext.Initialize()`, without an argument. With a
+  configuration object, it reads only `StrictMode` from the file.
+- Check that the file is in the test project's output folder (`<CopyToOutputDirectory>`).
+- Check that the JSON parses. A file that does not parse stops the SDK from starting, and the SDK
+  prints `[Xping] SDK initialization failed`.
 
-**Solutions:**
-1. Ensure file is copied to output directory:
-   ```xml
-   <ItemGroup>
-     <None Update="appsettings.json">
-       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-     </None>
-   </ItemGroup>
-   ```
+**An environment variable has no effect:**
 
-2. Verify JSON syntax is valid
+- Check the name: `XPING_` with one underscore, then the setting name in capitals, such as
+  `XPING_BATCHSIZE`. The local store variable is `XPING_LOCAL_STORE`.
+- Check the value. A value that does not parse, such as `XPING_ENABLED=yes`, is ignored. Use `true`
+  or `false`.
+- Check that the test process gets it. An IDE reads the environment when it starts.
 
-3. Check section name is exactly `"Xping"` (case-sensitive)
-
-### Environment variables not working
-
-**Problem:** Environment variables don't override JSON configuration.
-
-**Solutions:**
-1. Verify variable name uses `XPING_` prefix (not `XPING__`)
-
-2. Check variable is set in the correct scope:
-   ```bash
-   # System-wide
-   export XPING_APIKEY="key"
-   
-   # Process-specific
-   XPING_APIKEY="key" dotnet test
-   ```
-
-3. Restart IDE/terminal after setting environment variables
-
-### Validation errors on startup
-
-**Problem:** SDK fails to initialize with validation errors.
-
-**Solutions:**
-1. Check error messages for specific issues
-
-2. Verify the required setting (`ApiKey`) is provided
-
-3. Ensure numeric values are within valid ranges
-
-4. Validate TimeSpan format: `"HH:MM:SS"`
+**The SDK disabled itself:** the line after `Configuration validation failed:`, or after
+`Xping configuration invalid:` for a configuration object, names each setting that broke a rule.
+See [Validation rules](#validation-rules).
 
 ---
 
-## See Also
+## See also
 
-- **[Quick Start Guides](../getting-started/quickstart-nunit.md)** - Framework-specific setup
-- **[CI/CD Integration](../getting-started/ci-cd-setup.md)** - Pipeline configuration examples
-- **[Troubleshooting](../troubleshooting/common-issues.md)** - Common configuration issues
-
----
-
-**Need help?** 
-- 📚 [Documentation](https://docs.xping.io)
-- 💬 [Community Discussions](https://github.com/xping-dev/sdk-dotnet/discussions)
-- 📧 [Email Support](mailto:support@xping.io)
+- [Data Xping collects](collected-data.md)
+- [Local store](local-store.md)
+- [Set up CI](../getting-started/ci-cd-setup.md)
+- [Common issues](../troubleshooting/common-issues.md)
