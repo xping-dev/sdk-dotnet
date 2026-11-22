@@ -4,6 +4,7 @@
  */
 
 using Microsoft.Extensions.Logging;
+using Xping.Sdk.Core.Services.Diagnostics;
 
 namespace Xping.Sdk.Core.Configuration;
 
@@ -293,7 +294,7 @@ public sealed class XpingConfigurationBuilder
         if (errors.Count > 0)
         {
             throw new InvalidOperationException(
-                $"Invalid configuration: {string.Join(", ", errors)}");
+                $"Invalid configuration: {Sentences.Join(errors)}");
         }
 
         return _configuration;

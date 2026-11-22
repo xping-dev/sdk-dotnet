@@ -147,7 +147,7 @@ public static class XpingServiceCollectionExtensions
         IReadOnlyList<string> errors = effective.Validate();
         if (errors.Count > 0 && builder.Configuration.Validate().Count > 0)
         {
-            string message = $"Invalid Xping configuration: {string.Join(", ", errors)}";
+            string message = $"Invalid Xping configuration: {Sentences.Join(errors)}";
 
             if (effective.StrictMode)
                 throw new XpingConfigurationException(message);

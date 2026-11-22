@@ -410,6 +410,19 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
     }
 
     [Fact]
+    public void AddXping_WithBuilder_InvalidConfig_JoinsTheErrorsAsSentences()
+    {
+        var services = new ServiceCollection();
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            services.AddXping(b => b.WithMode(XpingMode.Cloud).WithBatchSize(2000)));
+
+        Assert.Equal(
+            "Invalid Xping configuration: ApiKey is required in Cloud mode. BatchSize cannot exceed 1000.",
+            ex.Message);
+    }
+
+    [Fact]
     public void AddXping_WithNullBuilderAction_ShouldThrow()
     {
         // Arrange

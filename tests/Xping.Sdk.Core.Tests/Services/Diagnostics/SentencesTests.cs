@@ -15,6 +15,10 @@ public sealed class SentencesTests
     [InlineData("  padded  ", "padded.")]
     [InlineData("Really?", "Really?")]
     [InlineData("Stop!", "Stop!")]
+    [InlineData("Could not load 'appsettings.json.'", "Could not load 'appsettings.json.'")]
+    [InlineData("It said (see above.)", "It said (see above.)")]
+    [InlineData("Waiting\u2026", "Waiting\u2026")]
+    [InlineData("Could not load 'appsettings.json'", "Could not load 'appsettings.json'.")]
     [InlineData("", "")]
     [InlineData(null, "")]
     public void End_AddsAPeriodOnlyWhenTheTextHasNoEnding(string? text, string expected) =>

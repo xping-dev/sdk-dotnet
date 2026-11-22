@@ -34,18 +34,14 @@ internal sealed class RawConsoleSink : ILogEventSink
     // a stray U+FEFF at the start of the SDK's first log line in the test runner's output.
     private static readonly Encoding _utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
-    private static readonly TextWriter _stdout =
-        TextWriter.Synchronized(
-            new StreamWriter(Console.OpenStandardOutput(), _utf8NoBom) { AutoFlush = true });
+    private static readonly TextWriter _stdout = TextWriter.Synchronized(CreateWriter(Console.OpenStandardOutput()));
 
-    private static readonly TextWriter _stderr =
-        TextWriter.Synchronized(
-            new StreamWriter(Console.OpenStandardError(), _utf8NoBom) { AutoFlush = true });
+    private static readonly TextWriter _stderr = TextWriter.Synchronized(CreateWriter(Console.OpenStandardError()));
 
     private readonly ITextFormatter _formatter;
 
-    /// <summary>The encoding both streams are written in.</summary>
-    internal static Encoding StreamEncoding => _utf8NoBom;
+    /// <summary>Creates the writer for one of the standard streams.</summary>
+    internal static StreamWriter CreateWriter(Stream stream) => new(stream, _utf8NoBom) { AutoFlush = true };
 
     internal RawConsoleSink(ITextFormatter formatter)
     {

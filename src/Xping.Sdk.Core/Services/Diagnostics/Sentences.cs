@@ -18,7 +18,7 @@ internal static class Sentences
 {
     /// <summary>
     /// Returns <paramref name="text"/> trimmed, with a period added unless it already ends with
-    /// <c>.</c>, <c>!</c> or <c>?</c>.
+    /// <c>.</c>, <c>!</c>, <c>?</c> or <c>…</c>, before any closing quotes and brackets.
     /// </summary>
     public static string End(string? text)
     {
@@ -26,8 +26,12 @@ internal static class Sentences
         if (trimmed.Length == 0)
             return trimmed;
 
-        char last = trimmed[trimmed.Length - 1];
-        return last is '.' or '!' or '?' ? trimmed : trimmed + ".";
+        // "Could not load 'appsettings.json.'" already ends its sentence inside the quote.
+        int i = trimmed.Length - 1;
+        while (i > 0 && trimmed[i] is '\'' or '"' or ')' or ']' or '\u2019' or '\u201D')
+            i--;
+
+        return trimmed[i] is '.' or '!' or '?' or '\u2026' ? trimmed : trimmed + ".";
     }
 
     /// <summary>
