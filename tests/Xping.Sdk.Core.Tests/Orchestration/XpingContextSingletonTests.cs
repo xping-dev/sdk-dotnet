@@ -288,7 +288,10 @@ public sealed class XpingContextSingletonTests
         Harness? resolved = singleton.Start(context => context, reports.Add, retryNextRun: false);
 
         Assert.Null(resolved);
-        Assert.Contains("[Xping] SDK initialization failed: host failed to build", Assert.Single(reports), StringComparison.Ordinal);
+        // The exception message has no period of its own; the line still reads as two sentences.
+        Assert.Equal(
+            "[Xping] SDK initialization failed: host failed to build. Tests run without Xping tracking.",
+            Assert.Single(reports));
     }
 
     /// <summary>

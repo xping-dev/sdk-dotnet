@@ -410,6 +410,19 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
     }
 
     [Fact]
+    public void AddXping_WithBuilder_InvalidConfig_JoinsTheErrorsAsSentences()
+    {
+        var services = new ServiceCollection();
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            services.AddXping(b => b.WithMode(XpingMode.Cloud).WithBatchSize(2000)));
+
+        Assert.Equal(
+            "Invalid Xping configuration: ApiKey is required in Cloud mode. BatchSize cannot exceed 1000.",
+            ex.Message);
+    }
+
+    [Fact]
     public void AddXping_WithNullBuilderAction_ShouldThrow()
     {
         // Arrange
@@ -1177,6 +1190,24 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
         // "A validation error has occurred." would leave the reader guessing which of a dozen
         // XPING_* settings the pipeline got wrong.
         Assert.Contains(ex.Failures, f => f.Contains("BatchSize", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void OptionsValidation_ReportsEachOutOfRangeSettingOnce()
+    {
+        // A [Range] annotation used to report these a second time, in other words, so the log line
+        // the docs quote said the same thing twice.
+        using var _batch = WithEnv("XPING_BATCHSIZE", "2000");
+        using var _retries = WithEnv("XPING_MAXRETRIES", "11");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { ApiKey = "k" });
+
+        var provider = services.BuildServiceProvider();
+        var ex = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<XpingConfiguration>>().Value);
+
+        Assert.Equal(["BatchSize cannot exceed 1000.", "MaxRetries cannot exceed 10."], ex.Failures);
     }
 
     [Fact]

@@ -5,6 +5,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xping.Sdk.Core.Configuration;
@@ -144,5 +145,88 @@ public sealed class XpingContextOrchestratorEnvVarTests
         {
             System.Environment.SetEnvironmentVariable("XPING_STRICTMODE", null);
         }
+    }
+
+    private sealed class CapturingLoggerProvider : ILoggerProvider
+    {
+        public List<string> Messages { get; } = [];
+
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(Messages);
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class CapturingLogger(List<string> messages) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            messages.Add(formatter(state, exception));
+    }
+
+    // Sets each variable for the test and puts the process environment back afterwards, including
+    // an XPING_APIKEY the developer's shell may hold.
+    private static Restorer WithEnv(params (string Name, string? Value)[] variables)
+    {
+        var originals = variables.Select(v => (v.Name, System.Environment.GetEnvironmentVariable(v.Name))).ToList();
+        foreach ((string name, string? value) in variables)
+            System.Environment.SetEnvironmentVariable(name, value);
+        return new Restorer(originals);
+    }
+
+    private sealed class Restorer(List<(string Name, string? Value)> originals) : IDisposable
+    {
+        public void Dispose()
+        {
+            foreach ((string name, string? value) in originals)
+                System.Environment.SetEnvironmentVariable(name, value);
+        }
+    }
+
+    [Fact]
+    public async Task AConfigurationErrorIsLoggedWithEachErrorAsOneSentence()
+    {
+        // The docs quote this line word for word. The template used to add ". " after messages that
+        // already end with a period, printing "mode.. SDK disabled".
+        using var _ = WithEnv(("XPING_APIKEY", null), ("XPING_MODE", "Cloud"), ("XPING_BATCHSIZE", "2000"));
+        using var logs = new CapturingLoggerProvider();
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        ServiceHelper.SetupDefaultMocks(uploaderMock, envDetectorMock);
+        using var store = new ScratchStore();
+
+        using IHost host = ServiceHelper.BuildRegisteredOrchestratorHost(
+            new XpingConfiguration { LocalStorePath = store.Path }, uploaderMock, envDetectorMock,
+            configureServices: services => services.AddSingleton<ILoggerProvider>(logs));
+        var orchestrator = new TestOrchestrator(host);
+        await orchestrator.DisposeAsync();
+
+        Assert.Contains(
+            "Configuration validation failed: ApiKey is required in Cloud mode. BatchSize cannot exceed 1000. " +
+            "SDK disabled - tests will run without observability tracking.",
+            logs.Messages);
+    }
+
+    [Fact]
+    public void AStrictModeConfigurationErrorJoinsTheErrorsAsSentences()
+    {
+        using var _ = WithEnv(("XPING_APIKEY", null), ("XPING_STRICTMODE", "true"), ("XPING_BATCHSIZE", "2000"));
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        ServiceHelper.SetupDefaultMocks(uploaderMock, envDetectorMock);
+        using var store = new ScratchStore();
+
+        using IHost host = ServiceHelper.BuildRegisteredOrchestratorHost(
+            new XpingConfiguration { LocalStorePath = store.Path }, uploaderMock, envDetectorMock);
+
+        var ex = Assert.Throws<XpingConfigurationException>(() => new TestOrchestrator(host));
+        Assert.Equal(
+            "Xping configuration invalid: ApiKey is required when StrictMode is enabled. BatchSize cannot exceed 1000.",
+            ex.Message);
     }
 }
