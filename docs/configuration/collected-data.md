@@ -37,9 +37,10 @@ the store is and how to delete it.
 | CI email of that person (`CI.ActorEmail`) | On Azure Pipelines, GitLab, Jenkins and AppVeyor | [CollectCiActorEmail](configuration-reference.md#collectciactoremail) | Off |
 | GitLab commit author (`CI.CommitAuthor`) | On GitLab. GitLab gives it as `Name <email>`. | None | On |
 | PR author (`PullRequestContext.Author`) | On a PR build with PR context | [EnablePullRequestDetection](configuration-reference.md#enablepullrequestdetection) | On |
-| Local git author name (`Git.Actor`) | Outside CI, from `user.name` in the repository's git config | [CollectLocalGitAuthor](configuration-reference.md#collectlocalgitauthor) | Off |
+| Local git author name (`Git.Actor`) | Outside CI, from `user.name` in the repository's git config, or else in your global git config (`~/.gitconfig` or `$XDG_CONFIG_HOME/git/config`) | [CollectLocalGitAuthor](configuration-reference.md#collectlocalgitauthor) | Off |
 | Error message (`ErrorMessage`) | When a test fails | None | On |
 | Stack trace text (`StackTrace`) | When a test fails. The local store always keeps it. | [UploadStackTraces](configuration-reference.md#uploadstacktraces), for the upload only | Not uploaded |
+| NUnit author tag (`Tags`, `author:<name>`) | For each `[Author]` attribute. `[Author(name, email)]` gives `author:Name <email>`. | None | On |
 | Test arguments (`CustomAttributes["Arguments"]`) | For each data row of a parameterized test | None | On |
 | xUnit test output (`CustomAttributes["Output"]`) | When an xUnit test writes to `ITestOutputHelper` | None | On |
 | MSTest `TestContext` properties | Always on MSTest. Some of them are folder paths on the machine, which can contain the user name. | None | On |
@@ -68,6 +69,7 @@ To record nothing at all, set [Enabled](configuration-reference.md#enabled) to `
 | `StartedAt`, `EndedAt` | UTC times of the first and last record |
 | `Assemblies` | The names of the test assemblies in the session |
 | `SdkVersion` | The version of the Xping SDK |
+| `SessionState` | Which upload this is: `Initial` (the first batch), `Partial` (a later batch) or `Finalized` (the last one, at the end of the session) |
 | `EnvironmentInfo` | The machine and the CI build. See [The environment](#the-environment). |
 | `PullRequestContext` | The pull request, on a PR build. See [Pull request context](#pull-request-context). |
 | `QuickStatistics`, `StatisticsByAssembly` | Counts of executions by outcome, for the whole session and for each assembly |
@@ -84,7 +86,7 @@ To record nothing at all, set [Enabled](configuration-reference.md#enabled) to `
 | `FullyQualifiedName`, `Assembly`, `Namespace`, `ClassName`, `MethodName` | Where the test is declared |
 | `DisplayName` | The name the framework shows |
 | `ParameterHash` | A hash of the arguments, for a data row of a parameterized test |
-| `SourceFile`, `SourceLineNumber` | The file and the line of the test method, read from the Portable PDB. The path is relative to the repository root. Both are empty when the assembly has no PDB. |
+| `SourceFile`, `SourceLineNumber` | The file and the line of the test method, read from the Portable PDB. The path is relative to the repository root when the SDK finds one, and absolute otherwise. Both are empty when the assembly has no PDB. |
 
 ### Result
 
@@ -212,7 +214,7 @@ the name in the first column.
 | `TeamCity` | `TEAMCITY_VERSION` | No |
 | `BitbucketPipelines` | `BITBUCKET_PIPELINE_UUID` | No |
 | `AppVeyor` | `APPVEYOR=True` | No |
-| `Generic` | `CI=true` | No |
+| `Generic` | `CI=true` or `CI=True` | No |
 
 CircleCI, Travis CI, TeamCity, Bitbucket Pipelines, AppVeyor and a generic CI upload without PR
 context. They are not targeted for it. Most of them still send the PR flag (`CI.IsPullRequest`).
@@ -223,14 +225,14 @@ context. They are not targeted for it. Most of them still send the PR flag (`CI.
 |---|---|---|---|---|---|---|---|---|---|
 | `CI.CommitSha` | `GITHUB_SHA` (see [Which commit is recorded](#which-commit-is-recorded)) | `BUILD_SOURCEVERSION` | `GIT_COMMIT` | `CI_COMMIT_SHA` | `CIRCLE_SHA1` | `TRAVIS_COMMIT` | `BUILD_VCS_NUMBER` | `BITBUCKET_COMMIT` | `APPVEYOR_REPO_COMMIT` |
 | `CI.IsPullRequest` | `GITHUB_EVENT_NAME`, `GITHUB_REF` | `BUILD_REASON` | `CHANGE_ID` or `ghprbPullId` | `CI_MERGE_REQUEST_IID` | `CIRCLE_PULL_REQUEST` | `TRAVIS_PULL_REQUEST` | Not sent | `BITBUCKET_PR_ID` | `APPVEYOR_PULL_REQUEST_NUMBER` |
-| `CI.Branch` | `GITHUB_HEAD_REF`, else `GITHUB_REF_NAME` | `SYSTEM_PULLREQUEST_SOURCEBRANCH` on a PR, else `BUILD_SOURCEBRANCH` without `refs/heads/` | `CHANGE_BRANCH` or `ghprbSourceBranch` on a PR, else `BRANCH_NAME`, else `GIT_BRANCH` without `origin/` | `CI_COMMIT_BRANCH`, else `CI_COMMIT_REF_NAME` | `CIRCLE_BRANCH` | `TRAVIS_BRANCH` | — | `BITBUCKET_BRANCH` | `APPVEYOR_REPO_BRANCH` |
+| `CI.Branch` | `GITHUB_HEAD_REF`, else `GITHUB_REF_NAME`, else the branch in `GITHUB_REF` | `SYSTEM_PULLREQUEST_SOURCEBRANCH` on a PR, else `BUILD_SOURCEBRANCH` without `refs/heads/` | `CHANGE_BRANCH` or `ghprbSourceBranch` on a PR, else `BRANCH_NAME`, else `GIT_BRANCH` without `origin/` | `CI_COMMIT_BRANCH`, else `CI_COMMIT_REF_NAME` | `CIRCLE_BRANCH` | `TRAVIS_BRANCH` | — | `BITBUCKET_BRANCH` | `APPVEYOR_REPO_BRANCH` |
 | `CI.DefaultBranch` | `repository.default_branch` from the event file | — | — | `CI_DEFAULT_BRANCH` | — | — | — | — | — |
 | `CI.ServerUrl` | `GITHUB_SERVER_URL` | `SYSTEM_COLLECTIONURI` (Azure Repos) or `BUILD_REPOSITORY_URI` | — | `CI_SERVER_URL` | — | — | — | — | — |
 | `CI.Repository` | `GITHUB_REPOSITORY` | `BUILD_REPOSITORY_NAME` | — | `CI_PROJECT_PATH` (as `CI.ProjectPath`) | `CIRCLE_PROJECT_REPONAME` (as `CI.ProjectName`) | `TRAVIS_REPO_SLUG` | `TEAMCITY_PROJECT_NAME` (as `CI.ProjectName`) | `BITBUCKET_REPO_FULL_NAME` | `APPVEYOR_REPO_NAME` |
 | Build ids | `CI.RunId` (`GITHUB_RUN_ID`), `CI.RunNumber` (`GITHUB_RUN_NUMBER`) | `CI.BuildId` (`BUILD_BUILDID`), `CI.BuildNumber` (`BUILD_BUILDNUMBER`) | `CI.BuildNumber` (`BUILD_NUMBER`), `CI.JobName` (`JOB_NAME`), `CI.BuildUrl` (`BUILD_URL`) | `CI.JobId` (`CI_JOB_ID`), `CI.PipelineId` (`CI_PIPELINE_ID`) | `CI.BuildNumber` (`CIRCLE_BUILD_NUM`), `CI.WorkflowId` (`CIRCLE_WORKFLOW_ID`) | `CI.BuildNumber` (`TRAVIS_BUILD_NUMBER`), `CI.JobNumber` (`TRAVIS_JOB_NUMBER`) | `CI.BuildId` (`TEAMCITY_BUILD_ID`), `CI.Version` (`TEAMCITY_VERSION`) | `CI.BuildNumber` (`BITBUCKET_BUILD_NUMBER`) | `CI.BuildNumber` (`APPVEYOR_BUILD_NUMBER`), `CI.BuildVersion` (`APPVEYOR_BUILD_VERSION`) |
 | Other | `CI.Ref` (`GITHUB_REF`), `CI.HeadBranch` (`GITHUB_HEAD_REF`), `CI.BaseBranch` (`GITHUB_BASE_REF`), `CI.Workflow` (`GITHUB_WORKFLOW`) | `CI.SourceBranch` (`BUILD_SOURCEBRANCH`) | `CI.GitBranch` (`GIT_BRANCH`) | `CI.CommitBranch` (`CI_COMMIT_BRANCH`), `CI.CommitAuthor` (`CI_COMMIT_AUTHOR`) | — | — | — | — | — |
 
-A generic CI (`CI=true`) sends only `CIPlatform`. The actor properties are in
+A generic CI (`CI=true` or `CI=True`) sends only `CIPlatform`, and `CI.DefaultBranch` when you set DefaultBranch. The actor properties are in
 [Who is behind the run](#who-is-behind-the-run).
 
 [DefaultBranch](configuration-reference.md#defaultbranch) (`XPING_DEFAULTBRANCH`) replaces

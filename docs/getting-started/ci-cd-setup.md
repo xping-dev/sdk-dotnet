@@ -90,8 +90,8 @@ jobs:
 **Tests in a container.** When the tests run in `docker run`, pass the `GITHUB_*` variables,
 including `GITHUB_SERVER_URL` and `GITHUB_EVENT_NAME`. Also mount the runner's temp folder, so that
 the file at `GITHUB_EVENT_PATH` is readable. Without them, the SDK still records the run, but it
-skips the PR context and logs a warning. Without `GITHUB_EVENT_NAME`, the run is also not filed
-under a commit, unless `GITHUB_REF` is `refs/pull/*`.
+skips the PR context and logs a warning. Without `GITHUB_EVENT_NAME`, Xping Cloud also files the
+run under no commit.
 
 ---
 
@@ -272,7 +272,9 @@ xping report --no-color --ascii   # for log viewers that do not show color codes
 
 `xping report` adds Xping Cloud's confidence for each test when its key can read Xping Cloud data.
 A key with only the Upload scope cannot. In a pipeline, create a second key with the Read scope, and
-pass it only to the report step:
+pass it only to the report step. Reading also needs a plan that includes API access. See
+[Credentials](../cli/command-reference.md#credentials).
+
 
 ```yaml
 - name: Check findings
@@ -346,7 +348,8 @@ records both, and separate projects split the history that the confidence score 
    echo "API key set: $([ -n "$XPING_APIKEY" ] && echo yes || echo no)"
    ```
 
-2. Run `dotnet test` with `--logger "console;verbosity=normal"`. The SDK's start line says
+2. Run `dotnet test` with `--logger "console;verbosity=normal"`. On xUnit v3, run the test project
+   with `dotnet run` instead. The SDK's start line says
    `Initialized in local-only mode` when it has no key. With a key, it prints one line for each
    upload that Xping Cloud accepts, or an error that says why the upload failed.
 3. Check that the agent can reach the upload endpoint:
