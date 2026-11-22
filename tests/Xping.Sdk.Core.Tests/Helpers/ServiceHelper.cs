@@ -145,10 +145,9 @@ internal static class ServiceHelper
                     o.FlushInterval = TimeSpan.Zero;
                 });
 
-                // Mirror the real pipeline: both data annotations and the mode-aware Validate()
-                // delegate, so OptionsValidationException fires on .Value access.
+                // Mirror the real pipeline: the mode-aware Validate(), so OptionsValidationException
+                // fires on .Value access.
                 services.AddOptions<XpingConfiguration>()
-                    .ValidateDataAnnotations()
                     .Validate(config => config.Validate().Count == 0);
 
                 services.AddXpingCollectors();
@@ -196,7 +195,6 @@ internal static class ServiceHelper
                 });
 
                 services.AddOptions<XpingConfiguration>()
-                    .ValidateDataAnnotations()
                     .Validate(config => config.Validate().Count == 0);
 
                 services.AddXpingCollectors();

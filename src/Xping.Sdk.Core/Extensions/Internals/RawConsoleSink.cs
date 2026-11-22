@@ -30,15 +30,18 @@ internal sealed class RawConsoleSink : ILogEventSink
 {
     // Open the raw OS handles at once. Console.OpenStandard* bypasses Console.SetOut/SetError,
     // so these writers are unaffected by any later redirections made by test frameworks.
-    private static readonly TextWriter _stdout =
-        TextWriter.Synchronized(
-            new StreamWriter(Console.OpenStandardOutput(), Encoding.UTF8) { AutoFlush = true });
+    // Encoding.UTF8 writes a byte order mark before the first line on each stream, which shows up as
+    // a stray U+FEFF at the start of the SDK's first log line in the test runner's output.
+    private static readonly Encoding _utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
-    private static readonly TextWriter _stderr =
-        TextWriter.Synchronized(
-            new StreamWriter(Console.OpenStandardError(), Encoding.UTF8) { AutoFlush = true });
+    private static readonly TextWriter _stdout = TextWriter.Synchronized(CreateWriter(Console.OpenStandardOutput()));
+
+    private static readonly TextWriter _stderr = TextWriter.Synchronized(CreateWriter(Console.OpenStandardError()));
 
     private readonly ITextFormatter _formatter;
+
+    /// <summary>Creates the writer for one of the standard streams.</summary>
+    internal static StreamWriter CreateWriter(Stream stream) => new(stream, _utf8NoBom) { AutoFlush = true };
 
     internal RawConsoleSink(ITextFormatter formatter)
     {

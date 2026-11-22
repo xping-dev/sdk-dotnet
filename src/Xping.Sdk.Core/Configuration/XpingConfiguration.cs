@@ -3,7 +3,6 @@
  * License: [MIT]
  */
 
-using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Logging;
 
 namespace Xping.Sdk.Core.Configuration;
@@ -34,8 +33,6 @@ public sealed class XpingConfiguration
     /// <summary>
     /// Gets or sets the Xping API endpoint URL.
     /// </summary>
-    [Required(ErrorMessage = "ApiEndpoint is required")]
-    [Url(ErrorMessage = "ApiEndpoint must be a valid HTTP or HTTPS URL")]
     public string ApiEndpoint { get; set; } = "https://upload.xping.io/v1";
 
     /// <summary>
@@ -43,10 +40,8 @@ public sealed class XpingConfiguration
     /// Required in <see cref="XpingMode.Cloud"/> mode; ignored in <see cref="XpingMode.LocalOnly"/> mode.
     /// </summary>
     /// <remarks>
-    /// This property intentionally carries no <c>[Required]</c> data annotation. Requiring it
-    /// unconditionally would make <c>ValidateDataAnnotations()</c> throw before
-    /// <see cref="ResolveMode"/> ever runs, making local-only operation impossible.
-    /// Presence is enforced by <see cref="Validate()"/> only when the resolved mode needs it.
+    /// Presence is enforced by <see cref="Validate()"/> only when the resolved mode needs it, so
+    /// that local-only operation needs no key.
     /// </remarks>
     public string? ApiKey { get; set; }
 
@@ -72,7 +67,6 @@ public sealed class XpingConfiguration
     /// <summary>
     /// Gets or sets the batch size for uploading test executions.
     /// </summary>
-    [Range(1, 1000, ErrorMessage = "BatchSize must be between 1 and 1000")]
     public int BatchSize { get; set; } = 100;
 
     /// <summary>
@@ -149,7 +143,6 @@ public sealed class XpingConfiguration
     /// <summary>
     /// Gets or sets the maximum number of retry attempts for failed uploads.
     /// </summary>
-    [Range(0, 10, ErrorMessage = "MaxRetries must be between 0 and 10")]
     public int MaxRetries { get; set; } = 3;
 
     /// <summary>

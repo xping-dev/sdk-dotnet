@@ -75,6 +75,19 @@ public sealed class XpingConfigurationBuilderTests
     }
 
     [Fact]
+    public void BuildJoinsTheErrorsAsSentences()
+    {
+        var builder = new XpingConfigurationBuilder()
+            .WithMode(XpingMode.Cloud)
+            .WithBatchSize(2000);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
+        Assert.Equal(
+            "Invalid configuration: ApiKey is required in Cloud mode. BatchSize cannot exceed 1000.",
+            exception.Message);
+    }
+
+    [Fact]
     public void BuildShouldThrowWhenConfigurationIsInvalid()
     {
         // Arrange — an empty builder now yields a valid local-only configuration, so invalidity
