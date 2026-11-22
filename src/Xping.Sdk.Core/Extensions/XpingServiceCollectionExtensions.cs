@@ -20,6 +20,7 @@ using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Extensions.Internals;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Collector.Internals;
+using Xping.Sdk.Core.Services.Diagnostics;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Environment.Internals;
 using Xping.Sdk.Core.Services.Identity;
@@ -196,7 +197,7 @@ public static class XpingServiceCollectionExtensions
         IReadOnlyList<string> errors = effective.Validate();
         if (errors.Count > 0 && configuration.Validate().Count > 0)
         {
-            string message = $"Xping configuration invalid: {string.Join(", ", errors)}";
+            string message = $"Xping configuration invalid: {Sentences.Join(errors)}";
 
             if (effective.StrictMode)
                 throw new XpingConfigurationException(message);
@@ -323,8 +324,6 @@ public static class XpingServiceCollectionExtensions
         });
 
         // 3. Add validation
-        services.AddOptions<XpingConfiguration>()
-            .ValidateDataAnnotations();
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<XpingConfiguration>, XpingConfigurationValidator>());
 
@@ -363,8 +362,6 @@ public static class XpingServiceCollectionExtensions
         // result reaches IOptions.Value unchallenged. XpingContextOrchestrator already treats an
         // OptionsValidationException as a configuration error and degrades to no-op services, so
         // this reports the problem rather than running on a batch size of zero.
-        services.AddOptions<XpingConfiguration>()
-            .ValidateDataAnnotations();
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<XpingConfiguration>, XpingConfigurationValidator>());
 

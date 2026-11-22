@@ -6,6 +6,7 @@
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.Core.Exceptions;
 using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Services.Diagnostics;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Environment.Internals;
 using Xping.Sdk.Shared;
@@ -174,11 +175,11 @@ internal sealed class XpingContextSingleton<TContext>
                 throw;
 
             if (IsStrictMode(installation.Configuration))
-                throw new XpingConfigurationException($"Failed to initialize Xping SDK: {ex.Message}", ex);
+                throw new XpingConfigurationException($"Failed to initialize Xping SDK: {Sentences.End(ex.Message)}", ex);
 
             if (reportIt)
             {
-                string message = $"[Xping] SDK initialization failed: {ex.Message} Tests run without Xping tracking.";
+                string message = $"[Xping] SDK initialization failed: {Sentences.End(ex.Message)} Tests run without Xping tracking.";
                 Console.Error.WriteLine(message);
                 report?.Invoke(message);
             }

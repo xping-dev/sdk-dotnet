@@ -1180,6 +1180,24 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
     }
 
     [Fact]
+    public void OptionsValidation_ReportsEachOutOfRangeSettingOnce()
+    {
+        // A [Range] annotation used to report these a second time, in other words, so the log line
+        // the docs quote said the same thing twice.
+        using var _batch = WithEnv("XPING_BATCHSIZE", "2000");
+        using var _retries = WithEnv("XPING_MAXRETRIES", "11");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { ApiKey = "k" });
+
+        var provider = services.BuildServiceProvider();
+        var ex = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<XpingConfiguration>>().Value);
+
+        Assert.Equal(["BatchSize cannot exceed 1000.", "MaxRetries cannot exceed 10."], ex.Failures);
+    }
+
+    [Fact]
     public void BindEnvVars_PROJECTID_ShouldBeTrimmed()
     {
         using var _ = WithEnv("XPING_PROJECTID", "  my-proj  ");
