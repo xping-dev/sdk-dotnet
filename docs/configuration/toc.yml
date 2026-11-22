@@ -2,3 +2,5 @@
   href: configuration-reference.md
 - name: Local store
   href: local-store.md
+- name: Data Xping collects
+  href: collected-data.md

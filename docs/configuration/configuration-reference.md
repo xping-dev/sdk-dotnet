@@ -773,12 +773,12 @@ XpingContext.Initialize(config);
 **Default:** `false`  
 **Environment Variable:** `XPING_COLLECTLOCALGITAUTHOR`
 
-When running on a developer machine (not a CI environment) inside a git repository, controls whether the SDK reads the author name from `.git/config [user] name` and includes it as the `Git.Actor` custom property in environment metadata.
+When running on a developer machine (not a CI environment) inside a git repository, controls whether the SDK reads the author name from `[user] name` in the repository's `.git/config`, or else in the user's global git config (`~/.gitconfig`, then `$XDG_CONFIG_HOME/git/config`), and includes it as the `Git.Actor` custom property in environment metadata.
 
 This setting is **disabled by default** because `user.name` in `.git/config` is typically a developer's real full name — collecting and uploading it without explicit consent is a PII concern. Enable it only when your team is aware and has agreed to share this information.
 
 **When enabled, the following custom property is populated:**
-- `Git.Actor` — value of `[user] name` from the local `.git/config`
+- `Git.Actor` — value of `[user] name` from the repository's `.git/config`, or else from the global git config
 
 **This setting has no effect when:**
 - Running in a CI environment (`IsCIEnvironment = true`) — CI actor comes from the CI provider's environment variables instead
@@ -824,7 +824,7 @@ committer to a workspace member automatically; it never counts committers by it.
 committers are still counted from `CI.Actor`. On Azure Pipelines, GitLab, Jenkins and AppVeyor an
 Owner or Admin then links them to members by hand. GitHub Actions links by actor id and login, so it
 is not affected. See
-[Who Is Behind the Run](../getting-started/ci-cd-setup.md#who-is-behind-the-run).
+[Who is behind the run](collected-data.md#who-is-behind-the-run).
 
 **This setting has no effect on:**
 - Local runs, which never send `CI.ActorEmail`
