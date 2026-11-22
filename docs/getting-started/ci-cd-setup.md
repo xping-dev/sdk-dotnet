@@ -325,6 +325,7 @@ The SDK does not read `ASPNETCORE_ENVIRONMENT`. To reuse it, pass it in the shel
 
 ```yaml
 - name: Run tests
+  shell: bash
   run: XPING_ENVIRONMENT="$ASPNETCORE_ENVIRONMENT" dotnet test
 ```
 

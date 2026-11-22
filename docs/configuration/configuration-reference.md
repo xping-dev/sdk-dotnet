@@ -23,12 +23,16 @@ a value wins:
 4. The `"Xping"` section of `appsettings.json`
 5. The defaults
 
-**`XpingContext.Initialize(configuration)`** reads these sources. It reads no file and no `Xping__*`
-variable:
+**`XpingContext.Initialize(configuration)`** reads these sources:
 
 1. `XPING_*` environment variables
 2. The `XpingConfiguration` object you pass
 3. The defaults
+
+On this path, the SDK reads only one setting from `appsettings.json` and `Xping__*`:
+[StrictMode](#strictmode). It turns strict mode on when the object, `XPING_STRICTMODE`,
+`Xping__StrictMode` or `"Xping": { "StrictMode": true }` in `appsettings.json` asks for it.
+`XPING_STRICTMODE=false` turns it off whatever the other sources say.
 
 `XPING_*` variables win on both paths. A pipeline can change a value without a rebuild, even when
 the code passes a configuration object. The SDK applies them to its own copy, so your object does
@@ -38,8 +42,8 @@ Once a process has called `Initialize(configuration)`, a later `Initialize()` in
 reuses that configuration. This matters in a process that runs several sessions, such as an IDE's
 test server. `XpingContext.ShutdownAsync()` forgets it.
 
-To read `appsettings.json` and `Xping__*` as well as your own values, build an `IConfiguration` and
-call `services.AddXping(configuration)`.
+You cannot combine a configuration object with `appsettings.json`. To use the file, call
+`Initialize()` and override values with `XPING_*` variables.
 
 ### Files and environment variables
 
@@ -52,7 +56,8 @@ call `services.AddXping(configuration)`.
 - Section and key names are not case-sensitive: `"Xping"`, `"xping"` and `"XPING"` are the same
   section.
 - In JSON, write a `TimeSpan` as `"hh:mm:ss"`. A bare number is days: `"30"` is 30 days.
-- In an `XPING_*` variable, write a `TimeSpan` as whole seconds (`"30"`) or as `"hh:mm:ss"`.
+- In an `XPING_*` variable, write a `TimeSpan` as whole seconds (`"30"`) or as `"hh:mm:ss"`. Do not
+  use a fraction: a value with a dot is read as days and hours, so `"1.5"` is 1 day and 5 hours.
 - An `XPING_*` variable that is blank, or whose value does not parse, is ignored. So a missing
   secret, such as `XPING_APIKEY: ${{ secrets.XPING_APIKEY }}`, does not clear a key set elsewhere.
 
@@ -279,8 +284,9 @@ The SDK retries:
 
 It does not retry any other 4xx response, such as 400, 401 or 403.
 
-When at least half of 10 or more recent uploads fail with a 5xx response, a network error or a
-timeout, the SDK stops uploading for 30 seconds. It logs
+When at least half of the upload attempts in 30 seconds fail with a 5xx response, a network error
+or a timeout, and there were at least 10 attempts, the SDK stops uploading for 30 seconds. Retries
+count as attempts. It logs
 `Circuit breaker is open: Too many consecutive failures`.
 
 ```bash
@@ -349,6 +355,7 @@ use one, pass it in the shell of the test step:
 
 ```yaml
 - name: Run tests
+  shell: bash
   run: XPING_ENVIRONMENT="$ASPNETCORE_ENVIRONMENT" dotnet test
 ```
 
@@ -404,6 +411,7 @@ it.
 Turns the SDK off without removing it from the test project. With `false`, the tests run as usual.
 The SDK records nothing and prints
 `SDK is disabled via configuration (Enabled=false). Tests will run without observability tracking.`
+It prints the same line for `Mode = Disabled`.
 
 ```bash
 export XPING_ENABLED="false"
@@ -540,7 +548,7 @@ pipeline fails when it cannot record its tests.
 |---|---|---|
 | No API key, `Mode` is `Auto` | The SDK runs local-only | The test run fails before any test runs |
 | No API key, `Mode` is `Cloud` | The SDK logs the error and records nothing | The test run fails before any test runs |
-| An invalid setting, such as `BatchSize = 2000` | The SDK logs the error and records nothing | The test run fails before any test runs |
+| An invalid setting, such as `BatchSize = 2000` | The SDK logs the error and records nothing. See [What the SDK prints](#what-the-sdk-prints). | The test run fails before any test runs |
 | The SDK fails to start, for example because `appsettings.json` does not parse | The SDK prints `[Xping] SDK initialization failed`, and the tests run unrecorded | The test run fails before any test runs |
 | An upload fails | The SDK logs the error. The local store still gets the session. | The test run fails at its end |
 
@@ -587,8 +595,18 @@ These lines come from an NUnit project on vstest, with
 [Xping] Xping network error in strict mode: HTTP request failed: Connection refused (127.0.0.1:9)
 ```
 
-When the SDK fails to start, and strict mode is off, it prints this line once and the tests run
-unrecorded:
+An invalid value in the configuration object you pass to `Initialize(configuration)` gives another
+line, because the SDK rejects the object before it starts:
+
+```
+[Xping] SDK initialization failed: Xping configuration invalid: BatchSize cannot exceed 1000. Tests run without Xping tracking.
+```
+
+An invalid value from an `XPING_*` variable or from `appsettings.json` gives the
+`Configuration validation failed:` line above.
+
+When the SDK fails to start for any other reason, and strict mode is off, it prints this line once
+and the tests run unrecorded:
 
 ```
 [Xping] SDK initialization failed: <reason>. Tests run without Xping tracking.
@@ -671,7 +689,11 @@ export XPING_LOCAL_STORE="/var/tmp/xping-store"
 
 - The SDK reads `XPING_LOCAL_STORE` once, when it starts. A change during the run does not move
   where the run is recorded.
-- The CLI reads the same variable, so an exported `XPING_LOCAL_STORE` moves both.
+- The CLI reads the same variable, so an exported `XPING_LOCAL_STORE` moves both. Use an absolute
+  path: the SDK and the CLI each read a relative path from their own current directory, and the
+  SDK's is the test project's output folder.
+- The SDK uses the path as it is. When it cannot write there, the run has no local history: the SDK
+  does not fall back to another folder.
 - A path set in code or in `appsettings.json` moves only the SDK. Export the variable for the CLI
   too. The CLI's `--directory` option changes where the CLI starts looking for the repository. It
   does not name a store.
@@ -768,7 +790,7 @@ shows where to call it.
 **The SDK ignores `appsettings.json`:**
 
 - Check that the SDK starts with `XpingContext.Initialize()`, without an argument. With a
-  configuration object, it reads no file.
+  configuration object, it reads only `StrictMode` from the file.
 - Check that the file is in the test project's output folder (`<CopyToOutputDirectory>`).
 - Check that the JSON parses. A file that does not parse stops the SDK from starting, and the SDK
   prints `[Xping] SDK initialization failed`.
@@ -781,8 +803,9 @@ shows where to call it.
   or `false`.
 - Check that the test process gets it. An IDE reads the environment when it starts.
 
-**The SDK disabled itself:** the log line after `Configuration validation failed:` names each
-setting that broke a rule. See [Validation rules](#validation-rules).
+**The SDK disabled itself:** the line after `Configuration validation failed:`, or after
+`Xping configuration invalid:` for a configuration object, names each setting that broke a rule.
+See [Validation rules](#validation-rules).
 
 ---
 

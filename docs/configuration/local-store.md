@@ -16,15 +16,16 @@ In `Disabled` mode, the SDK writes nothing.
 
 ## Location
 
-The SDK uses the first of these locations that it can write to:
+The SDK uses the first of these locations:
 
 1. The path in the `XPING_LOCAL_STORE` environment variable, or in the
-   [LocalStorePath](configuration-reference.md#localstorepath) setting.
+   [LocalStorePath](configuration-reference.md#localstorepath) setting. The SDK uses it as it is,
+   without checking that it can write there. Use an absolute path.
 2. A `.xping` folder at the **repository root**: the nearest folder above the test assembly that
    holds `.git`, a `*.sln` file or a `*.slnx` file.
-3. A folder under your user profile, `Xping/stores/<key>`, when there is no repository root or it
-   is not writable. The profile folder is `%LOCALAPPDATA%` on Windows, `~/Library/Application
-   Support` on macOS and `~/.local/share` on Linux.
+3. A folder under your user profile, `Xping/stores/<key>`, when there is no repository root or the
+   SDK cannot write to it. The profile folder is `%LOCALAPPDATA%` on Windows,
+   `~/Library/Application Support` on macOS, and `$XDG_DATA_HOME` or else `~/.local/share` on Linux.
 
 The `<key>` of the profile folder comes from the repository root when there is one. Otherwise it
 comes from the nearest folder above that holds a `.csproj`, `.fsproj` or `.vbproj` file. So
@@ -155,8 +156,10 @@ it.
 
 ## Failures
 
-**The local store never fails your test run.** When the SDK cannot write, for example because the
-checkout is read-only, the disk is full or a file is locked, the run has no local history. The SDK
+**The local store never fails your test run.** When the SDK cannot write the session, for example
+because the disk is full or because `XPING_LOCAL_STORE` names a folder it cannot write to, the run
+has no local history. A repository root that is not writable is not such a case: the SDK then uses
+the profile folder, so run `xping where` to find it. The SDK
 logs the reason at the `Debug` level. To see it, set
 [`XPING_LOGLEVEL=Debug`](configuration-reference.md#loglevel).
 
@@ -172,8 +175,8 @@ and reads the rest.
 | `XPING_LOCAL_STORE` | SDK and CLI | Moves the store. See [LocalStorePath](configuration-reference.md#localstorepath). |
 | `XPING_NO_BANNER` | SDK and CLI | Any non-empty value hides the SDK's retry hint after a test run and the CLI's Xping Cloud invitation |
 
-If you set `XPING_LOCAL_STORE` for the test run, set it for `xping report` too. Otherwise the CLI
-looks in another place and finds nothing.
+If you set `XPING_LOCAL_STORE` for the test run, set it for `xping report` too, to the same absolute
+path. Otherwise the CLI looks in another place and finds nothing.
 
 ```bash
 export XPING_LOCAL_STORE=/var/tmp/xping-store
