@@ -992,22 +992,20 @@ XpingContext.Initialize(config);
   run: dotnet test
 ```
 
-**Expected output when strict mode triggers:**
+**What the SDK prints** (NUnit on vstest, `dotnet test --logger "console;verbosity=normal"`):
 
 ```
-# Resilient mode (default) — configuration error
-[Error] Configuration validation failed: ApiKey is required.
-        SDK disabled - tests will run without observability tracking.
+# Resilient mode (default): configuration error, here XPING_MODE=Cloud without a key
+[Xping 10:43:01 ERR] Configuration validation failed: ApiKey is required in Cloud mode. SDK disabled - tests will run without observability tracking.
 
-# Strict mode — configuration error
-[Xping] Strict mode configuration error: Xping configuration invalid: ApiKey is required.
+# Strict mode: configuration error
+[Xping] Strict mode configuration error: Xping configuration invalid: ApiKey is required when StrictMode is enabled.
 
-# Resilient mode (default) — network error
-[Error] Network error occurred
-        HTTP request failed: ...
+# Resilient mode (default): network error
+[Xping 10:00:08 ERR] Network error occurred → HttpRequestException: Connection refused (127.0.0.1:9)
 
-# Strict mode — network error
-[Xping] Strict mode network error: Xping network error in strict mode: HTTP request failed: ...
+# Strict mode: network error
+[Xping] Xping network error in strict mode: HTTP request failed: Connection refused (127.0.0.1:9)
 ```
 
 ---

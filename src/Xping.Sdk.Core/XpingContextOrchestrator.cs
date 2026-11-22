@@ -22,6 +22,7 @@ using Xping.Sdk.Core.Models.PullRequests;
 using Xping.Sdk.Core.Models.Statistics;
 using Xping.Sdk.Core.Services.Collector;
 using Xping.Sdk.Core.Services.Collector.Internals;
+using Xping.Sdk.Core.Services.Diagnostics;
 using Xping.Sdk.Core.Services.Environment;
 using Xping.Sdk.Core.Services.Environment.Internals;
 using Xping.Sdk.Core.Services.LocalStore;
@@ -293,7 +294,7 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
         }
         catch (OptionsValidationException ex)
         {
-            string message = $"Xping configuration invalid: {string.Join(", ", ex.Failures)}";
+            string message = $"Xping configuration invalid: {Sentences.Join(ex.Failures)}";
 
             // Validation fails on the very first read, before _strictMode could be set.
             if (IsStrictModeEnabled(services))
@@ -302,8 +303,8 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             }
 
             _logger.LogError(
-                "Configuration validation failed: {Errors}. SDK disabled - tests will run without observability tracking. ",
-                string.Join("; ", ex.Failures));
+                "Configuration validation failed: {Errors} SDK disabled - tests will run without observability tracking.",
+                Sentences.Join(ex.Failures));
 
             _isHealthy = false;
             _collector = new NoOpTestExecutionCollector();
@@ -318,13 +319,13 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             // failure while resolving them.
             if (_strictMode || IsStrictModeEnabled(services))
             {
-                string message = $"Failed to initialize Xping SDK: {ex.Message}";
+                string message = $"Failed to initialize Xping SDK: {Sentences.End(ex.Message)}";
                 throw new XpingConfigurationException(message, ex);
             }
 
             _logger.LogError(
-                "Failed to initialize Xping SDK: {Message}. SDK disabled - tests will run without observability tracking.",
-                ex.Message);
+                "Failed to initialize Xping SDK: {Message} SDK disabled - tests will run without observability tracking.",
+                Sentences.End(ex.Message));
 
             _isHealthy = false;
             _collector = new NoOpTestExecutionCollector();
