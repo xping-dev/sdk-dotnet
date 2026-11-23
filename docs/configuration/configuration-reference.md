@@ -98,7 +98,7 @@ You cannot combine a configuration object with `appsettings.json`. To use the fi
 | Setting | Read by | Default | Description |
 |---|---|---|---|
 | [`CloudUrl`](#cloudurl) / `XPING_CLOUDURL` | CLI | `https://app.xping.io` | The Xping Cloud address for `xping login` and for Xping Cloud data in `xping report` |
-| `XPING_APIKEY`, `XPING_PROJECTID` | SDK and CLI | *(none)* | The CLI reads them for Xping Cloud data. See [Credentials](../cli/command-reference.md#credentials). |
+| `XPING_APIKEY`, `XPING_PROJECTID` | SDK and CLI | *(none)* | The CLI reads them for Xping Cloud data. See [Credentials](../cli/cloud-data.md#what-you-need). |
 | [`XPING_LOCAL_STORE`](#localstorepath) | SDK and CLI | *(none)* | Moves the local store for both |
 | [`XPING_SHELL`](#xping_shell) | CLI | `powershell` on Windows, `posix` elsewhere | The shell syntax of the commands `xping report` prints |
 | `XPING_NO_BANNER` | SDK and CLI | *(unset)* | Any non-empty value hides the SDK's retry hint and the CLI's Xping Cloud invitation |
@@ -183,7 +183,7 @@ output.
 **In the `xping` CLI:** the CLI uses the key to read Xping Cloud data when you have not signed in
 with `xping login`. `--api-key` wins over a sign-in. `XPING_APIKEY` and `appsettings.json` do not,
 because on a developer machine they usually hold the upload key. A key with only the Upload scope
-cannot read. See [Credentials](../cli/command-reference.md#credentials).
+cannot read. See [Credentials](../cli/cloud-data.md#what-you-need).
 
 ### ProjectId
 

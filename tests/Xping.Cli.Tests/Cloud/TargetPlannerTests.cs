@@ -217,7 +217,7 @@ public sealed class TargetPlannerTests
                 ? null
                 : ReportFixtures.Get("history-flaky").Test! with
                 {
-                    Test = ReportFixtures.LatestRunFailure("new", subject, "x").Subject with { Assembly = Assembly }
+                    Test = ReportFixtures.LatestRunFailure("new", subject, "x").Subject with { Assembly = Assembly, Fingerprint = $"fp-{subject}" }
                 },
             LatestRun = latestRunFailures is null
                 ? null
@@ -225,7 +225,8 @@ public sealed class TargetPlannerTests
                 {
                     Failures = [.. latestRunFailures.Select(n => ReportFixtures.LatestRunFailure("new", n, "x") with
                     {
-                        Subject = ReportFixtures.LatestRunFailure("new", n, "x").Subject with { Assembly = Assembly }
+                        // The model's executions are fingerprinted fp-<name>; the envelope's rows must agree.
+                        Subject = ReportFixtures.LatestRunFailure("new", n, "x").Subject with { Assembly = Assembly, Fingerprint = $"fp-{n}" }
                     })]
                 }
         };

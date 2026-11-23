@@ -223,7 +223,7 @@ NEEDS ATTENTION (4 high)                               most severe first
 
 rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
+https://docs.xping.io/cli/reading-the-report.html#the-population-marker
 
 Detail of row 1: xping report --id f_2b84a621 --assembly SampleApp.MSTest
 ````
@@ -308,7 +308,7 @@ xping report
 `xping report` then adds the Xping Cloud confidence score to the rows it prints. A key with only
 the Upload scope cannot read Xping Cloud data, so the CLI uses your sign-in instead. See
 [`xping login`](cli/command-reference.md#xping-login) and
-[Cloud data](cli/command-reference.md#cloud-data).
+[Cloud data](cli/cloud-data.md).
 
 To set up CI, see [Set up CI](getting-started/ci-cd-setup.md).
 

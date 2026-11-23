@@ -10,7 +10,7 @@ FINDING                                                       row 1 of 1
     cloud: confidence 0.22 v0.61 - highly unreliable - 35 d
     local: flaky in 20 runs here
     failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
-    evidence adequate | -env-cluster | f_89134598 | ...eckoutTests.cs:42
+    evidence adequate | -env-cluster | f_354063e8 | ...eckoutTests.cs:42
 
     test      MyApp.Tests.CheckoutTests.Completes
     assembly  MyApp.Tests
@@ -60,8 +60,8 @@ FAILURE MODES                                            3 failure modes
 
 rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
+https://docs.xping.io/cli/reading-the-report.html#the-population-marker
 
 Showing 1 of 1 finding | all: xping report --all --assembly MyApp.Tests
-History: xping report --test fp-MyApp --assembly MyApp.Tests
+History: xping report --test 5a915b19 --assembly MyApp.Tests
 Repro: dotnet test tests/MyApp.Tests/MyApp.Tests.csproj -e XPING_ENABLED=false --filter FullyQualifiedName=MyApp.Tests.CheckoutTests.Completes

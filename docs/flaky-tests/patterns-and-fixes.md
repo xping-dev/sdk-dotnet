@@ -36,7 +36,7 @@ that test. Run it that many times, from the repository root, or from the project
 command names no project. `-e XPING_ENABLED=false` keeps the reruns out of your history.
 `xping report --test <name>` prints the same `repro` line under each finding about the test, and
 the command as `Repro of row N:`.
-[Reproducing a finding](../cli/command-reference.md#reproducing-a-finding) shows the output and
+[Reproducing a finding](../cli/reading-the-report.md#reproducing-a-finding) shows the output and
 says which findings get a command.
 
 With no `Repro:` line because the runner wasn't recorded (the xUnit console runner, a custom host),
