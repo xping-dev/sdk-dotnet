@@ -543,8 +543,8 @@ Configuration property names are **case-sensitive** in JSON:
    ```json
    {
      "Xping": {
-       "FlushInterval": "30",         // ❌ Wrong: not TimeSpan format
-       "FlushInterval": "00:00:30"    // ✅ Correct: HH:MM:SS format
+       "FlushInterval": "1.5",        // ❌ Ignored: not whole seconds or hh:mm:ss
+       "FlushInterval": "00:00:30"    // ✅ Correct: hh:mm:ss, or whole seconds such as 30
      }
    }
    ```

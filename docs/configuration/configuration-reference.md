@@ -55,9 +55,12 @@ You cannot combine a configuration object with `appsettings.json`. To use the fi
   [Environment](#environment) setting.
 - Section and key names are not case-sensitive: `"Xping"`, `"xping"` and `"XPING"` are the same
   section.
-- In JSON, write a `TimeSpan` as `"hh:mm:ss"`. A bare number is days: `"30"` is 30 days.
-- In an `XPING_*` variable, write a `TimeSpan` as whole seconds (`"30"`) or as `"hh:mm:ss"`. Do not
-  use a fraction: a value with a dot is read as days and hours, so `"1.5"` is 1 day and 5 hours.
+- Write a `TimeSpan` as whole seconds (`30`) or as `"hh:mm:ss"` (`"00:00:30"`), in JSON, in an
+  `Xping__*` variable and in an `XPING_*` variable alike. A value in another form, such as `"1.5"` or
+  `"30s"`, is ignored and the setting keeps its default. The SDK prints a warning that names it:
+  `[Xping 16:39:12 WRN] XPING_RETRYDELAY '1.5' is not a duration and was ignored. Use whole seconds (30) or a time with colons (00:00:30).`
+  From `appsettings.json` or an `Xping__*` variable, the warning names the setting as
+  `Xping:RetryDelay`.
 - An `XPING_*` variable that is blank, or whose value does not parse, is ignored. So a missing
   secret, such as `XPING_APIKEY: ${{ secrets.XPING_APIKEY }}`, does not clear a key set elsewhere.
 
@@ -411,7 +414,7 @@ it.
 Turns the SDK off without removing it from the test project. With `false`, the tests run as usual.
 The SDK records nothing and prints
 `SDK is disabled via configuration (Enabled=false). Tests will run without observability tracking.`
-It prints the same line for `Mode = Disabled`.
+With `Mode = Disabled`, the line says `(Mode=Disabled)` instead.
 
 ```bash
 export XPING_ENABLED="false"
@@ -689,14 +692,19 @@ export XPING_LOCAL_STORE="/var/tmp/xping-store"
 
 - The SDK reads `XPING_LOCAL_STORE` once, when it starts. A change during the run does not move
   where the run is recorded.
-- The CLI reads the same variable, so an exported `XPING_LOCAL_STORE` moves both. Use an absolute
-  path: the SDK and the CLI each read a relative path from their own current directory, and the
-  SDK's is the test project's output folder.
-- The SDK uses the path as it is. When it cannot write there, the run has no local history: the SDK
-  does not fall back to another folder.
+- The CLI reads the same variable, so an exported `XPING_LOCAL_STORE` moves both.
+- An absolute path is used as it is. A relative path, such as `.xping-ci`, is read from the
+  repository root: the nearest folder above the test assembly that holds `.git`, a `*.sln` file or
+  a `*.slnx` file. Without a repository root, it is read from the nearest folder that holds a
+  `.csproj`, `.fsproj` or `.vbproj` file, and without one of those, from the current directory. So
+  the SDK and the CLI find the same folder when the CLI runs anywhere inside the repository.
+- On Windows, a path is absolute only with a drive and a separator (`C:\xping-store`) or as a UNC
+  path. `\xping-store` and `C:xping-store` are relative, and are read as above.
+- When the SDK cannot write to the folder, the run has no local history: the SDK does not fall
+  back to another folder.
 - A path set in code or in `appsettings.json` moves only the SDK. Export the variable for the CLI
-  too. The CLI's `--directory` option changes where the CLI starts looking for the repository. It
-  does not name a store.
+  too. The CLI's `--directory` option changes where the CLI starts looking for the repository, and
+  so the folder a relative path is read from.
 
 ### CloudUrl
 
@@ -801,6 +809,7 @@ shows where to call it.
   `XPING_BATCHSIZE`. The local store variable is `XPING_LOCAL_STORE`.
 - Check the value. A value that does not parse, such as `XPING_ENABLED=yes`, is ignored. Use `true`
   or `false`.
+  A duration that does not parse is ignored too, and the SDK prints a warning that names it.
 - Check that the test process gets it. An IDE reads the environment when it starts.
 
 **The SDK disabled itself:** the line after `Configuration validation failed:`, or after
