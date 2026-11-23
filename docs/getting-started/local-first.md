@@ -135,7 +135,7 @@ Each finding has four parts: a **severity**, a **kind**, the **test**, and the *
 | Part | Meaning |
 |---|---|
 | `HIGH` / `MED` / `LOW` | The severity. The report lists the most severe findings first. |
-| `flaky`, `slower`, `stopped running` | The *kind*: what the report observed. There are 13 kinds. The [command reference](../cli/reading-the-report.md#finding-kinds) lists them all. |
+| `flaky`, `slower`, `stopped running` | The *kind*: what the report observed. There are 13 kinds. [Reading the report](../cli/reading-the-report.md#finding-kinds) lists them all. |
 | The counts line | The measurement behind the finding, in plain numbers. |
 | `evidence sparse\|adequate\|robust` | How many runs support *this finding*. A finding can count only the runs it could measure, so this is not always every run of the test. Treat a finding with `sparse` evidence as a lead, not a verdict. |
 | `f_2a91c0de` | The finding id. It stays the same between reports, so you can use it in a ticket or compare two reports. |
@@ -164,8 +164,8 @@ The report has 13 finding kinds. These are the ones you see most often:
 
 The other kinds are deeper retries (`RetryDeepening`), out of retries (`RetryExhausted`), unstable
 timing (`DurationUnstable`), concurrency (`ParallelSensitive`), broken fixture (`BrokenFixture`),
-shared failure (`SharedFailure`) and time sensitive (`TimeSensitive`). The
-[command reference](../cli/reading-the-report.md#finding-kinds) describes each one.
+shared failure (`SharedFailure`) and time sensitive (`TimeSensitive`).
+[Reading the report](../cli/reading-the-report.md#finding-kinds) describes each one.
 
 Every kind needs the 5-run minimum. Before that, the SDK still tells you about a retry in the run
 that just finished. Outside CI, it writes this line to your terminal when the run ends:

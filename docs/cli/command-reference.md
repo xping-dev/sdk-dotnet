@@ -125,7 +125,7 @@ that recent, the window is the last 20 runs.
 
 `--all` means every finding, not every assembly. Use `--assembly` to choose an assembly.
 
-### Exit codes
+### Report exit codes
 
 | Code | Meaning |
 |---|---|
@@ -135,7 +135,8 @@ that recent, the window is the last 20 runs.
 | `3` | With `--id`, the report was produced and that finding is not in it. With `--test`, no test matches the name, or none of its runs is in the window |
 | `4` | With `--test`, the name matches more than one test. With `--id` and no `--assembly`, more than one assembly reports the finding |
 | `70` | The CLI crashed |
-| `130` | You pressed Ctrl+C |
+
+Ctrl+C ends `report` without an exit code of its own. See [Exit codes](#exit-codes).
 
 Exit `1` means "the report found problems". Exit `2` means "the report could not run". A build step
 can tell the two apart. Xping Cloud never changes the exit code.
@@ -154,7 +155,7 @@ part. The other forms are below.
 
 ### The Cloud invitation
 
-At a terminal, after a report with findings, the CLI can print one line on stderr:
+At a terminal, after a text report with findings, the CLI can print one line on stderr:
 
 ```
 See flakiness across CI and your whole team → https://xping.io/start
@@ -163,10 +164,12 @@ See flakiness across CI and your whole team → https://xping.io/start
 It appears at most once every 24 hours per store. The CLI keeps the time in `state.json` in the
 store folder. It does not appear when:
 
-- stdout or stderr is not a terminal;
+- stdout is not a terminal;
+- you use `--format json`;
+- the report is the overview of several assemblies;
 - the report has no findings;
 - the newest run was recorded in Cloud mode, or Xping Cloud answered the report;
-- `XPING_NO_BANNER` is set to any value.
+- `XPING_NO_BANNER` is set to any non-empty value.
 
 ### `--summary`
 
@@ -924,7 +927,7 @@ code is the one your shell reports for an interrupted process.
 | Variable | Effect |
 |---|---|
 | `XPING_LOCAL_STORE` | Moves the local store. Set the same value the SDK used. See [LocalStorePath](../configuration/configuration-reference.md#localstorepath) |
-| `XPING_NO_BANNER` | Any value hides the [Cloud invitation](#the-cloud-invitation) |
+| `XPING_NO_BANNER` | Any non-empty value hides the [Cloud invitation](#the-cloud-invitation) |
 | `XPING_SHELL` | The shell printed commands are quoted for: `posix` or `powershell`. Default: `powershell` on Windows, `posix` elsewhere. Any other value prints a warning, and the default applies |
 | `XPING_APIKEY` | An API key for Xping Cloud data when you are not signed in. `Xping__ApiKey` and `XPING__APIKEY` work too. See [What you need](cloud-data.md#what-you-need) |
 | `XPING_PROJECTID` | The Xping Cloud project to read. `--project` overrides it. `Xping__ProjectId` and `XPING__PROJECTID` work too |

@@ -846,8 +846,8 @@ public sealed class ShareableOutputTests
             string.Join(' ', ReportVocabulary.PopulationLegend),
             StringComparison.Ordinal);
 
-        // The section this points at is `### The population marker` in
-        // docs/cli/command-reference.md. Renaming that heading moves the anchor and breaks this.
+        // The section this points at is `## The population marker` in
+        // docs/cli/reading-the-report.md. Renaming that heading moves the anchor and breaks this.
         Assert.Equal(
             "https://docs.xping.io/cli/reading-the-report.html#the-population-marker",
             ReportVocabulary.PopulationLegend[^1]);
