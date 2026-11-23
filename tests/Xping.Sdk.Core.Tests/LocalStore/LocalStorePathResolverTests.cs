@@ -53,6 +53,73 @@ public sealed class LocalStorePathResolverTests : IDisposable
     }
 
     [Fact]
+    public void ARelativeExplicitPathNamesOneStoreForTheSdkAndTheCli()
+    {
+        // The SDK starts from the test assembly's bin folder and the CLI from where it is run. Read
+        // from either one's current directory, XPING_LOCAL_STORE=.xping-ci named two stores.
+        string repo = Path.Combine(_temp, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, ".git"));
+        string sdkStart = Path.Combine(repo, "tests", "MyTests", "bin", "Release", "net10.0");
+        string cliStart = Path.Combine(repo, "src");
+        Directory.CreateDirectory(sdkStart);
+        Directory.CreateDirectory(cliStart);
+
+        string expected = Path.Combine(repo, ".xping-ci");
+        Assert.Equal(expected, LocalStorePathResolver.ResolveExplicit(".xping-ci", sdkStart));
+        Assert.Equal(expected, LocalStorePathResolver.ResolveExplicit(".xping-ci", cliStart));
+    }
+
+    [Fact]
+    public void ARelativeExplicitPathOutsideARepositoryIsReadFromTheProjectFolder()
+    {
+        string project = Path.Combine(_temp, "MyTests");
+        string bin = Path.Combine(project, "bin", "Release", "net10.0");
+        Directory.CreateDirectory(bin);
+        File.WriteAllText(Path.Combine(project, "MyTests.csproj"), "<Project />");
+
+        Assert.Equal(
+            Path.Combine(project, "store"),
+            LocalStorePathResolver.ResolveExplicit("store", bin));
+    }
+
+    [Fact]
+    public void ARelativeExplicitPathWithNoRepositoryOrProjectIsReadFromTheCurrentDirectory()
+    {
+        // The start directory can be an external runner's install folder (nunit3-console from a
+        // tools folder), which is outside the repository and often read-only.
+        string runner = Path.Combine(_temp, "tools", "nunit.consolerunner");
+        Directory.CreateDirectory(runner);
+
+        Assert.Equal(
+            Path.GetFullPath("store"),
+            LocalStorePathResolver.ResolveExplicit("store", runner));
+    }
+
+    [Theory]
+    [InlineData(@"C:\xping-store", true, true)]
+    [InlineData("C:/xping-store", true, true)]
+    [InlineData(@"\\server\share\store", true, true)]
+    [InlineData(@"\xping-store", true, false)]
+    [InlineData("C:xping-store", true, false)]
+    [InlineData("xping-store", true, false)]
+    [InlineData("/var/tmp/store", false, true)]
+    [InlineData("xping-store", false, false)]
+    public void OnlyAPathThatNamesOneLocationIsUsedAsItIs(string path, bool windows, bool expected)
+    {
+        // On Windows "\xping-store" is on the current drive and "C:xping-store" in that drive's current
+        // directory, so the testhost and the CLI read either as a different store.
+        Assert.Equal(expected, LocalStorePathResolver.IsFullyQualified(path, windows));
+    }
+
+    [Fact]
+    public void AnAbsoluteExplicitPathIsUsedAsItIs()
+    {
+        string store = Path.Combine(_temp, "elsewhere", "store");
+
+        Assert.Equal(store, LocalStorePathResolver.ResolveExplicit(store, _temp));
+    }
+
+    [Fact]
     public void FindsRepositoryRootByGitDirectory()
     {
         // Arrange — nest the start directory several levels below the marker, mirroring the real

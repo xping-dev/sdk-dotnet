@@ -213,6 +213,57 @@ public sealed class XpingContextOrchestratorEnvVarTests
     }
 
     [Fact]
+    public async Task AnIgnoredDurationIsLoggedAsAWarning()
+    {
+        using var _ = WithEnv(("XPING_APIKEY", null), ("XPING_MODE", "LocalOnly"), ("XPING_RETRYDELAY", "1.5"));
+        using var logs = new CapturingLoggerProvider();
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        ServiceHelper.SetupDefaultMocks(uploaderMock, envDetectorMock);
+        using var store = new ScratchStore();
+
+        using IHost host = ServiceHelper.BuildRegisteredOrchestratorHost(
+            new XpingConfiguration { LocalStorePath = store.Path }, uploaderMock, envDetectorMock,
+            configureServices: services => services.AddSingleton<ILoggerProvider>(logs));
+        var orchestrator = new TestOrchestrator(host);
+        await orchestrator.DisposeAsync();
+
+        Assert.Contains(
+            "XPING_RETRYDELAY '1.5' is not a duration and was ignored. " +
+            "Use whole seconds (30) or a time with colons (00:00:30).",
+            logs.Messages);
+    }
+
+    [Theory]
+    [InlineData(true, "Mode=Disabled")]
+    [InlineData(false, "Enabled=false")]
+    public async Task TheDisabledMessageNamesTheSettingThatTurnedTheSdkOff(bool enabled, string setting)
+    {
+        using var _ = WithEnv(("XPING_APIKEY", null), ("XPING_MODE", null), ("XPING_ENABLED", null));
+        using var logs = new CapturingLoggerProvider();
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        ServiceHelper.SetupDefaultMocks(uploaderMock, envDetectorMock);
+        using var store = new ScratchStore();
+
+        using IHost host = ServiceHelper.BuildRegisteredOrchestratorHost(
+            new XpingConfiguration
+            {
+                Enabled = enabled,
+                Mode = enabled ? XpingMode.Disabled : XpingMode.Auto,
+                LocalStorePath = store.Path,
+            },
+            uploaderMock, envDetectorMock,
+            configureServices: services => services.AddSingleton<ILoggerProvider>(logs));
+        var orchestrator = new TestOrchestrator(host);
+        await orchestrator.DisposeAsync();
+
+        Assert.Contains(
+            $"SDK is disabled via configuration ({setting}). Tests will run without observability tracking.",
+            logs.Messages);
+    }
+
+    [Fact]
     public void AStrictModeConfigurationErrorJoinsTheErrorsAsSentences()
     {
         using var _ = WithEnv(("XPING_APIKEY", null), ("XPING_STRICTMODE", "true"), ("XPING_BATCHSIZE", "2000"));

@@ -205,6 +205,14 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             // instance, so the raw sources are consulted as well.
             _strictMode = configuration.StrictMode || IsStrictModeEnabled(services);
 
+            foreach (KeyValuePair<string, string> ignored in configuration.IgnoredDurations)
+            {
+                _logger.LogWarning(
+                    "{Setting} '{Value}' is not a duration and was ignored. " +
+                    "Use whole seconds (30) or a time with colons (00:00:30).",
+                    ignored.Key, ignored.Value);
+            }
+
             _collector = services.GetRequiredService<ITestExecutionCollector>();
             _uploader = services.GetRequiredService<IXpingUploader>();
             _environmentDetector = services.GetRequiredService<IEnvironmentDetector>();
@@ -288,8 +296,10 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             }
             else
             {
+                // Name the setting that turned the SDK off: Enabled=false and Mode=Disabled both land here.
                 _logger.LogWarning(
-                    "SDK is disabled via configuration (Enabled=false). Tests will run without observability tracking.");
+                    "SDK is disabled via configuration ({Setting}). Tests will run without observability tracking.",
+                    configuration.Enabled ? "Mode=Disabled" : "Enabled=false");
             }
         }
         catch (OptionsValidationException ex)

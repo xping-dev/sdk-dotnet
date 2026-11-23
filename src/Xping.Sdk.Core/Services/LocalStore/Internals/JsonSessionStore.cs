@@ -37,12 +37,13 @@ internal sealed class JsonSessionStore : ILocalSessionStore
     /// <param name="options">Retention limits for the store.</param>
     /// <param name="logger">Receives the store's diagnostics.</param>
     /// <param name="startDirectory">
-    /// Where the repository walk starts when no path is configured. Defaults to the location of
-    /// the calling assembly.
+    /// Where the repository walk starts. Defaults to the folder of the SDK assembly.
     /// </param>
     /// <param name="storePath">
-    /// The store root, when configured explicitly. Skips the repository walk altogether; the
-    /// directory is created on first write like any resolved root.
+    /// The store root, when configured explicitly. An absolute path is used as it is; a relative
+    /// one is read from the repository root or project folder found from
+    /// <paramref name="startDirectory"/>. The directory is created on first write like any
+    /// resolved root.
     /// </param>
     public JsonSessionStore(
         LocalStoreOptions options, ILogger logger, string? startDirectory = null, string? storePath = null)
@@ -52,7 +53,7 @@ internal sealed class JsonSessionStore : ILocalSessionStore
         _storePath = new Lazy<string?>(() =>
             string.IsNullOrWhiteSpace(storePath)
                 ? LocalStorePathResolver.Resolve(startDirectory)
-                : storePath);
+                : LocalStorePathResolver.ResolveExplicit(storePath!, startDirectory));
     }
 
     public bool IsAvailable => _storePath.Value != null;

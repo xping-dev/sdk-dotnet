@@ -4,7 +4,6 @@
  */
 
 using System.Globalization;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using Xping.Sdk.Core.Services.Diagnostics;
@@ -31,9 +30,9 @@ namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 /// </para>
 /// <para>
 /// An explicit path (<c>XPING_LOCAL_STORE</c> or <see cref="Configuration.XpingConfiguration.LocalStorePath"/>)
-/// never reaches this class: callers read it once and hand it to the store. The store resolves its
-/// root lazily, on the first write at the end of the run, and a test suite that sets the variable
-/// for the tool it tests would otherwise redirect where its own run is recorded.
+/// is read by the callers, never by this class: they read it once and hand it to the store, which
+/// passes it to <see cref="ResolveExplicit"/>. A test suite that sets the variable for the tool it
+/// tests would otherwise redirect where its own run is recorded.
 /// </para>
 /// <para>
 /// The repository root is preferred over the user profile because flakiness history is only
@@ -55,7 +54,7 @@ internal static class LocalStorePathResolver
     /// Resolves the store root directory, or <see langword="null"/> when no writable location exists.
     /// </summary>
     /// <param name="startDirectory">
-    /// Directory to start the upward walk from. Defaults to the location of the calling assembly.
+    /// Directory to start the upward walk from. Defaults to the folder of the SDK assembly, which sits in the test project's output.
     /// </param>
     /// <returns>The absolute path of the store root, or <see langword="null"/>.</returns>
     public static string? Resolve(string? startDirectory = null)
@@ -75,6 +74,69 @@ internal static class LocalStorePathResolver
         }
 
         return GetProfileFallback(repoRoot ?? FindProjectDirectory(origin) ?? origin);
+    }
+
+    /// <summary>
+    /// Makes an explicit store path (<c>XPING_LOCAL_STORE</c> or <c>LocalStorePath</c>) absolute.
+    /// </summary>
+    /// <param name="storePath">The path as configured.</param>
+    /// <param name="startDirectory">
+    /// Directory the walk starts from. Defaults to the folder of the SDK assembly, which sits in the test project's output.
+    /// </param>
+    /// <returns>The absolute path of the store root.</returns>
+    /// <remarks>
+    /// <para>
+    /// A relative path is read from the repository root, else from the nearest project folder, the
+    /// same anchors the profile fallback is keyed by. Read from the current directory instead, the
+    /// SDK would put it under the test project's output folder and the CLI under wherever it was
+    /// run, so one exported variable would name two stores.
+    /// </para>
+    /// <para>
+    /// With neither above the start directory, the path is read from the current directory, not
+    /// from the start directory: that can be a test runner's install folder, which is outside the
+    /// repository and often read-only.
+    /// </para>
+    /// </remarks>
+    public static string ResolveExplicit(string storePath, string? startDirectory = null)
+    {
+        if (IsFullyQualified(storePath))
+            return Path.GetFullPath(storePath);
+
+        string? origin = startDirectory ?? GetAssemblyDirectory();
+        string anchor = RepositoryRoot.Find(origin)
+            ?? FindProjectDirectory(origin)
+            ?? Directory.GetCurrentDirectory();
+
+        return Path.GetFullPath(Path.Combine(anchor, storePath));
+    }
+
+    /// <summary>
+    /// Returns whether <paramref name="path"/> names one location whatever the current directory
+    /// and drive are.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Path.IsPathRooted"/> is not enough on Windows: <c>\store</c> is on the current
+    /// drive and <c>C:store</c> is in that drive's current directory, so the testhost and the CLI
+    /// would read either as two different stores. netstandard2.0 has no
+    /// <c>Path.IsPathFullyQualified</c>, hence the check here.
+    /// </remarks>
+    internal static bool IsFullyQualified(string path) =>
+        IsFullyQualified(path, RuntimeInformation.IsOSPlatform(OSPlatform.Windows));
+
+    /// <summary>
+    /// <see cref="IsFullyQualified(string)"/> for a given platform, so both rules can be tested anywhere.
+    /// </summary>
+    internal static bool IsFullyQualified(string path, bool windows)
+    {
+        if (!windows)
+            return path.StartsWith("/", StringComparison.Ordinal);
+
+        if (path.Length >= 2 && IsSeparator(path[0]) && IsSeparator(path[1]))
+            return true; // UNC (\\server\share) or a device path (\\?\C:\)
+
+        return path.Length >= 3 && char.IsLetter(path[0]) && path[1] == ':' && IsSeparator(path[2]);
+
+        static bool IsSeparator(char c) => c == '\\' || c == '/';
     }
 
     private static readonly string[] ProjectFileExtensions = [".csproj", ".fsproj", ".vbproj"];
@@ -165,10 +227,11 @@ internal static class LocalStorePathResolver
     {
         try
         {
-            string? location = Assembly.GetEntryAssembly()?.Location;
-
-            if (string.IsNullOrEmpty(location))
-                location = typeof(LocalStorePathResolver).Assembly.Location;
+            // The SDK's own assembly, not the entry assembly: under an external runner
+            // (nunit3-console from a tools folder, Visual Studio's testhost.net48.exe) the entry
+            // assembly sits in the runner's install folder, outside the repository. The SDK is
+            // always copied into the test project's output. The CLI always passes a start directory.
+            string? location = typeof(LocalStorePathResolver).Assembly.Location;
 
             // Single-file and some dynamic hosts report an empty location.
             if (string.IsNullOrEmpty(location))
