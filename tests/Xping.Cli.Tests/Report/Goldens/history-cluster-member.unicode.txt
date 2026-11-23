@@ -55,7 +55,7 @@ FINDINGS                                                      2 findings
 
 rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
+https://docs.xping.io/cli/reading-the-report.html#the-population-marker
 
 2 findings about this test · all: xping report --all --assembly SampleApp.MSTest --runs 10
 Detail of row 3: xping report --id f_1b44e0c9 --assembly SampleApp.MSTest --runs 10

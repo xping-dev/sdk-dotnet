@@ -86,7 +86,7 @@ FINDINGS                                                       1 finding
 
 rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
+https://docs.xping.io/cli/reading-the-report.html#the-population-marker
 
 1 finding about this test | all: xping report --all --assembly MyApp.Tests --runs 20
 Detail of row 1: xping report --id f_16b97583 --assembly MyApp.Tests --runs 20

@@ -194,7 +194,7 @@ NEEDS ATTENTION (4 high)                               most severe first
 
 rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
+https://docs.xping.io/cli/reading-the-report.html#the-population-marker
 
 Detail of row 1: xping report --id f_2b84a621 --assembly SampleApp.MSTest
 ````
@@ -343,7 +343,7 @@ uploads to Xping Cloud.
 > **Xping Cloud data in the CLI.** After `xping login`, `xping report` asks Xping Cloud about the
 > tests it lists and labels the answers, so you cannot mistake them for local numbers. When Xping
 > Cloud cannot be reached, you get the local report and one line that says why.
-> [Cloud data →](https://docs.xping.io/cli/command-reference.html#cloud-data)
+> [Cloud data →](https://docs.xping.io/cli/cloud-data.html)
 
 ---
 

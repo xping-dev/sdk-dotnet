@@ -341,7 +341,7 @@ internal static partial class ReportFixtures
     /// </summary>
     public static CloudHealthTestDto HealthTest(string name, CloudDigestDto digest, string? assembly = "MyApp.Tests") =>
         new(
-            new SubjectDto("test", $"fp-{name}", name, name, SubjectNames.ShortName(name, name), null, null, null, assembly, null, null, null),
+            new SubjectDto("test", Fingerprint(name), name, name, SubjectNames.ShortName(name, name), null, null, null, assembly, null, null, null),
             digest);
 
     // The detail view of a finding whose failure modes Cloud matched, did not see, and could not sign.

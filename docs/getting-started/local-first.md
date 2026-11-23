@@ -67,7 +67,7 @@ The SDK writes each run to a local store. `xping report` shows no findings until
 least **5 runs**, and each test needs at least 5 runs of its own. With fewer runs, the report shows
 the counts but no findings. Fewer runs cannot tell a flaky test from a test that just broke.
 From the second run on, the report does show the failures of the latest run. See
-[The latest run](../cli/command-reference.md#the-latest-run).
+[The latest run](../cli/reading-the-report.md#the-latest-run).
 
 ---
 
@@ -123,7 +123,7 @@ NEEDS ATTENTION (1 high, 1 medium, 1 low)              most severe first
 
 rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
+https://docs.xping.io/cli/reading-the-report.html#the-population-marker
 
 Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests
 ````
@@ -135,7 +135,7 @@ Each finding has four parts: a **severity**, a **kind**, the **test**, and the *
 | Part | Meaning |
 |---|---|
 | `HIGH` / `MED` / `LOW` | The severity. The report lists the most severe findings first. |
-| `flaky`, `slower`, `stopped running` | The *kind*: what the report observed. There are 13 kinds. The [command reference](../cli/command-reference.md#finding-kinds) lists them all. |
+| `flaky`, `slower`, `stopped running` | The *kind*: what the report observed. There are 13 kinds. [Reading the report](../cli/reading-the-report.md#finding-kinds) lists them all. |
 | The counts line | The measurement behind the finding, in plain numbers. |
 | `evidence sparse\|adequate\|robust` | How many runs support *this finding*. A finding can count only the runs it could measure, so this is not always every run of the test. Treat a finding with `sparse` evidence as a lead, not a verdict. |
 | `f_2a91c0de` | The finding id. It stays the same between reports, so you can use it in a ticket or compare two reports. |
@@ -164,8 +164,8 @@ The report has 13 finding kinds. These are the ones you see most often:
 
 The other kinds are deeper retries (`RetryDeepening`), out of retries (`RetryExhausted`), unstable
 timing (`DurationUnstable`), concurrency (`ParallelSensitive`), broken fixture (`BrokenFixture`),
-shared failure (`SharedFailure`) and time sensitive (`TimeSensitive`). The
-[command reference](../cli/command-reference.md#finding-kinds) describes each one.
+shared failure (`SharedFailure`) and time sensitive (`TimeSensitive`).
+[Reading the report](../cli/reading-the-report.md#finding-kinds) describes each one.
 
 Every kind needs the 5-run minimum. Before that, the SDK still tells you about a retry in the run
 that just finished. Outside CI, it writes this line to your terminal when the run ends:
@@ -301,7 +301,7 @@ xping login
 cannot mistake it for a local number. Under `FLAGGED IN CLOUD`, it lists the tests that Xping Cloud
 calls flaky, broken or unstable but that passed here. Neither changes the local counts or the exit
 code. When you are offline, it prints the local report. See
-[Cloud data](../cli/command-reference.md#cloud-data).
+[Cloud data](../cli/cloud-data.md).
 
 To stop the SDK from uploading when credentials are present, set the mode:
 

@@ -5,57 +5,85 @@ title: Xping CLI Reference
 
 # Xping CLI Reference
 
-`Xping.Cli` reads the local run store written by the Xping SDK and reports on it. The report needs no account, no API key, and no network access.
+The `xping` command reads the local run store that the Xping SDK writes, and reports on it. The
+report needs no account, no API key and no network access.
 
-Signing in is optional. With [`xping login`](#xping-login) or an API key, `xping report` adds what Xping Cloud knows about each test to the same rows — see [Cloud data](#cloud-data). Without a credential, the CLI makes no network calls.
+This page lists every command, option, exit code and output stream. Two other pages explain the
+output:
 
-The SDK records runs; the CLI interprets them. Keeping analysis out of the test host means your test runs pay no analysis cost and the report never has to compete with the test runner for the terminal.
+- [Reading the report](reading-the-report.md): the findings, evidence, population markers, failure
+  modes, repro commands and test history.
+- [Xping Cloud data in the CLI](cloud-data.md): what the report adds when you sign in or set an API
+  key.
 
 ---
 
 ## Installation
 
-> **Requires the .NET 10 SDK or runtime.** The tool targets `net10.0` and will not launch on
-> older runtimes. The Xping SDK packages themselves target `netstandard2.0` and are unaffected —
-> your test projects can stay on any supported .NET version.
+The CLI needs the .NET 10 runtime or SDK. The tool targets `net10.0`. Your test projects can stay
+on any .NET version that the SDK packages support.
 
-### As a global tool (recommended)
+The packages are prereleases, so each install command needs `--prerelease`.
+
+### As a global tool
 
 ```bash
-dotnet tool install -g Xping.Cli
+dotnet tool install -g Xping.Cli --prerelease
 ```
 
-Invoke it as `xping`, from any directory. This is how the tool refers to itself: every command it
-prints — in help text, in error hints, in the `drillDown` field of `--format json` — is a bare
-`xping` command you can paste back into the shell.
-
-Printed commands are quoted for the shell you most likely use: PowerShell 7.3 or later on Windows,
-bash or zsh everywhere else. Set `XPING_SHELL` to `posix` or `powershell` to choose; Git Bash on
-Windows, and a coding agent running commands through it, wants `posix`. The `--format json` fields
-carry the same strings. cmd.exe and Windows PowerShell 5.1 aren't supported; see
-[known limitations](../troubleshooting/known-limitations.md#printed-commands-are-quoted-for-one-shell-chosen-by-xping_shell-or-the-os).
-
-> Global tools install to `~/.dotnet/tools` (`%USERPROFILE%\.dotnet\tools` on Windows), which the
-> .NET SDK normally adds to your `PATH`. If your shell answers `command not found: xping`, add that
-> directory to `PATH` and reopen the terminal.
+Run it as `xping`, from any folder. Global tools go to `~/.dotnet/tools`
+(`%USERPROFILE%\.dotnet\tools` on Windows). The .NET SDK usually adds that folder to your `PATH`. If
+your shell says `command not found: xping`, add the folder to `PATH` and open a new terminal.
 
 ### As a local tool
 
 ```bash
-dotnet new tool-manifest        # if your repo has no manifest yet
-dotnet tool install Xping.Cli
+dotnet new tool-manifest        # if the repository has no manifest yet
+dotnet tool install Xping.Cli --prerelease
 ```
 
-Invoke it as `dotnet xping`. The version is pinned in `.config/dotnet-tools.json`, so everyone on
-the team gets identical output; teammates run `dotnet tool restore` once. Choose this if pinning
-the CLI version alongside your repo matters more than the shorter command — the rest of this page
-writes `xping`, and each of those becomes `dotnet xping` for a manifest install.
+Run it as `dotnet xping`. The version is pinned in `.config/dotnet-tools.json`, so everyone on the
+team gets the same output. Each teammate runs `dotnet tool restore` once. This page writes `xping`.
+With a local tool, write `dotnet xping` instead.
+
+### Printed commands
+
+Every command the CLI prints, in help text, in hints and in the `drillDown` field of
+`--format json`, starts with `xping` and runs as printed.
+
+The CLI quotes printed commands for one shell: PowerShell 7.3 or later on Windows, and bash or zsh
+elsewhere. Set `XPING_SHELL` to `posix` or `powershell` to choose. Git Bash on Windows, and a coding
+agent that runs commands through it, needs `posix`. The `--format json` fields carry the same
+strings. cmd.exe and Windows PowerShell 5.1 are not supported. See
+[known limitations](../troubleshooting/known-limitations.md#printed-commands-are-quoted-for-one-shell-chosen-by-xping_shell-or-the-os).
+
+---
+
+## Commands
+
+| Command | Does |
+|---|---|
+| [`xping report`](#xping-report) | Reports findings from recent local runs |
+| [`xping where`](#xping-where) | Shows where local runs are stored |
+| [`xping clear`](#xping-clear) | Deletes recorded runs |
+| [`xping login`](#xping-login) | Signs in to Xping Cloud |
+| [`xping logout`](#xping-logout) | Signs out of Xping Cloud and removes the stored sign-in |
+| [`xping auth status`](#xping-auth-status) | Shows which Xping Cloud credential the CLI would use |
+| [`xping --version`](#xping---version) | Prints the version |
+
+### Help
+
+- `xping --help`, `xping -h`, `xping -?` and `xping help` print the commands and exit `0`.
+- `xping` with no arguments prints the same help and exits `1`.
+- `xping <command> --help` prints the command's options and exits `0`.
+- An unknown command or option, or an invalid value, prints the error on stderr, then
+  ``Run `xping report --help` for usage.`` (with the command you ran), and exits `2`.
 
 ---
 
 ## `xping report`
 
-Reports test reliability findings from recent local runs.
+Reports findings from recent local runs.
 
 ```bash
 xping report [options]
@@ -63,790 +91,85 @@ xping report [options]
 
 | Option | Default | Description |
 |---|---|---|
-| `--runs <n>` | 20 runs / 14 days | Recent runs to analyse. Alias: `--last`. Under `--test` the default is every run in the store |
-| `--since <sha\|date>` | — | Analyse from a commit or date instead. Excludes `--runs` |
-| `--top <n>` | `10` | Findings to show. Findings about one test stay together, so the cut is not strictly the `n` most severe — see [The report](#the-report). Excludes `--all`. Needs `--assembly` when the store holds several |
-| `--all` | off | Show **every finding**, and every row of [the latest run](#the-latest-run), rather than the first ten of each. Needs `--assembly` when the store holds several |
-| `--kind <Kind>...` | all | Restrict to one or more finding kinds. Needs `--assembly` when the store holds several |
-| `--assembly <name>` | the only one | Report on one test assembly. Without it, a store with several gets [one row per assembly](#scoping) |
-| `--id <f_…>` | — | Show one finding in detail — see [Finding ids](#finding-ids). Excludes `--test`, `--kind`, `--top`, `--all`, `--fail-on` and `--summary` |
-| `--test <name>` | — | Show one test's run-by-run history, by its name or fingerprint — see [Test history](#test-history). Excludes `--id`, `--kind`, `--top`, `--all`, `--fail-on` and `--summary` |
-| `--directory <path>` | working directory | Resolve the store starting from this directory |
-| `--project <key>` | — | Read [Cloud data](#cloud-data) from this Xping Cloud project. Overrides `XPING_PROJECTID` |
-| `--format <f>` | `text` | `text`, `json` or `summary` |
-| `--json` | off | Alias for `--format json` |
-| `--summary` | off | Alias for `--format summary` |
-| `--fail-on <s>` | `none` | Exit non-zero when a finding reaches `high`, `medium` or `low`. Without `--assembly`, judged over every assembly |
-| `--ascii` | auto | Force ASCII output |
-| `--no-color` | auto | Never emit ANSI colour. `NO_COLOR` is honoured too |
+| `--runs <n>` | see below | The number of recent runs to analyse. `--last` is the same option. Under `--test`, the default is every run in the store |
+| `--since <sha\|date>` | — | Analyse the runs from a commit or a date (`yyyy-MM-dd`). Cannot be used with `--runs` |
+| `--top <n>` | `10` | The number of rows to show. Findings about one test stay together, so a lower-severity finding can come before a higher one about another test. Cannot be used with `--all` |
+| `--all` | off | Show every finding, and every row of [the latest run](reading-the-report.md#the-latest-run) |
+| `--kind <kind>...` | all | Show only these [finding kinds](reading-the-report.md#finding-kinds) |
+| `--assembly <name>` | the only one | Report on one test assembly. Without it, a store with several assemblies gets [one row per assembly](#scoping) |
+| `--id <f_…>` | — | Show one finding in detail. See [Finding ids](reading-the-report.md#finding-ids) |
+| `--test <name>` | — | Show one test's run-by-run history, by name or fingerprint. See [Test history](reading-the-report.md#test-history) |
+| `--directory <path>` | current folder | Find the store starting from this folder |
+| `--project <key>` | — | Read [Xping Cloud data](cloud-data.md) from this project. Overrides `XPING_PROJECTID` |
+| `--format <f>` | `text` | `text`, `json` or `summary`, in any case |
+| `--json` | off | The same as `--format json` |
+| `--summary` | off | The same as `--format summary` |
+| `--fail-on <s>` | `none` | Exit `1` when a finding reaches this severity: `high`, `medium` or `low`. Without `--assembly`, every assembly is checked |
+| `--ascii` | auto | Use ASCII output |
+| `--no-color` | auto | Never use ANSI colour. `NO_COLOR` does the same |
 
-> `--all` means *every finding*, not *every assembly*. Scoping is `--assembly`.
+`--last`, `--json` and `--summary` are shorter ways to write `--runs`, `--format json` and
+`--format summary`.
 
-**Exit codes:** `0` a report was produced and nothing reached `--fail-on` · `1` a finding reached `--fail-on`, in any assembly · `2` no report could be produced (no store, no readable runs, a parse error, or `--top`, `--all` or `--kind` without `--assembly` over several assemblies) · `3` with `--id`, the report was produced and that finding is not in it; with `--test`, no test matches the name, or none of its runs is in the window · `4` with `--test`, the name matches more than one test; with `--id` and no `--assembly`, more than one assembly reports that finding · `70` the CLI crashed · `130` cancelled.
+**The default window** is the last 20 runs, cut to the runs from the last 14 days. When no run is
+that recent, the window is the last 20 runs.
 
-The 1/2 distinction is what lets a build step tell "I looked and found problems" apart from "I could not look". Warnings go to stderr, so `--format json` on stdout stays parsable.
+**Options that cannot be combined.** The command exits `2` for each of these:
 
-A run stamped more than a day ahead of your clock is left out of the window rather than allowed to
-define it. The window's end is the instant every finding is aged against, so one run recorded by a
-fast clock — a container sharing the checkout, a CI runner that drifted — would age the whole report
-against a moment that never happened. Such runs are counted in `summary.skewedSessions`, called out
-above the report, and named on stderr, because the fix is the clock on the machine that recorded
-them. When *every* recorded run is ahead of your clock, none is excluded: one clock wrote the whole
-store, the spacing between its runs is intact, and the report is dated against that clock and says so.
+- `--id` with `--test`, `--kind`, `--top`, `--all`, `--fail-on` or `--summary`;
+- `--test` with `--kind`, `--top`, `--all`, `--fail-on` or `--summary`;
+- `--runs` with `--since`, and `--all` with `--top`;
+- `--json` with `--summary`, and either of them with a different `--format`;
+- `--format summary` with `--id` or `--test`;
+- `--kind`, `--top` or `--all` without `--assembly`, when the store holds several assemblies.
 
-### The report
+`--all` means every finding, not every assembly. Use `--assembly` to choose an assembly.
 
-The default output is built to be shared. The findings sit inside a fenced code block, so selecting the report and pasting it into Slack, a pull request or a ticket renders it in monospace with its columns intact:
+### Report exit codes
 
-<!-- xping:sample docs-checkout -->
-````
-Xping · Checkout.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e
-412 tests · 409 healthy · 3 flagged · 41 awaiting more runs · 6 not significant
-◷ nothing to measure: concurrency 108 · slower 32
-
-```
-NEEDS ATTENTION (1 high, 1 medium, 1 low)              most severe first
-────────────────────────────────────────────────────────────────────────
-
-1.  HIGH  flaky
-    SummaryTests.GenerateMonthlySummary
-    failed 7 of 20 executions (35%) in 5 of 20 runs, 3 failure modes
-    evidence adequate | -env-cluster | f_2a91c0de | ...ummaryTests.cs:88
-
-2.  MED   slower
-    FlowTests.CheckoutFlow_Completes
-    3.51x slower (95% CI 1.94-5.87x), 340ms -> 1.2s on the clock
-    evidence robust | -env | f_8c04b71a | .../Checkout/FlowTests.cs:214
-
-3.  LOW   stopped running
-    LegacyImport.Roundtrip
-    ran in 12 of 17 earlier runs, absent from the last 3
-    evidence adequate | -partial | f_1d77e3f5 | .../ImportTests.cs:41
-```
-
-rates: the marker on each finding says which runs its percentage was
-counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
-
-Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests
-````
-
-The lines above the fence answer separate questions. The first says **what was analysed** — the assembly, how many runs, over what period, at which revision. The second says **what state the suite is in**, in one unit: `tests` is `healthy` plus `flagged`, and they add up because `flagged` counts tests rather than findings. When the newest run failed tests that no finding names, `N failed in latest run` follows `flagged`. Those tests are not inside `healthy`, so the three still add up to `tests`. One test can attract findings of several kinds, and one finding about a broken fixture covers every test that fixture took down. Candidates the report saw and withheld are counted on the end of that line: `awaiting more runs` is waiting on data, `not significant` did not clear its kind's bar. A third line appears when some kind could not be measured on part of the suite at all, which is a different statement again — those tests are inside `healthy`, and [`--format json`](#--format-json) below says why.
-
-Inside the fence, `NEEDS ATTENTION` heads the list and carries the severity breakdown for every finding the report **produced**, which is not always the number of rows beneath it — a report narrowed by `--top` still says how much it found. The note on the right says how the list is ordered.
-
-Each row is numbered and takes four lines: a header line carrying the severity marker and the finding kind, then the test's name on a line of its own, then the observations, then a dim trailer. The name gets a full-width line because it is the one thing in the report that must never be cut — it is what you grep for and what you paste after `dotnet test --filter FullyQualifiedName~`.
-
-When one test carries more than one finding, the second is pulled up to sit directly beneath the first and says so on the right of its header line — `same test as #1`. The ranking between distinct tests is unchanged.
-
-A finding about a cluster — a broken fixture, a shared failure — names the cause rather than one arbitrary member, and lists the tests it took down beneath it, up to three and then a count:
-
-<!-- xping:sample docs-cluster rows -->
-```
-1.  HIGH  broken fixture
-    UnprovisionedDatabase..ctor (3 tests)
-      FixtureTests.FirstTestNeedingTheDatabase
-      FixtureTests.SecondTestNeedingTheDatabase
-      FixtureTests.ThirdTestNeedingTheDatabase
-    UnprovisionedDatabase..ctor failed, blocking 3 tests in 20 of 20
-    runs
-    evidence robust | all runs | f_7c905f05
-```
-
-The `-env-cluster`, `-env`, `-partial` and `all runs` markers in each finding's last line say which runs that finding's rate was counted out of — see [The population marker](#the-population-marker) below, because two rates are comparable only where their markers agree.
-
-The legend follows the fence whenever the report printed a finding, and nothing follows it when the report is empty — there are no markers to explain. Only the top ten findings are shown by default; when some are withheld, one more line follows the legend — `Showing 10 of 21 findings · all: xping report --all --assembly Checkout.Tests`. It also counts the rows the latest-run section withheld (`Showing 10 of 21 findings, 10 of 23 failures · all: …`), because `--all` lifts both, and it is the only place the report prints that command: below the fence it can carry a long `--directory` whole. After them, whenever the report printed a finding and was not narrowed by `--kind`, comes the command that shows the first row in detail — `Detail of row 1: xping report --id f_2a91c0de --assembly Checkout.Tests` — which runs as printed and repeats any `--runs`, `--since` or `--directory` you gave; swap in the id from any other row. At a terminal, the cloud invitation can follow it on stderr, so redirecting stdout captures the report alone.
-
-Nothing inside the fence exceeds 72 columns, so the block survives a phone, a quoted reply and a chat client that wraps. The only exception is a single identifier longer than that on its own, which is emitted whole rather than cut in half — half an identifier is not searchable. Piped output is drawn in ASCII and carries no colour, so `xping report | pbcopy` copies a report and nothing else; `--ascii` and `--no-color` force the same treatment on a terminal. Recorded text, such as test names and failure messages, is printed with every control, bidi and invisible formatting character replaced by `?` (a failure message's line breaks have already become spaces, and a stack trace's separate its frames), so a recorded escape sequence cannot recolour or reorder your terminal; under `--ascii` and in piped output every non-ASCII character is replaced too, except inside a printed command, where it is needed to select the test. `--format json` carries the recorded values unchanged.
-
-Rows are ordered most severe first, so the top of the block is the part worth reading. The one thing that interrupts that order is a second finding about a test already listed, which sits under the first rather than at its own rank and says so.
-
-### The latest run
-
-The findings answer *what is chronically unreliable*, and they need five runs of history before they will say anything. *What just broke* is a different question — one run's outcome beside the runs before it — and it needs two to say what changed. When the newest run has failures, a `LATEST RUN` section opens the fence, above the findings:
-
-<!-- xping:sample latest-run latest-run -->
-```
-LATEST RUN  16:21 · eab9867                               2 new failures
-────────────────────────────────────────────────────────────────────────
-
-    new          CartTests.Checkout_AppliesDiscount
-                 passed the previous 19 runs, failed just now
-                 NullReferenceException | CartTests.cs:112
-
-    new test     CartTests.Checkout_RejectsExpiredCoupon
-                 first seen this run, failed
-                 EqualException | CartTests.cs:140
-
-    Also failing: 5 tests explained by findings below (#1, #2, #3).
-```
-
-The heading names the run — when it started, and the commit when one was recorded — and counts what is new. Each row is one test that ended the run red, and its second line is the whole point: the contrast with history, which `dotnet test` cannot print. A test is **new** when it had passed in every earlier run it appeared in, a **new test** when the window had never seen it, and **seen before** when it had failed before — `failed 2 of 4 runs`. That last row states its count and no more: the reasons a failing test carries no finding range from too little history to a comparison that did not survive multiplicity correction, and the row cannot tell them apart. The trailer is the exception type and the source location, and nothing else: no evidence level, no id and no population marker, because a single run's outcome is an observation and not an estimate.
-
-These rows are not findings. They carry no severity, are not ranked against the findings, and never affect [`--fail-on`](#xping-report) — `dotnet test` has already failed the build. A test that a finding already explains is not listed twice; the closing line counts those and names the findings by row number, saying so when `--top` cut some of them. A test that failed and then passed on retry is not listed at all, because the run did not end red on it. Runs that looked environmental are left out of a test's history here exactly as they are left out of every finding's, so one bad afternoon in the window cannot turn a regression into a test that has failed before.
-
-`--kind` narrows what the section defers to rather than what it reports: a test whose only finding was filtered out is listed as a row instead of counted on the closing line, and states its history without claiming why no finding explains it.
-
-The section is absent when the newest run was clean. On a store holding a single run it is still shown, and every row is a `new test`: there is no local history to contrast, but the failure is counted in the header and Cloud's line, when it answered, says what Cloud knows about the test. When the newest run failed widely enough to look like an outage rather than a set of broken tests, it is described in one line — `Looks environmental: 187 of 210 tests failed. Not itemised.` — rather than listed. At most ten rows are shown; `Showing 10 of 23` closes a longer list, and the report's one truncation line below the fence names the command — `--all` lifts this cap along with the findings'. `--top` does not apply here.
-
-### The population marker
-
-**The evidence level counts the runs behind the finding, not the runs behind the test.** `evidence adequate` means the claim was computed from somewhere between 8 and 15 independent runs — a `time-sensitive` split reads only the runs whose machine recorded a clock, and a `slower` finding only the runs whose durations could be normalised. So one test can carry two findings at two different levels, and that is the two claims resting on different amounts of data rather than an inconsistency. The exact number is `evidenceSessions` in the JSON. Xping Cloud uses the same three words on its own scale (`sparse` below an effective sample size of 15, `robust` from 40), so `evidence robust` here and `cloud evidence adequate` in a finding's detail can both be right: the local scale fits a 20-run window, Cloud's a long history. Whether a finding is shown at all is a separate bar, and that one does read the test's whole history in the window.
-
-The marker between the evidence level and the finding id — `all runs`, `-env`, `-env-cluster` or `-partial` — says **which runs went into the denominator** of that finding's rate. Every finding carries one, including the ones that set nothing aside, so that "we counted everything" and "this build did not say" never read alike.
-
-| Marker | The rate is over |
+| Code | Meaning |
 |---|---|
-| `all runs` | Every execution of the test in the window |
-| `-env` | Every execution **except** those from environmental runs |
-| `-env-cluster` | Every execution except those from environmental runs, and except failures already reported as a shared cause |
-| `-partial` | Every run that covered the suite; runs that covered only part of it are set aside |
+| `0` | A report was produced, and no finding reached `--fail-on` |
+| `1` | A finding reached `--fail-on`, in any assembly |
+| `2` | No report could be produced: an invalid option or combination; no store; no runs, or no runs for `--assembly`; a `--since` commit that no run carries, or a `--since` value that is neither a commit nor a date; no run that names its test assembly |
+| `3` | With `--id`, the report was produced and that finding is not in it. With `--test`, no test matches the name, or none of its runs is in the window |
+| `4` | With `--test`, the name matches more than one test. With `--id` and no `--assembly`, more than one assembly reports the finding |
+| `70` | The CLI crashed |
 
-**An environmental run** is a single run in which at least 10 tests failed *and* they were at least 30% of the tests it ran. Both bounds matter: the rate alone would condemn a five-test suite with two failures, and the count alone would condemn a thousand-test suite with ten unrelated ones. When that many tests fail at once they did not all break simultaneously — something underneath them did — so the run is set aside rather than counted against each test individually.
+Ctrl+C ends `report` without an exit code of its own. See [Exit codes](#exit-codes).
 
-**A clustered failure** is one whose signature is shared by at least three tests *in a single run*, which the report already publishes once as its own `shared failure` or `broken fixture` finding. Two tests failing alike is a coincidence; three at once is a cause. Counting it a second time against each test that was caught by it is what turns one cause into forty findings.
+Exit `1` means "the report found problems". Exit `2` means "the report could not run". A build step
+can tell the two apart. Xping Cloud never changes the exit code.
 
-**A partial run** is one that ran part of the suite — what a `dotnet test --filter` produces. Under xUnit that is a fact the framework reports (fewer test cases selected than discovered); elsewhere it is a run whose distinct tests are under half those of the largest run in the window. Only `-partial` sets one aside, and only one kind carries `-partial`, because the asymmetry is real: a filtered run's *outcomes* are as true as any other run's, so a kind reading outcomes counts it in full or throws away real evidence, while its *silences* mean nothing, because it did not fail to see the tests it excluded — it never looked for them. `stopped running` is the only kind that reasons from absence, so it is the only one for which the distinction changes a denominator.
+### Output streams
 
-**Why it is on the page.** The list is ranked, so it invites you to compare rates — and the comparison is only valid where the markers agree. The arithmetic is not small. A test that ran 20 times, was caught by a shared cause 10 times and failed twice on its own reports:
+- stdout carries the report, or the JSON envelope.
+- stderr carries every warning, error and hint, so `--format json` on stdout stays valid JSON.
+- When no run names its test assembly, stderr says
+  `No runs in <store> record which test assembly they belong to.`, and the command exits `2`.
 
-```
-failed 2 of 12 executions (16.7%)
-```
+### The output
 
-Not `2 of 22 (9.1%)`. Both are defensible and they answer different questions — "how often does this test fail on its own account" against "how often does this test fail" — but only the marker tells you which one you are reading. A `-env-cluster` finding at 16.7% beside an `all runs` finding at 12% is not the milder of the two.
+The default output is the text report. [Reading the report](reading-the-report.md) explains each
+part. The other forms are below.
 
-**The marker states the rule, not whether it fired.** A finding marked `-env-cluster` in a window with no outages and no clusters has had nothing removed from it, and its denominator is simply how many times the test ran. To see whether a rule actually bit, read the counts in the JSON evidence:
+### The Cloud invitation
 
-```bash
-xping report --assembly Checkout.Tests --all --format json \
-  | jq '.findings[] | select(.population | startswith("excludesEnvironmental"))
-        | {kind, population, evidence: (.evidence | {
-            executionsConsidered, discountedEnvironmental, discountedClustered })}'
-```
-
-Those three add up to the number of times the test ran in the window, which is the figure `executionsConsidered` is *not*. `discountedEnvironmental` and `discountedClustered` are published apart because they are set aside for unrelated reasons, and a reader chasing a surprising rate needs to know which one narrowed it.
-
-The filter names the two execution populations rather than excluding `allExecutions`, because those are the findings that carry these three fields. An `all runs` finding has no discount counts at all — there is nothing for it to report having set aside — and `excludesPartialRuns` discounts runs rather than executions, so projecting it here would return a row of nulls. Read that one with its own projection:
-
-```bash
-xping report --assembly Checkout.Tests --all --format json \
-  | jq '.findings[] | select(.population == "excludesPartialRuns")
-        | {kind, population, evidence: (.evidence | {
-            baselineSessions, baselineSessionCount, currentSessionCount,
-            partialSessionsSetAside })}'
-```
-
-Kinds counting runs rather than executions name their counts accordingly: `retryExhausted` and `retryDeepening` publish `discountedEnvironmentalRuns`, `timeSensitive` publishes both that and `runsWithoutClock`, which is not a discount but a run whose session recorded no clock to place it on, and `stopped running` publishes `partialSessionsSetAside`.
-
-Kinds do not all count the same population, and the per-kind choice is deliberate rather than an oversight — `shared failure` keeps environmental runs because that is precisely where a shared cause shows itself, and `stopped running` keeps them too, because an environmental run is still a run the test either was or was not in. What `stopped running` does set aside is the runs that covered part of the suite, which is why it is the one kind marked `-partial` rather than `all runs`.
-
-### Finding kinds
-
-Every value `--kind` accepts. A kind is what a finding *claims*; the words in brackets are how the
-report prints it.
-
-| Kind | Printed as | Claims |
-|---|---|---|
-| `RetryMasked` | masked by retry | The test failed and passed on retry, never reaching the run's outcome |
-| `RetryDeepening` | deeper retries | The test used to pass on fewer attempts than it now needs |
-| `RetryExhausted` | out of retries | The retries ran out and the test still failed the run |
-| `Flaky` | flaky | The test both passes and fails, or fails in varying ways |
-| `AlwaysFailing` | always failing | The test fails almost always, in one dominant way |
-| `TimingOut` | timing out | The test is mostly killed for overrunning its timeout rather than failing |
-| `BrokenFixture` | broken fixture | Several tests fail alike because one shared lifecycle member is broken, and that member is named |
-| `SharedFailure` | shared failure | Several tests fail with one signature in one run — one cause, not many |
-| `DurationRegression` | slower | The test's recent runs are slower than its earlier ones by more than the variation it already had |
-| `DurationUnstable` | unstable timing | The test's duration varies too much for anyone to predict what it will cost |
-| `ParallelSensitive` | concurrency | The test's failure rate moves with how many tests ran alongside it |
-| `TimeSensitive` | time sensitive | The test's failures cluster at one local time of day, day group, or UTC offset |
-| `Vanished` | stopped running | The test ran habitually through the baseline and has stopped |
-
-The three retry kinds are one judgement about one mechanism, and a test gets at most one of them:
-`RetryExhausted` first, then `RetryDeepening`, then `RetryMasked` — red beats worsening beats
-standing. Each is decided on the attempts an adapter actually recorded. A run counts as out of
-retries when its last recorded attempt failed and an earlier attempt exists — never by comparing an
-attempt number against the configured limit. That limit is published beside the finding as
-`maxRetriesAsDeclared` and nothing is decided by it: retry attributes disagree about whether the
-number counts total attempts or retries after the first, so the report records it the way the
-attribute spelled it rather than guessing. `RetryDeepening` compares the recent runs against the
-earlier ones and needs five earlier passing runs to compare against, so it stays quiet on a short
-history. A test can still be reported as both out of retries and flaky: those are different claims
-about the same red run, and they carry different ids.
-
-`DurationRegression` is a comparison of two samples, not of two numbers. The test's three most recent
-runs and the runs before them are each reduced to one duration per run — the median of that test's
-attempts there, over the run's own median, so a busy machine moves every test together and cancels —
-and the report asks whether the recent runs are drawn from a slower distribution or are doing what
-the test always did. The size of the change is published as a factor with the interval around it,
-`3.51x slower (95% CI 1.94-5.87x)`, because on three recent runs the interval is the more useful half
-of the sentence. A finding has to be both real and worth a morning: the test must have got at least
-half as long again — a factor of 1.5, which is a 50% increase — *and* have gained at least a hundred
-milliseconds at its own speed, *and* the comparison must clear its bar. Where that bar holds and
-where it does not — the recent slice being only three runs — is in
-[known limitations](../troubleshooting/known-limitations.md); both arms publish the spread of the runs they were
-measured over, in the JSON evidence, so the answer can be read off the finding rather than assumed.
-
-`TimeSensitive` reads three axes: the local six-hour quarter of the day, weekend against weekday,
-and — when the window contains two UTC offsets for one time zone, which is what a daylight-saving
-change looks like — one side of the change against the other. Each side is counted in runs rather
-than attempts, since every attempt of a run is read on the same clock. The failing side must span at
-least three separate local days, so a bad afternoon is not reported as an afternoon pattern.
-
-Trying several splits and keeping the best of them is a search, and the report is charged for it.
-Every split with runs enough on both sides is tested exactly, and its result is multiplied by the
-number of **distinct** ways the window was divided — two quarters that separate the same runs are
-one division, not two. The split with the least probable result wins, and it is reported only if it
-survives that multiplication. The finding publishes the probability it survived on and the number of
-divisions charged for, so how wide a search found it is visible rather than implied. The practical
-effect, on an even split of a fortnight of runs with a clean other side: five failures of six are
-reported and four are not. How much it takes is not one number — it falls as the clean side grows
-and rises with the width of the search — so the finding publishes both figures rather than asking
-you to remember a rule.
-
-`ParallelSensitive` reads the concurrency an execution ran at as an ordered dose and asks whether the
-test's failures track it, across **every** level it was observed at. There is no split point, which is
-what makes the finding reachable on the commonest .NET configuration: a suite pinned at a fixed
-`maxParallelThreads` puts almost every execution on one level, and dividing that distribution in two
-leaves one half empty. The report needs only that the concurrency varied at all.
-
-Concurrency genuinely differs between attempts within a run, so every attempt is a real reading and
-the per-level rates are over executions. What the probability behind the finding is computed over is
-runs: a run's attempts are correlated, and a heavily retried afternoon would otherwise buy
-significance with repetition. The finding publishes both denominators at every level, so a rate over
-twelve executions can be read against how many separate occasions supplied them.
-
-Two figures are published and neither implies the other. The probability says whether the failures
-track concurrency more than they would have anyway; **tau**, a rank correlation, says how strongly.
-Both must clear their bar. Tau is discounted by how tied the exposure is, so it is not comparable
-between suites with different parallelism settings — the level table and the observed range are
-published beside it so the dose-response can be read directly rather than inferred from one number.
-
-The direction is two-sided: a test that fails more when it runs *nearly alone* is as real a defect as
-one that fails under contention. Whichever way it runs, the finding is illustrated by the failures
-that drove it — the ones on the trend's side of the test's mean concurrency, rather than its newest
-failures — and the headline quotes the pair of levels that supplied the most of the correlation,
-rather than the two ends of the observed range. What the report cannot do is separate concurrency from duration — a slow test overlaps more
-neighbours by construction — which is in [known limitations](../troubleshooting/known-limitations.md).
-
-`BrokenFixture` and `SharedFailure` describe the same measurement and differ only in what can be said
-about its cause. A cluster is reported as a broken fixture when **every** failure in it was recorded
-in the same lifecycle member — a `[SetUp]`, a `[TestInitialize]`, a class fixture constructor — and
-stays a shared failure otherwise. Which failures an adapter can place, and which it cannot, is in
-[known limitations](../troubleshooting/known-limitations.md).
-
-`Vanished` is decided by a test, not by a count of appearances. A test that ran in three of seventeen
-earlier runs is *expected* to miss the next three, so before calling an absence a change the report
-asks how often every one of a test's appearances would fall among the earlier runs and none among the
-current ones if appearing had nothing to do with when the run happened — Fisher's exact test,
-one-sided, since the kind only ever looks at a test already known to be missing. The finding is
-emitted only at p ≤ 0.05, and publishes that p-value alongside the baseline run rate, so the strength
-of the claim is visible rather than implied. On the default three-run current slice the bar works out
-at a baseline run rate of about 0.71 — twelve of seventeen earlier runs carries, eight does not — and
-it eases towards 0.632 as the history lengthens. On a window shorter than eight runs the current
-slice narrows to a single run and one run's absence never reaches the bar, so the kind is silent
-there — see [known limitations](../troubleshooting/known-limitations.md).
-
-It also asks only the runs that were in a position to answer. A run under a `dotnet test --filter`
-did not fail to see the tests it excluded; it never looked for them, and counting its silence makes
-every unselected test look deleted. Such a run is therefore set aside. Under xUnit the test framework
-says so directly: the run selected fewer test cases than it discovered. Under NUnit and MSTest, and
-for xUnit tests started from an IDE, the report falls back to a count, and treats a run whose
-distinct tests are under half those of the largest run in the window as filtered. The rest are re-split into their own earlier and current
-runs, and the finding's denominators count only those — the sentence says `full runs`, a
-`set aside` metric gives the number left out, and the finding is marked `-partial` rather than
-`all runs` so a rate from it is not compared with one taken over every run. The summary line reports
-how many of the window's runs covered part of the suite. Only this kind sets them aside; every other
-kind still counts them in full, because a filtered run's outcomes are as true as any other run's.
-Where the fallback applies, a deletion removing more than half a suite is indistinguishable from a
-filter and is not reported — see [known limitations](../troubleshooting/known-limitations.md).
-
-### Finding ids
-
-The `f_…` on each finding is a short, stable identity for that finding — a hash of what the
-finding claims (`flaky`, `slower`, `stopped running`, …) and the test or group it claims it
-about. Nothing else goes into it.
-
-It is stable **across runs**. Run `dotnet test` again, run `xping report` again, and a
-finding that is still there keeps the id it had — even though the run count moved and the
-numbers behind it changed. That is what makes it useful: paste a report into a pull request
-today and another next week, and the ids say which findings are the same ones and which are
-new.
-
-The id names the *claim*, not the measurement. Two reports can quote different failure rates
-under one id; the rate moved as runs accumulated, and it is the same finding observed again.
-For the numbers themselves, read the `headline` and `metrics` — not the id.
-
-Two findings about the same test carry different ids when they are different claims: a test
-that is both flaky and masked by a retry produces two findings and two ids.
-
-**Pass an id to `--id` to see that finding in detail.** Every finding's `drillDown` in
-`--format json` is that command, scoped to the report it came from. The id prefix and digits are
-accepted in either case. The detail view prints the row as the report does, every
-member of a cluster with where it lives, the test's full name and source location, each metric
-behind the headline, the other findings about the same test, and, for a finding about one test,
-the command that shows that test's run-by-run history. Where rerunning the test can show the
-failure, it also prints the command that reruns it — see [Reproducing a finding](#reproducing-a-finding):
-
-<!-- xping:sample detail-test -->
-````
-Xping · SampleApp.XUnit · 20 runs · 2026-09-05 09:00 → 16:21 · main@eab9867
-16 tests · 10 healthy · 6 flagged
+At a terminal, after a text report with findings, the CLI can print one line on stderr:
 
 ```
-FINDING                                                       row 5 of 5
-────────────────────────────────────────────────────────────────────────
-
-5.  HIGH  flaky                                          same test as #4
-    SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState
-    failed 6 of 20 executions (30%) in 6 of 20 runs, 1 failure mode
-    evidence robust | -env-cluster | f_445c562e | .../SampleTests.cs:83
-
-    test      SampleApp.XUnit.SampleTests.
-              FlakyTest_EnvironmentState_FailsBasedOnSystemState
-    assembly  SampleApp.XUnit
-    source    src/SampleApp.XUnit/SampleTests.cs:83
-
-    failed         6 of 20 executions (30%)
-    runs affected  6 of 20
-    failure modes  1
-
-    Also about this test: #4 unstable timing (f_66c10ec3)
-
-FAILURE MODES                                             1 failure mode
-────────────────────────────────────────────────────────────────────────
-
-1.  6 failed attempts · since its first run in the window
-    System.InvalidOperationException
-    expected <num> but was <num>
+See flakiness across CI and your whole team → https://xping.io/start
 ```
 
-rates: the marker on each finding says which runs its percentage was
-counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
-
-Showing 1 of 5 findings · all: xping report --all --assembly SampleApp.XUnit
-History: xping report --test fp-Sampl --assembly SampleApp.XUnit
-````
-
-**`FAILURE MODES`** lists the distinct ways the test failed, the most frequent first. A mode is
-one exception type with one message and the stack frames it was thrown through. The message is
-normalised so that runs group: run-varying values such as numbers and dates become tokens like
-`<num>`, and it is lowercased outside quoted text. A flaky finding lists every mode among the
-failures it counted. An always failing finding lists only its most common mode, and its `dominant
-mode` line says when that does not cover every failure. A broken fixture or shared failure lists
-its one. Other kinds print no block. Each mode reads:
-
-```
-1.  4 failed attempts · first seen 08-12 09:40 at b71e004, 6 runs ago
-    System.InvalidOperationException
-    expected <num> but was <num>
-      at MyApp.Checkout.Basket.Total()
-      at MyApp.Tests.CheckoutTests.Completes()
-```
-
-- **The count** is the failures the finding counted. For a flaky or always failing test it leaves
-  out the runs its population marker excludes.
-- **First seen** says whether the mode is new, asked of every failure in the window, discounted or
-  not, and measured from the test's own first run in the window, so a test that joined late is not
-  called a regression. `since its first run in the window`: it was already there in that run, and
-  the report can't see further back. A group of tests reads `since its tests first ran in the
-  window`, measured from the first of them to run, and `report --test` for a test whose only run is
-  the latest reads `since its first run, the latest`. `first seen in the latest run`: it is new just
-  now, and the test ran without it before. Otherwise it appeared after the test's first run, and the
-  line gives the date and commit of the oldest failure the finding counted: `first seen <date> at
-  <sha>, N runs ago`. When the mode's older failures fell in runs the finding set aside, that
-  failure can be newer than the mode itself, down to `first seen <date> at <sha>, in the latest
-  run`. ` at <sha>` is left out when no commit was recorded.
-- **The message** is wrapped and stops after 6 lines, ending in `...`.
-- **Frames** are your own code, innermost first, up to 5. When none of it was on the stack, the
-  framework's frames are shown with the note `(no test code on the stack; framework frames
-  shown)`.
-- **`exception type not recorded`** stands in for a type the adapter did not record.
-- **`the adapter recorded no failure detail`** replaces the type, message and frames when the
-  failure was recorded without an exception.
-- **`timed out, no failure detail recorded`** replaces them for a timeout recorded without an
-  exception, as a killed test can be.
-
-Timed-out attempts are always modes of their own, counted apart from failed attempts, in `--id`
-and `--test` alike.
-
-At most 5 modes are printed, then `N more failure modes in --format json`; the heading counts all
-of them. `failureModes` in [`--format json`](#--format-json) carries every mode.
-
-Because the kind is half of the id, **an id moves when its claim changes kind.** A shared
-failure that turns out to live in one fixture member becomes a broken fixture, and a slowdown
-that stops clearing its significance bar can be reported as unstable timing instead. Asking for
-the old id then exits `3` and says where the subject is reported now:
-
-```
-Finding f_7c905f05 (shared failure) is not reported in this window (Checkout.Tests, 20 runs). Its subject is reported as f_3ea537e4 (broken fixture, row 3).
-```
-
-The tool does not redirect you to the new id: it is a different claim, and it names it for you to
-ask for. Exit `3` is also what a finding that has healed returns, so a script can ask *is this
-still reported* without reading any output. With `--format json` the envelope is still printed,
-with `findings` empty and `selection.reported` false.
-
-Without `--assembly`, over a store with several assemblies, the id is looked for in every
-assembly. If none reports it, the message names every assembly as the window searched, and says
-in which assembly the subject went elsewhere:
-
-```
-Finding f_7c905f05 (shared failure) is not reported in any window (every assembly in this store). In Checkout.Tests, its subject is reported as f_3ea537e4 (broken fixture, row 3).
-```
-
-There is no single report to print then, so `--format json` leaves stdout empty. The exit code is
-still `3`.
-
-Copy the block, or pipe it:
-
-```bash
-xping report | pbcopy          # macOS
-xping report | clip            # Windows
-xping report | wl-copy         # Linux (Wayland)
-```
-
-When stdout is not a terminal the report drops everything that is not the report: no colour, no Unicode glyphs, no cloud invitation, and no blank lines around the block.
-
-
-### Reproducing a finding
-
-`--id` tells you how to see a finding fail on your own machine. The detail block gains a `repro`
-line saying how many times to run the test and why. Below the fence, a `Repro:` line gives the
-command. It is the last line, after `History:` where the finding has one (a cluster has none):
-
-<!-- xping:sample detail-repro-flaky -->
-````
-Xping · SampleApp.MSTest · 9 runs · 2026-08-20 → 2026-08-21 · main@c670fc3
-16 tests · 10 healthy · 6 flagged
-
-```
-FINDING                                                       row 1 of 1
-────────────────────────────────────────────────────────────────────────
-
-1.  HIGH  flaky
-    CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
-    failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode
-    evidence sparse | -env-cluster | f_1491bf4c | ...lculatorTests.cs:57
-
-    test      SampleApp.MSTest.CalculatorTests.
-              FlakyTest_RaceCondition_FailsIntermittently
-    assembly  SampleApp.MSTest
-    source    tests/SampleApp.MSTest/CalculatorTests.cs:57
-
-    failed         4 of 9 executions (44.4%)
-    runs affected  4 of 9
-    failure modes  1
-    repro          run 6 times: at 4 of 9 runs failing (44.4%), 6 runs
-                   show a failure 95% of the time
-
-FAILURE MODES                                             1 failure mode
-────────────────────────────────────────────────────────────────────────
-
-1.  4 failed attempts · since its first run in the window
-    System.InvalidOperationException
-    Race condition detected
-```
-
-rates: the marker on each finding says which runs its percentage was
-counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
-
-Showing 1 of 1 finding · all: xping report --all --assembly SampleApp.MSTest
-History: xping report --test fp-Sampl --assembly SampleApp.MSTest
-Repro: dotnet test tests/SampleApp.MSTest/SampleApp.MSTest.csproj -e XPING_ENABLED=false --filter FullyQualifiedName=SampleApp.MSTest.CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
-````
-
-The CLI prints the command and never runs it. The list view shows no `repro`; open the finding
-with `--id`, or its test with [`--test`](#test-history).
-
-**The command** depends on the runner the newest run in the window recorded:
-
-```
-VSTest:  dotnet test <path> -e XPING_ENABLED=false --filter <filter>
-MTP:     dotnet run --project <path> -e XPING_ENABLED=false -- --filter <filter>
-```
-
-- **Run it from the repository root.** `<path>` is the test project as the SDK recorded it,
-  relative to the root. When no path was recorded, the command leaves it out, and you run it from
-  the project directory.
-- **`-e XPING_ENABLED=false`** keeps the reruns out of the store. Recorded, a dozen filtered runs
-  of one test would push your real runs out of the window and skew every count in the report.
-- **No `--no-build`.** The store doesn't record which configuration the suite was built in. Add
-  `-c Release` yourself if that is what you build.
-- **The filter** is `FullyQualifiedName=` and the stored name, escaped for the runner. On NUnit it
-  selects exactly the failing case, arguments and all. On MSTest and xUnit a data-driven test's rows
-  share one name, so it runs every row, the failing one among them.
-- **Quoting follows `XPING_SHELL`, or your OS**, like every command the report prints: PowerShell
-  7.3+ on Windows, bash and zsh elsewhere. A filter holding parentheses or quotes is wrapped in
-  single quotes. Don't paste it into cmd.exe or Windows PowerShell 5.1: cmd.exe passes the quotes
-  through as part of the filter, and 5.1 drops the `"` around a string argument.
-
-**The run count** is how many runs it takes to see at least one failure 95% of the time, at the
-rate the test failed in the window: the runs it failed in out of the runs it ran in with a verdict.
-A run a retry turned green counts as passing, because it will pass the same way when you rerun it.
-Above 50 runs (a test failing in fewer than about 6% of runs) no count is given: the `repro` line
-says the failure is too rare to reproduce by rerunning and how many runs it would take, and the
-command is still printed for debugging a single run. An always-failing test needs one run.
-
-**Which findings get one.** A command that cannot show the failure is worse than none, so only
-these do:
-
-| Kind | Reruns |
-|---|---|
-| `flaky`, `always failing`, `timing out` | the test |
-| `broken fixture` | the member that failed in the largest share of its runs; a broken fixture fails every test that uses it |
-| `shared failure` | up to three members, those that failed in the largest share of their runs; the count is for the highest of their rates |
-
-None for the rest:
-
-- **Retry kinds** (`masked by retry`, `deeper retries`, `out of retries`): the retry attribute
-  stays on when you rerun, so the run stays green.
-- **Duration kinds** (`slower`, `unstable timing`): a rerun prints pass or fail, not a time against
-  the recorded median.
-- **`concurrency`**: the finding is the difference between an isolated run and a full one, and
-  each framework sets parallelism its own way.
-- **`time sensitive`**: it depends on the time of day, not on running again.
-- **`stopped running`**: the question is whether the test is still discovered at all, which
-  `dotnet test --list-tests` answers and a filtered rerun does not.
-
-**No runner recorded, no command.** The SDK records `VSTest` or `MTP` on each run. The xUnit
-console runner and custom hosts record neither, and a guessed runner prints a command that fails,
-so those findings carry no `repro`.
-
-### Test history
-
-`report` answers *what is wrong here*, and `--id` *tell me about this finding*. `--test` answers
-*tell me about this test*: every run the store holds for it, what it did in each, and what the
-report concludes from them. It works for any test, including one with no findings.
-
-```bash
-xping report --test FlakyTest_PassesOnRetry
-```
-
-<!-- xping:sample history-flaky -->
-````
-Xping · SampleApp.MSTest · 20 runs · 2026-08-20 → 2026-08-21 · main@c670fc3
-16 tests · 10 healthy · 6 flagged
-⚠ 14 of 20 runs covered part of the suite
-
-```
-TEST                                                         fp 3a597eb2
-────────────────────────────────────────────────────────────────────────
-
-    test    SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry
-    source  tests/SampleApp.MSTest/CalculatorTests.cs:42
-
-ran in 6 of 20 runs: 0 passed, 6 passed on retry, 0 failed
-duration p50 12ms · p95 13ms · range 11-13ms
-
-RUNS                                                        newest first
-────────────────────────────────────────────────────────────────────────
-
-               ─     absent from 14 runs, 14 partial
-  08-20 15:35  ✗→✓   attempt 2         12ms  c670fc3
-  08-20 15:34  ✗→✓   attempt 2         11ms  c670fc3
-  08-20 14:02  ✗→✓   attempt 2         13ms  c670fc3
-  08-20 14:02  ✗→✓   attempt 2         11ms  c670fc3
-  08-20 13:20  ✗→✓   attempt 2         12ms  c670fc3
-  08-20 13:19  ✗→✓   attempt 2         12ms  c670fc3
-
-FAILURE MODES                                             1 failure mode
-────────────────────────────────────────────────────────────────────────
-
-1.  6 failed attempts · since its first run in the window
-    Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException
-    assert.areequal failed. expected:<<num>>. actual:<<num>>.
-      at SampleApp.MSTest.CalculatorTests.FlakyTest_PassesOnRetry()
-
-FINDINGS                                                      2 findings
-────────────────────────────────────────────────────────────────────────
-
-1.  HIGH  flaky
-    failed 6 of 12 executions (50%) in 6 of 20 runs, 1 failure mode
-    evidence sparse | -env-cluster | f_8f042eab | ...lculatorTests.cs:42
-
-2.  MED   masked by retry
-    passed on retry 6 times in 6 of 20 runs, up to attempt 2
-    evidence sparse | -env | f_a2b61c2f | .../CalculatorTests.cs:42
-```
-
-rates: the marker on each finding says which runs its percentage was
-counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
-
-2 findings about this test · all: xping report --all --assembly SampleApp.MSTest --runs 20
-Detail of row 1: xping report --id f_8f042eab --assembly SampleApp.MSTest --runs 20
-````
-
-Above the runs, two lines sum them up. `ran in` counts the runs the test appeared in, by each run's
-deciding attempt: `passed on retry` passed after attempt 1, `failed` includes timeouts, and a run
-that was skipped, not executed or inconclusive adds `, N other`. The duration line is over the runs
-that passed or failed.
-
-Each row under `RUNS` is one run, newest first, in UTC: the first attempt's outcome and, when the
-deciding attempt differs, an arrow to it (`✗→✓`); then `attempt N` when a retry decided it, or the
-outcome when it was not a pass or a fail (`timeout`, `skipped`, `not run`, `inconcl.`, with `@N`
-for a retry); the deciding attempt's duration; the commit; and `partial` when the run covered only
-part of the suite. Every run in the window is printed.
-
-Runs that do not contain the test are not rows. Each stretch of them is one line,
-`absent from 14 runs, 14 partial`. When the partial count equals the run count, the test was not
-deleted: those runs were filtered to other tests.
-
-`FAILURE MODES` is [the same block as under `--id`](#finding-ids), built from the test's own
-failures rather than a finding's. It counts every failed attempt in the window, a timed-out one
-included, and discounts nothing, so it can list a mode `--id` leaves out and dates every mode from
-its oldest failure. A first attempt that passed on retry counts, so a test whose
-summary reads `0 failed` can list modes, as above, and its count can be higher than its finding's
-under `--id`. A test that never failed in the window has no block.
-
-`FINDINGS` lists every finding about the test, including clusters it belongs to. Each keeps its row
-number from the full report over the same assembly and window: the `all:` command in the footer
-prints that report. The command below the fence opens the first finding with `--id`. When the test has too little history for any finding, the
-block says so instead of `no findings`: `too little history to judge: findings need 5 runs, this
-test has 3`.
-
-A finding about the test that a rerun can show ends with the same `repro` line as under `--id`, and
-the last line below the fence is the command, named by its row. It is for the first such finding
-whose `repro` gives a run count, so `Repro of row 2:` can follow `Detail of row 1:`. A cluster the
-test belongs to gets neither here: its command reruns the members most likely to fail, which may not
-include this test; open it with `--id` to see it. A test with no such finding gets neither line (see
-[Reproducing a finding](#reproducing-a-finding)):
-
-<!-- xping:sample history-repro -->
-````
-Xping · SampleApp.MSTest · 9 runs · 2026-08-20 → 2026-08-21 · main@c670fc3
-16 tests · 10 healthy · 6 flagged
-
-```
-TEST                                                         fp 5d1e2a0c
-────────────────────────────────────────────────────────────────────────
-
-    test    SampleApp.MSTest.CalculatorTests.
-            FlakyTest_RaceCondition_FailsIntermittently
-    source  tests/SampleApp.MSTest/CalculatorTests.cs:57
-
-ran in 9 of 9 runs: 5 passed, 0 passed on retry, 4 failed
-duration p50 38ms · p95 41ms · range 38-41ms
-
-RUNS                                                        newest first
-────────────────────────────────────────────────────────────────────────
-
-  08-21 09:02  ✓                       38ms  c670fc3
-  08-21 06:51  ✗                       41ms  c670fc3
-  08-21 04:40  ✓                       38ms  c670fc3
-  08-21 02:29  ✗                       41ms  c670fc3
-  08-21 00:18  ✓                       38ms  c670fc3
-  08-20 22:07  ✓                       38ms  c670fc3
-  08-20 19:56  ✗                       41ms  c670fc3
-  08-20 17:45  ✗                       41ms  c670fc3
-  08-20 15:34  ✓                       38ms  c670fc3
-
-FAILURE MODES                                             1 failure mode
-────────────────────────────────────────────────────────────────────────
-
-1.  4 failed attempts · first seen 08-20 17:45 at c670fc3, 7 runs ago
-    Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException
-    assert.areequal failed. expected:<<num>>. actual:<<num>>. the
-    counter lost updates.
-      at SampleApp.MSTest.CalculatorTests.
-         FlakyTest_RaceCondition_FailsIntermittently()
-
-FINDINGS                                                       1 finding
-────────────────────────────────────────────────────────────────────────
-
-1.  HIGH  flaky
-    failed 4 of 9 executions (44.4%) in 4 of 9 runs, 1 failure mode
-    evidence sparse | -env-cluster | f_1491bf4c | ...lculatorTests.cs:57
-    repro  run 6 times: at 4 of 9 runs failing (44.4%), 6 runs show a
-           failure 95% of the time
-```
-
-rates: the marker on each finding says which runs its percentage was
-counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
-
-1 finding about this test · all: xping report --all --assembly SampleApp.MSTest --runs 9
-Detail of row 1: xping report --id f_1491bf4c --assembly SampleApp.MSTest --runs 9
-Repro of row 1: dotnet test tests/SampleApp.MSTest/SampleApp.MSTest.csproj -e XPING_ENABLED=false --filter FullyQualifiedName=SampleApp.MSTest.CalculatorTests.FlakyTest_RaceCondition_FailsIntermittently
-````
-
-**Naming the test.** The name is matched in three tiers, and the first tier that matches anything
-wins:
-
-1. The exact fully qualified name.
-2. A suffix that ends on a `.`: `Method`, `Class.Method` or `Namespace.Class.Method`. A nested type
-   written `Outer+Inner` matches with a `.` too, and a parameterised test's `(args)` can be left
-   off: `Add` matches every case of `Add(…)`, `Add(1,2)` only that one.
-3. A prefix of the test's fingerprint, at least 8 characters, or the whole fingerprint.
-
-Matching is case-sensitive, except that a fingerprint prefix made only of hex digits is retried in
-lower case, since a computed fingerprint is lower-case hex. It uses each test's newest name, so a renamed test is found under its
-current one. Without `--assembly`, every assembly in the store is searched; the history itself is
-always one assembly's.
-
-When the name matches more than one test, no history is rendered. stderr lists the candidates, up
-to ten, with the fingerprint that names each one, and the command for the first. The exit code is
-`4`. With `--format json`, stdout still carries the envelope, with the candidates in `test` (see
-[`--format json`](#--format-json)):
-
-```
-'Add' matches 3 tests. Name one by its fingerprint:
-  7e41c9a0  SampleApp.MSTest
-    SampleApp.MSTest.ParameterizedTests.Add(1,2)
-  5b1e09fd  SampleApp.MSTest
-    SampleApp.MSTest.ParameterizedTests.Add(2,3)
-  c4d2aa10  SampleApp.NUnit
-    SampleApp.NUnit.CalculatorTests.Add
-xping report --test 7e41c9a0 --assembly SampleApp.MSTest
-```
-
-When it matches none, the exit code is `3`, and stderr says whether the store has no such test or
-the window hides its runs:
-
-```
-No test matching 'Ad' in this store (3 assemblies, 48 runs).
-No run of 'Login' in this window (--runs 5). It ran in 12 earlier runs; drop --runs to see them.
-```
-
-**The window** is every run the store holds for the assembly, not the last 20: once you name a
-test you want its history, and retention already caps the store. `--runs` and `--since` narrow it
-as they do for `report`. The findings are computed over the same window, so a narrower one can
-change them. Every command the view prints repeats the window: `--since` as you gave it, otherwise
-`--runs` with the window's size, so it reopens a window of the same size.
-
-The two views link to each other. `--id` on a finding about one test prints a `History:` line
-below the fence, as the [`--id` sample](#finding-ids) shows, followed by a `Repro:` line where it
-has [one](#reproducing-a-finding). When an id is not reported and its test has no other
-finding in the window, stderr gives that test's `--test` command.
-
-### Source locations
-
-The last segment of a finding's trailer is where the test is declared:
-
-<!-- xping:sample docs-source-location trailer -->
-```
-    evidence robust | -env | f_2a91c0de | .../Billing/SummaryTests.cs:88
-```
-
-It is the file and the line the test's body starts on, made relative to the repository root, and it
-is printed whenever the SDK captured one rather than being reserved for a verbose mode — knowing a
-test is flaky is only half of what you need to fix it. Whether that line is the opening brace or the
-first statement depends on how the assembly was built; see
-[known limitations](../troubleshooting/known-limitations.md).
-
-None of NUnit, MSTest or xUnit reports this, so the SDK reads it from the test assembly's Portable
-PDB. That means a build with `DebugType=none` has no location to report, and the trailer ends at
-the finding id instead. A long path is shortened from the left at a directory boundary
-(`.../Billing/SummaryTests.cs:88`) so the rest of the trailer stays readable inside the fence.
-
-A group finding — one covering several tests at once, like a broken fixture — names no single file,
-because its members are declared in different places. The members and their own locations are in
-the JSON output.
-
-See [known limitations](../troubleshooting/known-limitations.md) for what the line number can and cannot tell you.
+It appears at most once every 24 hours per store. The CLI keeps the time in `state.json` in the
+store folder. It does not appear when:
+
+- stdout is not a terminal;
+- you use `--format json`;
+- the report is the overview of several assemblies;
+- the report has no findings;
+- the newest run was recorded in Cloud mode, or Xping Cloud answered the report;
+- `XPING_NO_BANNER` is set to any non-empty value.
 
 ### `--summary`
 
@@ -861,18 +184,24 @@ xping report --summary
 Xping: 3 findings (1 high, 1 medium, 1 low) in 20 runs of Checkout.Tests
 ```
 
-When the newest run has new failures, the line says so on the end — `, 2 new failures` — and says nothing when it has none, so a green build's title stays short:
+When the newest run has new failures, the line ends with them:
 
 <!-- xping:sample latest-run summary -->
 ```
 Xping: 5 findings (5 high) in 20 runs of SampleApp.XUnit, 2 new failures
 ```
 
+On a store with several assemblies, `--summary` prints one line per assembly. It never asks Xping
+Cloud.
+
 ### Scoping
 
-Every test project in a solution shares one store. A report covers one assembly: analysing them together would pool unrelated suites, so one assembly's history would contain another's tests, and its run count would be the solution-wide total.
+Every test project in a solution writes to one store. A report covers one assembly, because
+mixing unrelated suites would mix their tests and their run counts.
 
-When the store holds one assembly, `xping report` is that assembly's report. When it holds several, `xping report` prints one row per assembly, most severe first, and the command that opens the first:
+When the store holds one assembly, `xping report` is that assembly's report. When it holds several,
+`xping report` prints one row per assembly, most severe first, and the command that opens the
+first:
 
 ```
 Xping · 3 assemblies
@@ -891,242 +220,146 @@ Search.Tests                                                   no findings
 Details: xping report --assembly Checkout.Tests
 ```
 
-Each row repeats the header of that assembly's own report: the same window, the same numbers. Signed in, the overview also reads each assembly's [suite health](#flagged-in-cloud) from Xping Cloud, and nothing else. A row then gains the `cloud:` line its report's header prints, such as `cloud: 1 broken · 2 known flaky`, or why Cloud could not answer for it (`cloud: no project in this workspace for Search.Tests · pass --project <key>`). A reason every row shares, such as `cloud: login required · run xping login`, is printed once under the first line. `--assembly` adds the rest of the [Cloud data](#cloud-data).
+- Each row repeats the header of that assembly's own report, with the same window and numbers.
+- With a Xping Cloud credential, each row also gets its `cloud:` line. A reason that every row
+  shares, such as `cloud: login required · run xping login`, is printed once, under the first line.
+  See [Xping Cloud data in the CLI](cloud-data.md).
+- `--runs` and `--since` set every assembly's window. An assembly with no runs in the window gets a
+  row that says so.
+- `--fail-on` checks every assembly.
+- `--json` writes an envelope with `"scope": "overview"` and an `assemblies` array. An assembly's
+  own report has `"scope": "assembly"`. Each row's `cloud` holds its `status`, `reason`,
+  `projectKey` and `health` without the list of tests. It is `null` for a row with no window.
+- `--id` without `--assembly` looks in every assembly. So does `--test`.
 
-- `--runs` and `--since` set every assembly's window. An assembly with no runs in it gets a row that says so.
-- `--fail-on` judges every assembly, so one suite's finding fails the build even when another suite ran last.
-- `--summary` prints one line per assembly. `--json` writes an envelope with `"scope": "overview"` and an `assemblies` array; an assembly's own report has `"scope": "assembly"`. Each row's `cloud` holds its project row's `status`, `reason` and `projectKey`, and its `health` without the listed tests: the same `verdicts` its own report counts. It is `null` for a row with no window.
-- `--top`, `--all` and `--kind` describe one list of findings, so they need `--assembly`.
-- `--id` without `--assembly` looks in every assembly. `--test` already does.
+**A run can belong to several assemblies.** A run is one test host process, and `dotnet test` on a
+solution can run several test projects in one host. Such a run counts as one run of each assembly
+it covered. `--assembly` keeps only that assembly's tests. So two assemblies can each report 20 runs
+from the same 20 invocations.
 
-**A run can belong to more than one assembly.** A *run* is one test host process, and `dotnet test` over a solution puts several test projects in a single host. One run of that kind is one run of **each** assembly it covered, and `--assembly` narrows it to that assembly's tests rather than choosing between runs. So `Checkout.Tests` and `Billing.Tests` can each report 20 runs from the same 20 solution-wide invocations, each seeing only its own tests.
+Runs that name no assembly stay in the store, and `xping where` counts them, but no report includes
+them.
 
-Runs recorded before the SDK could name the assembly belong to no suite. They stay in the store and `xping where` still counts them, but no `--assembly` value reaches them.
-
-### Cloud data
-
-When the CLI has a credential — a sign-in from `xping login`, `--api-key`, or `XPING_APIKEY` — the
-report also asks Xping Cloud what it knows about each test it names, across every run uploaded to
-it, and which other tests it calls unhealthy ([Flagged in Cloud](#flagged-in-cloud)). The rows, their order and the exit code stay local. Cloud adds lines, and each line says where
-its value came from, `cloud:` or `local:`:
-
-```
-1.  HIGH  cloud broken
-    SampleTests.ExceptionTest_ThrowsOnMissingDependency
-    cloud: confidence 0.22 ▼0.61 · highly unreliable · 35 d
-    local: always failing in 20 runs here
-    failed 20 of 20 executions (100%), one failure mode:
-```
-
-- The header ends in `· cloud` when anything on the page came from Cloud, and in
-  `· cloud (partial)` when only some tests were answered.
-- On a full report, a `cloud:` line under the counts gives Cloud's verdicts over your window's
-  tests, shown on the page or not: `cloud: 1 broken · 2 known flaky`, or `cloud: no test flagged`.
-  It ends in `(partial)` when the suite's health was not read to the end. The overview prints the
-  same line for each assembly.
-- **The confidence line** comes first under the name on every finding Cloud has scored: the score,
-  its change, Cloud's category and the window it was computed over. With too little evidence it
-  reads `cloud: evidence sparse (ESS 4 of 10, 14 d)` instead. The score is Cloud's; the verdict is
-  Cloud's own call, not a threshold on the score.
-- **The label** says whose word it is. A flaky or always-failing finding takes Cloud's verdict
-  (`cloud known-flaky`, `cloud broken`, `cloud unstable`, `cloud passing`), and the local kind moves
-  to the `local:` line. Every other kind keeps its local label, such as `local timing out`, because
-  it describes this machine, and Cloud's flaky state goes on a `cloud:` line instead. When the two
-  disagree, the label shows both: `local always failing ≠ cloud passing`.
-- A latest-run failure gains a line under its local sentence, `cloud: confidence 0.22 (35 d) ·
-  broken since 2026-10-11`, followed by whether Cloud has seen the same error:
-  `same error on 6 machines and CI`, or `this error unseen in Cloud`.
-- A test Cloud does not know reads `cloud: not in project payments`. A test whose request Cloud did
-  not answer reads `cloud: not answered`. Both keep their local label.
-- `--id` adds `cloud confidence`, `cloud verdict`, `cloud evidence`, `cloud flaky`, `cloud canonical`,
-  `cloud transition`, `cloud lifetime` and `cloud fetched` to the detail block, and a `cloud:` line
-  under each failure mode saying whether Cloud has seen that error.
-- `--test` adds a `CLOUD` block with the same values and the test's error signatures, and
-  `RUNS IN CLOUD`, its newest runs on every machine: outcome, tier, CI or not, machine, branch and
-  commit. The runs are read only when a second of the four-second budget is left; otherwise the
-  block says `not fetched (budget)`.
-
-#### Flagged in Cloud
-
-A test can pass here and still be one Cloud calls known flaky, broken or unstable from every other
-machine's runs. So a full report also asks Cloud once per project for the tests it considers
-unhealthy, and lists the ones in your window that the page does not already name in a
-`FLAGGED IN CLOUD` section after the findings:
-
-<!-- xping:sample cloud-health -->
-````
-Xping · MyApp.Tests · 20 runs · 2026-08-05 → 2026-08-19 · main@a3f9c2e · cloud
-412 tests · 412 healthy · 0 flagged
-cloud: 1 broken · 1 known flaky · 1 unstable
-
-```
-FLAGGED IN CLOUD                                 3 with no local finding
-────────────────────────────────────────────────────────────────────────
-
-    broken       LedgerTests.Post_RejectsADuplicateEntry
-                 cloud: confidence 0.22 (35 d) · broken since 2026-10-11
-                        not flaky in 14 d
-
-    known flaky  CheckoutTests.Checkout_CompletesWithinTheServiceBudget
-                 cloud: confidence 0.41 (35 d)
-                        flaky (cause: timing, major)
-
-    unstable     InventoryTests.Reserve_ReleasesOnTimeout
-                 cloud: confidence 0.81 (35 d) · not flaky in 14 d
-```
-````
-
-- Each row puts Cloud's verdict where the latest run puts its status, then the test's name and a
-  `cloud:` line: the confidence, the date for `broken since`, and Cloud's flaky state.
-- A test already on the page, as a finding, a member of a cluster finding, or a latest-run row, is
-  not listed again; the section closes with `Also flagged in Cloud: 2 tests shown above.` A finding
-  `--top` left out, or a failure past the latest run's cap, is not on the page, so it is listed.
-- At most ten rows are shown, worst verdict first (`broken`, `known flaky`, `unstable`). `--all`
-  lifts the cap with the findings'; `--top` does not apply.
-- Tests Cloud knows that are not in your local window are never listed.
-- The section changes nothing local: the counts in the header, `--fail-on` and the exit code are
-  this machine's. A listed test stays in `healthy`, which means "no local finding". The section
-  does withhold `No findings.`, as the latest run does.
-- `--id` and `--test` do not ask for the suite's health. When the read is cut short, the line above
-  the block says `Cloud data partial: suite health not complete (budget).`
-
-Every Cloud value names its window (`35 d`, `14 d`, `10 runs`); `lifetime` is the one all-time
-total. Cloud times are in UTC. With `--ascii`, `·` is `-`, `▼` is `v` and `≠` is `!=`.
-
-Which credential is used is described in [Credentials](#credentials); `xping auth status` shows it.
-
-The report finds the Cloud project from, in order: `--project`, `XPING_PROJECTID` or `Xping:ProjectId`
-in `appsettings*.json` (read from `--directory` when given), the project id the SDK recorded with the
-runs, and a Cloud project whose name is the test assembly's.
-
-Cloud is never required. When it cannot answer — offline, slow (the whole lookup is capped at four
-seconds), a key that cannot read, no matching project — you get the local report with one line above
-the block saying why, such as `cloud: unavailable (budget) · showing local results only` when the
-four seconds ran out or `cloud: login required · run xping login`, and at most one line on stderr, at a terminal or with
-`--verbose`. Two lines are printed everywhere,
-because only a person can fix them: `Cloud data unavailable: your sign-in is no longer valid. Run
-xping login.` and the line for a key Cloud refuses. When some tests were answered and others were
-not, the line is `Cloud data partial: 9 of 14 tests answered (timeout).`, with the reason
-`context.cloud.reason` gives. `--summary` never asks Cloud. The other lines you may see:
-
-| Line (after `Cloud data unavailable: `) | What to do |
-|---|---|
-| `could not reach https://app.xping.io (timeout). Showing local results only.` | Nothing; the next report tries again |
-| `no matching Cloud project for Checkout.Tests. Use --project <key>.` | Pass `--project`, or set `XPING_PROJECTID` |
-| `no matching Cloud project for Checkout.Tests in workspace Acme. Use --project <key>.` | The same, when you are signed in |
-| `no Cloud project 'checkout' (from XPING_PROJECTID). Check the key, or pass --project <key>.` | Fix the project key |
-| `project checkout (from XPING_PROJECTID) is not in workspace Acme. Check the key, or run xping login to choose another workspace.` | Fix the key, or sign in to the workspace that has the project |
-| ``This API key cannot read Cloud data (its scope does not include read). Sign in with `xping login` instead.`` | The key is upload-only; sign in, or use a key with read scope |
-| ``This API key cannot read Cloud data (the workspace's plan does not include API access). Sign in with `xping login` instead.`` | Sign in; the workspace's plan does not allow API keys to read |
-| `Xping Cloud is rate limiting requests; try again in a minute.` | Wait |
-| `Refusing to read ~/.xping/credentials.json because other users can read it. …` | Run the `chmod` it prints |
-| `Xping Cloud no longer accepts this version of the CLI. Please upgrade the xping CLI.` | `dotnet tool update -g Xping.Cli` |
+**Runs recorded in CI have no commit.** The SDK records the commit only outside CI. So the header
+shows no commit for a CI run, and `--since <sha>` matches only runs recorded on a developer machine.
 
 ### `--format json`
 
-For scripts and agents. Emits a versioned envelope and nothing else — no rendered block to strip.
+For scripts and agents. The command writes a versioned envelope, and nothing else, to stdout:
 
 ```bash
 xping report --assembly Checkout.Tests --all --format json > findings.json
 ```
 
-Every finding carries a `headline` — the same sentence the rendered report prints — plus `metrics`, the labelled pairs behind it, and the raw `evidence` the two were resolved from. It also carries `population`, which is one of `allExecutions`, `excludesEnvironmental`, `excludesEnvironmentalAndClustered` or `excludesPartialRuns` and says what the finding's **published rate was counted out of** — executions, or, for `excludesPartialRuns`, runs. It qualifies that denominator and not every field beside it: a `stopped running` finding counts its appearances over the runs that covered the suite while its `executionsInWindow` stays a whole-window figure with nothing set aside, because the two answer different questions. And `evidenceSessions`, the number `evidenceLevel` was banded from.
+The top-level keys are `schemaVersion`, `scope`, `window`, `context`, `summary`, `latestRun`,
+`selection`, `test`, `findings` and `truncated`.
 
-Findings about one test are listed together, however far apart their severities put them: the first
-keeps the rank it earned, the rest follow it, and each of those carries an `annotation` saying which
-row the first one is. The reordering happens before `--top` cuts the list, so a limit never leaves a
-finding pointing at a row that is not there.
+**Each finding** carries:
 
-`latestRun` is [the latest run](#the-latest-run) as data: the newest session, its counts, and one
-entry per row with the same `contrast` sentence the rendered block prints and the same single-test
-`subject` a finding carries. It is present whenever the window holds a session, so a consumer can
-tell a clean run (`testsFailed` is zero) from one the report declined to itemise
-(`isLikelyEnvironmental` on an outage) and from one it cut (`failuresShown` against
-`failuresTotal`; `truncated.command` shows the rest, as it does for the findings).
-`explainedByFindingIds` lists, in the order `findings` ranks them, the findings that account for the
-failures not listed as rows.
+- `headline`, the sentence the text report prints, and `metrics`, the labelled values behind it;
+- `evidence`, the raw values both were computed from;
+- `evidenceLevel` and `evidenceSessions`, the number of runs the level was computed from;
+- `population`: `allExecutions`, `excludesEnvironmental`, `excludesEnvironmentalAndClustered` or
+  `excludesPartialRuns`. It says what the finding's published rate was counted out of: executions,
+  or runs for `excludesPartialRuns`. It applies to that rate only. A `stopped running` finding
+  counts its appearances over full runs, while its `executionsInWindow` covers the whole window. See
+  [the population marker](reading-the-report.md#the-population-marker);
+- `annotation`, on the second and later findings about one test, naming the row of the first. The
+  CLI groups them before `--top` cuts the list, so an annotation never points at a row that is not
+  there;
+- `drillDown`, the `--id` command for the finding;
+- `repro` and `failureModes`, described below;
+- `cloud`, described in [Xping Cloud data in the CLI](cloud-data.md#cloud-data-in---format-json).
 
-`test` is `null` unless [`--test`](#test-history) was given, and `window.resolution` is then `store`
-unless `--runs` or `--since` narrowed it. `test` carries the `query` you typed; the `test` it
-resolved to, as the same `subject` a finding carries, and its `shortFingerprint`, the value
-`--test` accepts; one entry in `sessions` per run in the window, newest first, each with
-`sessionId`, `startedAt`, `sha`, `appeared`, `partial`, the deciding `outcome`, `decidingAttempt`
-and `durationMs`, and every attempt in `attempts`; the `counts` and `duration` (with `dispersion`,
-which the text omits) behind the two summary lines; `findingsWithheld`, the reason when the floor
-left the block empty; and `findingRows`, the full-report row of each entry in `findings`, which
-holds only the findings about this test. When the name matches more than one test, `candidates`
-lists them, each with `fingerprintPrefix`, `assembly`, `fullyQualifiedName`, `lastSeen` and the
-`command` that names it, and `test.test` is `null`. When it matches none, `test.test` is `null` and
-`candidates` is empty. The exit code tells the two apart too. When there is no window to report
-over, such as a `--since` later than every run, stdout is empty and only the exit code and stderr
-answer.
+**`latestRun`** is [the latest run](reading-the-report.md#the-latest-run) as data: the newest run,
+its counts, and one entry per row with the same `contrast` sentence and the same `subject` a finding
+carries. It is present whenever the window holds a run. Use it to tell:
 
-`repro` is [the repro command](#reproducing-a-finding) as data, or `null` for a finding that has
-none. `command` is the `Repro:` line. `runs` is the count to run it, `null` above the cap of 50;
-`runsNeeded` is the same count uncapped. `rate` is `runsFailed` out of `runsJudged`, the rerun
-test's runs it failed in and ran in with a verdict, and `expectation` is the sentence the `repro`
-line prints. A cluster's members in `evidence` carry their own `runsFailed` and `runsJudged`, as do
-the `Flaky`, `AlwaysFailing` and `TimingOut` evidence records.
+- a clean run (`testsFailed` is `0`);
+- a run the report did not list, because it looked environmental (`isLikelyEnvironmental`);
+- a list the report cut (`failuresShown` against `failuresTotal`). `truncated.command` shows the
+  rest.
 
-`failureModes` lists the distinct ways a finding's test failed, most frequent first: every mode for
-`Flaky`, the one signature for `AlwaysFailing` (its most common), `BrokenFixture` and
-`SharedFailure`, and an empty list for every other kind. Each carries the exception type (`null` when
-the adapter recorded none), the normalised message, up to five frames innermost first, the
-`occurrences` the finding counted, and when it was first seen among those occurrences.
-`firstSeenInLatestSession` and `firstSeenAfterFirstRun` say whether the mode is new, asked of
-every failure in the window and measured from the test's first run in it with a verdict (for a
-cluster, its members' oldest), so `firstSeenSessionsAgo` of `0` alone does not mean new. A test
-whose only run is the latest has neither flag set. `hash` joins a
-mode to `evidence.exemplars[].signatureHash`. `unavailable` is `true` when nothing was recorded to
-group the failure by. `timedOut` is `true` when the mode's attempts timed out; a mode never mixes
-timed-out and failed attempts. `report --test --format json` carries the same list for the test,
-counted over every failed attempt in the window.
+`explainedByFindingIds` lists, in rank order, the findings that cover the failures not listed as
+rows.
 
-`context.cloud` is always present except under `--summary`. Read `status` first: `ok`, `partial`,
-`unavailable`, `login-required`, `forbidden`, `no-project`, or `not-attempted` when there is no
-credential or nothing to ask. Then `reason`: `none`, `credential-timeout`, `budget`, `timeout`,
-`network`, `server`, `rate-limited`, `invalid-response`, `not-found`, or `signature-algorithm` when
-Cloud matches failures with a different hash than this CLI. It also carries the `credential`
-(`login` or `api-key`), the signed-in `workspaceId` and its `workspace` name (both `null` for an
-API key; the name is also `null` when the sign-in predates it), `elapsedMs`, `fetchedAt`, how many tests were asked about
-(`requestedTests`) and answered (`enrichedTests`), one row per assembly in `projects` with its
-`projectKey`, `source` (`flag`, `env`, `config`, `session` or `name-match`), `status` and `reason`,
-in `sessions` whether Cloud has received and scored this machine's newest runs, and in `health`
-[the suite's health](#flagged-in-cloud): its `state` (`ok`, `partial`, `unavailable` or
-`not-attempted`, which `--id` and `--test` always are) and `reason`, the `totalTests` Cloud
-classified, the `unhealthyTests` in your window and their `verdicts` (`broken`, `knownFlaky`, `unstable`, and `flagged` for any other), the `shownElsewhere` the page already names (a
-finding's test or member after `--top`, or a latest-run row after its cap), and the rest in `tests`, each a local `subject` and Cloud's `digest`, with
-`testsShown` and `testsTotal` for the cap. `summary` never counts them.
+**`test`** is `null` unless you gave [`--test`](reading-the-report.md#test-history). Then
+`window.resolution` is `store`, unless `--runs` or `--since` narrowed it. `test` holds:
 
-Each single-test finding carries a `cloud` object with Cloud's view of its test, or `null` when
-Cloud did not answer for it: its `state` (`unknown` when Cloud does not know the test), the
-`verdict` (`known-flaky`, `broken`, `unstable`, `passing` or `no-history`), the `confidence` score
-with its own evidence level and windows, the flaky ledger's `flaky.state`, the newest `canonical`
-runs, the `lastTransition`, and the `signatures` Cloud has seen for the test. `disagreesWithLocal`
-is `true` when a local `Flaky` or `AlwaysFailing` finding reads differently in Cloud; `identity` is
-`name-mismatch` or `shared` when a fingerprint names different tests. Every failure mode carries
-the SDK's `errorMessageHash` and, under an enriched finding, a `cloud` match: `matched` with the
-signature, `unseen`, `unsignable` (no message), or `unknown`. A latest-run failure's `cloud` holds
-the `digest`, its `match` and `signature`; `test.cloud` holds the digest and the test's newest
-`runs` in Cloud, with `runsState`. `metrics`, `headline` and `contrast` stay local.
+- `query`, what you typed;
+- `test`, the test it matched, as a `subject`, and `shortFingerprint`, the value `--test` accepts;
+- `sessions`, one entry per run in the window, newest first, with `sessionId`, `startedAt`, `sha`,
+  `appeared`, `partial`, the deciding `outcome`, `decidingAttempt`, `durationMs` and every attempt in
+  `attempts`;
+- `counts` and `duration`, behind the two summary lines. `duration` also has `dispersion`, which the
+  text leaves out;
+- `findingsWithheld`, the reason when there was too little history for findings;
+- `findingRows`, the full-report row of each entry in `findings`. `findings` holds only the findings
+  about this test;
+- `candidates`, when the name matched more than one test. Each has `fingerprintPrefix`, `assembly`,
+  `fullyQualifiedName`, `lastSeen` and the `command` that names it, and `test.test` is `null`. When
+  the name matched nothing, `test.test` is `null` and `candidates` is empty.
 
-`summary.notMeasured` says, per kind, how many tests that metric could not be computed for at all —
-split into the ones waiting for more runs and the ones whose recorded data cannot answer the question
-however long you wait. It is deliberately not a total: adding the entries counts a test once per
-question it could not answer, and a kind absent from the object keeps no such tally. Read one entry to
-ask "how much of my suite could this metric read". Tests counted here are inside `healthy`, which
-means "no finding was raised and the latest run did not fail it" rather than "checked and fine" — a
-test first seen in a run that covered only part of the suite is inside it too, on one run of
-history. `flagged` counts tests where `findings` counts findings: one test can attract findings of several kinds,
-and one finding about a broken fixture covers every test that fixture took down, so the two numbers
-are not each other. `failedLatestRun` counts the latest run's rows, the tests it failed that no finding
-names, and `tests` is `healthy` plus `flagged` plus `failedLatestRun`:
+When there is no window, for example a `--since` date after every run, stdout is empty. Only the
+exit code and stderr answer.
+
+**`repro`** is [the repro command](reading-the-report.md#reproducing-a-finding) as data, or `null`.
+
+- `command` is the `Repro:` line.
+- `runs` is the number of runs to make, or `null` above the limit of 50. `runsNeeded` is the same
+  number without the limit.
+- `rate` is `runsFailed` out of `runsJudged`: the runs the test failed in, out of the runs it ran in
+  with a result.
+- `expectation` is the sentence the `repro` line prints.
+
+A group's members in `evidence` have their own `runsFailed` and `runsJudged`, and so do the `Flaky`,
+`AlwaysFailing` and `TimingOut` evidence records.
+
+**`failureModes`** lists the [failure modes](reading-the-report.md#failure-modes), the most frequent
+first: every mode for `Flaky`; the one signature for `AlwaysFailing` (its most common),
+`BrokenFixture` and `SharedFailure`; and an empty list for the other kinds. Each mode has:
+
+- `exceptionType` (`null` when the adapter recorded none), the normalised `message`, and up to five
+  `frames`, innermost first;
+- `occurrences`, the failures the finding counted, and when the mode was first seen among them;
+- `firstSeenInLatestSession` and `firstSeenAfterFirstRun`, which say whether the mode is new. Both
+  look at every failure in the window, from the test's first run in it with a result (for a group,
+  its members' oldest). So `firstSeenSessionsAgo` of `0` alone does not mean new. A test whose only
+  run is the newest has neither flag set;
+- `hash`, which matches `evidence.exemplars[].signatureHash`;
+- `unavailable`, `true` when nothing was recorded to group the failure by;
+- `timedOut`, `true` when the mode's attempts timed out. A mode never mixes timed-out and failed
+  attempts.
+
+`report --test --format json` carries the same list for the test, over every failed attempt in the
+window.
+
+**`summary`** counts the suite:
+
+- `tests` is `healthy` plus `flagged` plus `failedLatestRun`.
+- `flagged` counts tests and `findings` counts findings. One test can have several findings, and one
+  `broken fixture` finding covers every test the fixture failed, so the two numbers differ.
+- `failedLatestRun` counts the latest run's rows: the tests it failed that no finding names.
+- `healthy` means no finding and no failure in the newest run. It includes tests that were not
+  measured, and a test first seen in a partial run, with one run of history.
+- `excludedLowEvidence` and `excludedNotSignificant` are the `awaiting more runs` and
+  `not significant` counts.
+- `notMeasured` says, per kind, how many tests the kind could not measure: `awaitingRuns` need more
+  runs, and `unreadable` have recorded data that cannot answer the question. Do not add the entries
+  up: one test is counted once for each kind it could not answer.
+- `environmentalSessions`, `partialSessions`, `incompleteSessions`, `unreadableSessions` and
+  `skewedSessions` count the runs of each kind in the window. `failedProviders` names any kind
+  whose analysis failed.
 
 ```json
 {
   "schemaVersion": "1.33",
   "scope": "assembly",
-  "window": { "sessionCount": 20, "resolution": "default", "currentSliceSize": 3 },
+  "window": {
+    "from": "2026-08-05T09:12:00Z", "to": "2026-08-19T16:21:00Z", "sessionCount": 20,
+    "resolution": "default", "resolutionArgument": null, "currentSliceSize": 3,
+    "sessionIds": ["6f9a2f1c-…", "…"]
+  },
   "context": {
     "sha": "a3f9c2e", "branch": "main", "assembly": "Checkout.Tests",
     "cloud": {
@@ -1143,7 +376,7 @@ names, and `tests` is `healthy` plus `flagged` plus `failedLatestRun`:
       "health": {
         "state": "ok", "reason": "none", "totalTests": 412, "unhealthyTests": 3,
         "verdicts": { "broken": 1, "knownFlaky": 2, "unstable": 0, "flagged": 0 }, "shownElsewhere": 2,
-        "tests": [ { "subject": { "type": "test", "fingerprint": "…", "fullyQualifiedName": "Checkout.Tests.CartTests.Checkout_Rounds", … }, "digest": { "verdict": "known-flaky", … } } ],
+        "tests": [ { "subject": { "type": "test", "fingerprint": "…", "fullyQualifiedName": "Checkout.Tests.CartTests.Checkout_Rounds", "…": "…" }, "digest": { "verdict": "known-flaky", "…": "…" } } ],
         "testsShown": 1, "testsTotal": 1
       }
     }
@@ -1159,9 +392,15 @@ names, and `tests` is `healthy` plus `flagged` plus `failedLatestRun`:
     "excludedNotSignificant": 6,
     "notMeasured": {
       "DurationRegression": { "awaitingRuns": 63, "unreadable": 32 },
-      "ParallelSensitive": { "awaitingRuns": 0, "unreadable": 108 }
+      "ParallelSensitive": { "awaitingRuns": 0, "unreadable": 108 },
+      "…": "…"
     },
-    "partialSessions": 0
+    "environmentalSessions": 0,
+    "partialSessions": 0,
+    "incompleteSessions": 0,
+    "unreadableSessions": 0,
+    "skewedSessions": 0,
+    "failedProviders": []
   },
   "latestRun": {
     "sessionId": "6f9a2f1c-…",
@@ -1243,11 +482,13 @@ names, and `tests` is `healthy` plus `flagged` plus `failedLatestRun`:
 }
 ```
 
+`"…": "…"` marks fields left out of this sample.
+
 ---
 
 ## `xping where`
 
-Prints where the local store lives and what it holds.
+Prints where the local store is and what it holds.
 
 ```bash
 xping where [--directory <path>]
@@ -1256,16 +497,31 @@ xping where [--directory <path>]
 ```
 /Users/you/src/my-repo/.xping
   36 runs · 6.1 MB on disk
-  Checkout.Tests                              12 runs  last 2026-08-08 09:14 UTC
-  Billing.Tests                               12 runs  last 2026-08-08 09:13 UTC
-  Api.Tests                                   12 runs  last 2026-08-08 09:11 UTC
+  Checkout.Tests                             12 runs  last 2026-08-08 09:14 UTC
+  Billing.Tests                              12 runs  last 2026-08-08 09:13 UTC
+  Api.Tests                                  12 runs  last 2026-08-08 09:11 UTC
 ```
 
-The store location is discovered by walking up for a repository root, so this is the reliable way to answer "where is my data". It is also the first thing to run when a report looks wrong or empty.
+Run it first when a report looks wrong or empty. It shows the folder that the SDK and the CLI
+resolve. See [Local store](../configuration/local-store.md#location) for the rules.
 
-The size includes any temp files left by interrupted writes, because retention counts them toward the store's size limit.
+- The size includes temporary files left by interrupted writes, because retention counts them.
+- A run that covered several assemblies is counted under each of them, so the assembly counts can
+  add up to more than the total.
+- An assembly name longer than 40 characters is cut, and ends in `~`.
+- `N runs name no assembly and are not shown` appears when some runs name no assembly.
+- `(no runs recorded yet)` follows the path when the store has no runs.
 
-**Exit codes:** `0` success · `1` no store could be resolved · `70` the CLI crashed.
+When no store can be resolved, `xping where` prints
+`No Xping local store could be resolved from this directory.` on **stdout** and exits `1`. This
+happens only when the repository root's `.xping` folder is missing or cannot be written, and the
+folder under your user profile is not available either.
+
+| Code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | No store could be resolved |
+| `70` | The CLI crashed |
 
 ---
 
@@ -1279,35 +535,47 @@ xping clear [options]
 
 | Option | Description |
 |---|---|
-| `--assembly <name>` | Only delete one test assembly's history |
-| `--force` | Skip the confirmation prompt |
-| `--directory <path>` | Resolve the store from this directory |
+| `--assembly <name>` | Delete only this test assembly's runs. The name must match exactly |
+| `--force` | Do not ask for confirmation |
+| `--directory <path>` | Find the store starting from this folder |
 
-Local history is not recoverable — it is not in version control, and in local-only mode it exists nowhere else. So `clear` confirms first:
+You cannot get deleted runs back. They are not in version control, and in local-only mode they are
+nowhere else. So `clear` asks first, on stdout:
 
 ```
 Delete all 36 runs from /Users/you/src/my-repo/.xping? [y/N]
 ```
 
-`--assembly` is exact. A run recorded by a solution-wide `dotnet test` holds several test projects' history, and clearing one of them strips that project out and keeps the run — the other suites keep every run they had.
+Any answer other than `y` prints `Cancelled.` and deletes nothing.
 
-Clearing everything also deletes temp files left by interrupted writes. `--assembly` leaves them, because a temp file names no assembly.
-
-When stdin is not interactive (a script, a CI step, a pipeline), `clear` **refuses** rather than assuming consent:
+When stdin is not interactive (a script, a CI step or a pipe), `clear` refuses, on stderr:
 
 ```
 Refusing to delete all 36 runs without confirmation. Re-run with --force to proceed non-interactively.
 ```
 
-Pass `--force` to delete without prompting.
+- A run from a solution-wide `dotnet test` holds several assemblies. `--assembly` removes that
+  assembly's tests from the run and keeps the run for the others.
+- Clearing everything also deletes temporary files left by interrupted writes. `--assembly` leaves
+  them, because a temporary file names no assembly.
+- On success, stdout says `Deleted N runs.`
+- With nothing to delete, stdout says `Nothing to clear.`, or
+  `No runs recorded for assembly 'X'.` with `--assembly`, and the command exits `0`.
+- When no store can be resolved, stderr says
+  `No Xping local store could be resolved from this directory.`
 
-**Exit codes:** `0` success · `1` refused, cancelled, or some runs could not be deleted · `70` the CLI crashed.
+| Code | Meaning |
+|---|---|
+| `0` | The runs were deleted, or there was nothing to delete |
+| `1` | No store could be resolved; you cancelled; `clear` refused without `--force`; or some runs could not be deleted |
+| `70` | The CLI crashed |
 
 ---
 
 ## `xping login`
 
-Signs you in to Xping Cloud, so `xping report` can show [Cloud data](#cloud-data) for your tests.
+Signs you in to Xping Cloud, so `xping report` can show [Xping Cloud data](cloud-data.md) for your
+tests.
 
 ```bash
 xping login [--device] [--no-browser] [--workspace <id>] [--json]
@@ -1317,13 +585,13 @@ xping login [--device] [--no-browser] [--workspace <id>] [--json]
 |---|---|
 | `--device` | Sign in with a code on any device. Use it when your browser is on another machine |
 | `--no-browser` | Print the sign-in link without trying to open a browser |
-| `--workspace <id>` | Preselect this workspace on the consent page. The id is the 26-character value `xping auth status` shows in parentheses after the name |
+| `--workspace <id>` | Preselect this workspace on the consent page. The id is the 26-character value that `xping auth status` shows after the workspace name |
 | `--json` | Write the result to stdout as JSON |
 
-The [global options](#global-options) apply too: `--cloud-url` signs in to another Xping Cloud.
+The [global options](#global-options) apply too. `--cloud-url` signs in to another Xping Cloud.
 
 `login` opens your browser on the Xping Cloud consent page and waits up to 5 minutes for you to
-approve. It always prints the link as well, in case the browser does not open:
+approve. It always prints the link too, in case the browser does not open:
 
 ```
 Opening your browser to sign in to Xping Cloud (https://app.xping.io).
@@ -1338,13 +606,18 @@ Waiting for you to finish in the browser (up to 5 minutes)...
   Stored in  macOS Keychain
 ```
 
-The browser must run on the same machine as the CLI, because Xping Cloud returns you to a
-one-time loopback address (`127.0.0.1`). The CLI does not try to open a browser over SSH, on Linux without
-a display, or in a container (Docker, devcontainers, Codespaces). It prints the link and suggests
-`xping login --device` instead.
+The browser must run on the same machine as the CLI, because Xping Cloud returns you to a one-time
+address on `127.0.0.1`.
 
-With `--device`, open the page on any device — your phone, or the laptop you SSH from — and enter
-the code. The code expires after the time shown:
+The CLI does not try to open a browser over SSH, on Linux without a display, or in a container
+(Docker, devcontainers, Codespaces). It prints
+`No browser was found on this machine. Open this link in a browser on this machine:` and the link.
+With `--no-browser`, the first line is `Open this link in a browser on this machine:`. In both cases
+the CLI then prints
+``If your browser is on another machine, press Ctrl+C and run `xping login --device`.``
+
+With `--device`, open the page on any device, such as your phone or the laptop you connect from, and
+enter the code. The code expires after the time shown:
 
 ```
 To sign in, open  https://app.xping.io/device
@@ -1355,20 +628,19 @@ and enter the code  ABCD-EFGH
 Waiting for you to approve in the browser (up to 10 minutes)...
 ```
 
-All human text goes to stderr; stdout carries only the `--json` document.
+All text for people goes to stderr. stdout carries only the `--json` document.
 
 ### Only in your own terminal
 
-`login` refuses to run when stdin or stderr is not a terminal, or when `CI` is set to `true`, `1`
-or `yes`:
+`login` refuses to run when stdin or stderr is not a terminal, or when `CI` is `true`, `1` or `yes`:
 
 ```
 xping login needs an interactive terminal. Run it in your own shell. Coding agents and CI must use an API key or a login stored earlier; see `xping auth status`.
 ```
 
-It exits with `13`, and with `--json` it still writes the failure document. CI uses an API key
-instead ([Credentials](#credentials)). A coding agent runs `xping auth status --json` to learn
-whether Cloud data is available, and asks you to run `xping login` when it is not.
+It exits `13`. With `--json`, it still writes the failure document. CI uses an API key instead (see
+[What you need](cloud-data.md#what-you-need)). A coding agent runs `xping auth status --json` to
+learn whether Cloud data is available, and asks you to run `xping login` when it is not.
 
 ### Where the sign-in is stored
 
@@ -1376,52 +648,52 @@ whether Cloud data is available, and asks you to run `xping login` when it is no
 |---|---|
 | Windows | Windows Credential Manager |
 | macOS | macOS Keychain |
-| Linux | Secret Service (GNOME Keyring or another provider) through libsecret |
+| Linux | Secret Service (GNOME Keyring or another provider), through libsecret |
 
-The entry is named `xping-cli` and keyed by the Cloud URL, so signing in to two Xping Clouds keeps
-two sign-ins. When no OS store can be used — over SSH with a locked keychain, on a server without a
-D-Bus session, without libsecret — the sign-in goes to `~/.xping/credentials.json`, and `login`
-says so:
+The entry is named `xping-cli` and is keyed by the Cloud URL, so you can be signed in to two Xping
+Clouds. When no OS store can be used, for example over SSH with a locked keychain, on a server
+without a D-Bus session, or without libsecret, the sign-in goes to `~/.xping/credentials.json`, and
+`login` says so:
 
 ```
 ⚠ Stored credentials in ~/.xping/credentials.json because no OS credential store is available (Secret Service not running). The file is readable only by you.
 ```
 
-The same happens when the OS store is there but refuses the write — on Windows, a damaged user
-profile makes every Credential Manager write fail with error 8 (`cmdkey` fails the same way):
+The same happens when the OS store refuses the write. On Windows, a damaged user profile makes every
+Credential Manager write fail with error 8 (`cmdkey` fails the same way):
 
 ```
 ⚠ Could not write to Windows Credential Manager (error 8: Not enough memory resources are available to process this command).
 ⚠ Stored credentials in ~/.xping/credentials.json instead. The file is readable only by you.
 ```
 
-The file is created with mode `0600` in a `0700` directory (an owner-only ACL on Windows). The CLI
-refuses to read it when other users can, and says how to fix that: always in `auth status`, and in
-`report` when there is no API key to use instead (at a terminal or with `--verbose`). A new `login`
-replaces the file.
+- The file has mode `0600`, in a folder with mode `0700` (an owner-only ACL on Windows).
+- The CLI refuses to read the file when other users can read it, and says how to fix it. `auth status`
+  always says so. `report` says so when it has no API key to use instead, at a terminal or with
+  `--verbose`:
 
-```
-Refusing to read ~/.xping/credentials.json because other users can read it. Run `chmod 600 ~/.xping/credentials.json` (and `chmod 700 ~/.xping`) and try again.
-```
+  ```
+  Refusing to read ~/.xping/credentials.json because other users can read it. Run `chmod 600 ~/.xping/credentials.json` (and `chmod 700 ~/.xping`) and try again.
+  ```
 
-A sign-in stored in the file is still found later from a desktop session, and a later `login`
-there moves it to the OS store.
+- A new `login` replaces the file. A sign-in in the file is still found from a desktop session, and
+  a later `login` there moves it to the OS store.
 
-> **macOS: one keychain prompt after each upgrade.** The `xping` tool is not signed by Apple, so
-> macOS identifies it by its hash. After `dotnet tool update`, the first command that reads the
-> sign-in shows a dialog saying xping wants to use your confidential information stored in
-> `xping-cli`. Choose **Always Allow**; it stays quiet until the next upgrade.
+> **macOS: one keychain prompt after each upgrade.** Apple does not sign the `xping` tool, so macOS
+> identifies it by its hash. After `dotnet tool update`, the first command that reads the sign-in
+> shows a dialog: xping wants to use your confidential information stored in `xping-cli`. Choose
+> **Always Allow**. The dialog does not appear again until the next upgrade.
 
 ### WSL and devcontainers
 
 - **WSL 2.** `login` opens your Windows browser through `wslview` (from wslu) or `rundll32`. WSL 2
   forwards `127.0.0.1` to Windows by default, so the browser can return to the CLI. If the sign-in
-  never arrives — some networking modes turn the forwarding off — use `xping login --device`. WSL
+  never arrives, because a networking mode turns forwarding off, use `xping login --device`. WSL
   usually has no keyring, so expect the file store.
-- **VS Code devcontainers and Codespaces.** The CLI treats them as headless and prints the link.
-  Use `xping login --device`; the loopback sign-in works only if you forward the port it listens on
-  to your machine. The sign-in is stored in the container's `~/.xping/credentials.json` and goes
-  away with the container.
+- **VS Code devcontainers and Codespaces.** The CLI treats them as headless and prints the link. Use
+  `xping login --device`. The browser sign-in works only if you forward the port it listens on to
+  your machine. The sign-in is stored in the container's `~/.xping/credentials.json` and is lost
+  with the container.
 
 ### `--json`
 
@@ -1441,9 +713,10 @@ there moves it to the OS store.
 }
 ```
 
-`flow` is `loopback` or `device`; `store` is `keychain` or `file`. `workspaceName` is `null` when the
-sign-in predates Xping Cloud sending it; the text then shows the workspace ID alone. Every failure of `login`,
-`logout` and `auth status` under `--json` writes the same document:
+`flow` is `loopback` or `device`. `store` is `keychain` or `file`. `workspaceName` is `null` when
+Xping Cloud sent no name. The text then shows the workspace id alone.
+
+Every failure of `login`, `logout` and `auth status` under `--json` writes the same document:
 
 ```json
 {
@@ -1460,9 +733,19 @@ sign-in predates Xping Cloud sending it; the text then shows the workspace ID al
 `version_mismatch`, `credential_store`, `oauth_error` (the server's code is in `oauthError`),
 `cancelled`, `configuration` or `local_listener`. No document ever contains a token.
 
-**Exit codes:** `0` signed in · `2` invalid option or configuration · `11` declined · `12` timed out
-· `13` not an interactive terminal · `14` other sign-in failure · `15` Xping Cloud unreachable · `16`
-CLI version not accepted · `17` credential store error · `70` the CLI crashed · `130` cancelled. See [Exit codes](#exit-codes).
+| Code | Meaning |
+|---|---|
+| `0` | Signed in |
+| `2` | Invalid option or configuration |
+| `11` | You declined |
+| `12` | The sign-in timed out, or the device code expired |
+| `13` | Not an interactive terminal, or `CI` is set |
+| `14` | Another sign-in failure |
+| `15` | Xping Cloud could not be reached |
+| `16` | Xping Cloud does not accept this CLI version |
+| `17` | The credential store failed |
+| `70` | The CLI crashed |
+| `130` | You pressed Ctrl+C |
 
 ---
 
@@ -1480,8 +763,8 @@ There is no prompt.
 ✓ Signed out of https://app.xping.io (jane@example.com).
 ```
 
-When Xping Cloud cannot be reached, the local sign-in is removed anyway and the session stays
-valid on the server until it expires or you revoke it:
+When Xping Cloud cannot be reached, the CLI removes the local sign-in anyway. The session stays valid
+on the server until it expires or you revoke it:
 
 ```
 ⚠ Could not reach https://app.xping.io to revoke the session (connection failed).
@@ -1490,15 +773,23 @@ valid on the server until it expires or you revoke it:
 ✓ Signed out locally.
 ```
 
-Running it again prints `You are not signed in to https://app.xping.io.` and exits `0`. `logout`
-never touches an API key; when one is set it says where, so you can unset it.
+- `logout` also deletes the cached project list and the cached Xping Cloud endpoints for that Cloud
+  URL.
+- When you are not signed in, it prints `You are not signed in to https://app.xping.io.` and exits
+  `0`. If an API key is set, it then says where the key comes from, so you can unset it.
+- `logout` never changes an API key.
 
 `--json` writes
-`{ "schemaVersion": "1", "result": "signed-out", "cloudUrl": "…", "revoked": true, "warning": null }`;
+`{ "schemaVersion": "1", "result": "signed-out", "cloudUrl": "…", "revoked": true, "warning": null }`.
 `result` is `signed-out`, `signed-out-locally` or `not-signed-in`.
 
-**Exit codes:** `0` signed out, or not signed in · `2` invalid configuration · `17` the stored
-sign-in could not be removed (the message names the store) · `70` the CLI crashed · `130` cancelled.
+| Code | Meaning |
+|---|---|
+| `0` | Signed out, or not signed in |
+| `2` | Invalid configuration |
+| `17` | The stored sign-in could not be removed. The message names the store |
+| `70` | The CLI crashed |
+| `130` | You pressed Ctrl+C |
 
 ---
 
@@ -1519,15 +810,18 @@ Session       ...A7F2Q9
 Access token  expires in 12 minutes (refreshed automatically)
 ```
 
-The access token is refreshed when a command needs it, so an expired one is not a problem. Other
-states:
+The CLI refreshes the access token when a command needs it. The `Access token` row can also read
+`expired (refreshed automatically on next use)` or `none stored (refreshed automatically on next use)`.
+Neither is a problem.
 
-- An API key is set as well: `API key (XPING_APIKEY) also set; used only when no login is available.`
-- `--api-key` was given: `Credential    API key (--api-key)`, and `A stored login also exists and
-  is not used while --api-key is given.` when there is one.
-- Only an API key: `Credential    API key (XPING_APIKEY)`. The CLI cannot check the key without a
+Other cases:
+
+- An API key is set too: `API key (XPING_APIKEY) also set; used only when no login is available.`
+- `--api-key` was given: `Credential    API key (--api-key)`. When a sign-in is stored too, the CLI
+  adds `A stored login also exists and is not used while --api-key is given.`
+- Only an API key: `Credential    API key (XPING_APIKEY)`. The CLI cannot check a key without a
   network call, so `auth status` does not.
-- Nothing: `Credential    none` and ``Run `xping login` to sign in.``
+- No credential: `Credential    none` and ``Run `xping login` to sign in.``
 
 `--verbose` adds the paths in use under `~/.xping`.
 
@@ -1553,14 +847,26 @@ states:
 }
 ```
 
-`credential` is `stored-login`, `api-key` or `none`. `credentialSource` is `keychain` or `file` for
-a sign-in, and `flag`, `env` or `config` for a key. `fallbackApiKey` names a key that is used if the
-sign-in stops being valid. `warnings` holds full sentences — the file-store notice, a refused or
-unreadable credentials file — for an agent to pass on.
+- `credential` is `stored-login`, `api-key` or `none`.
+- `credentialSource` is `keychain` or `file` for a sign-in, and `flag`, `env` or `config` for a key.
+- `fallbackApiKey` is `env` or `config`: a key the CLI uses if the sign-in stops being valid.
+- `warnings` holds full sentences, such as the file-store notice or a refused credentials file, for
+  an agent to pass on.
 
-**Exit codes:** `0` a credential is available (a sign-in or a key) · `2` invalid configuration, such
-as a bad `XPING_CLOUDURL` (with `--json`, a failure document) · `10` no credential · `17` no
-credential, and a credential store could not be read · `70` the CLI crashed · `130` cancelled.
+| Code | Meaning |
+|---|---|
+| `0` | A credential is available: a sign-in or a key |
+| `2` | Invalid configuration, such as a bad `XPING_CLOUDURL`. With `--json`, a failure document |
+| `10` | No credential |
+| `17` | No credential, and a credential store could not be read |
+| `70` | The CLI crashed |
+| `130` | You pressed Ctrl+C |
+
+---
+
+## `xping --version`
+
+Prints the tool version, for example `1.0.0-rc.5`.
 
 ---
 
@@ -1571,63 +877,48 @@ These work on every command, before or after the command name.
 | Option | Description |
 |---|---|
 | `--cloud-url <url>` | The Xping Cloud to sign in to and read from. Default `https://app.xping.io` |
-| `--api-key <key>` | API key for reading Xping Cloud data. Prefer `XPING_APIKEY`, so the key does not land in shell history |
-| `--verbose` | Write diagnostics to stderr: which credential is used, refreshes, why Cloud data is missing. Tokens and keys are never printed |
+| `--api-key <key>` | An API key for reading Xping Cloud data. Prefer `XPING_APIKEY`, so the key does not go into your shell history |
+| `--verbose` | Write diagnostics to stderr: which credential is used, token refreshes, why Cloud data is missing, and the stack trace of a crash. Tokens and keys are never printed |
 
-The Cloud URL comes from, first match wins: `--cloud-url`, `XPING_CLOUDURL` (or `Xping__CloudUrl`), `Xping:CloudUrl` in
-`appsettings.json` (or `appsettings.{environment}.json`) in the working directory, then
-`https://app.xping.io`. It must be `https`; `http` is accepted only for `localhost` and
-`127.0.0.1`. Each Cloud URL has its own sign-in.
+The Cloud URL comes from the first of these that is set:
 
----
+1. `--cloud-url`;
+2. `XPING_CLOUDURL`, `Xping__CloudUrl` or `XPING__CLOUDURL`;
+3. `Xping:CloudUrl` in `appsettings.json` or `appsettings.{environment}.json`, in the current
+   folder (for `report`, in the `--directory` folder when you give one). `{environment}` is
+   `ASPNETCORE_ENVIRONMENT`, else `DOTNET_ENVIRONMENT`, else `Production`;
+4. `https://app.xping.io`.
 
-## Credentials
-
-`xping report` reads Cloud data with the first of these that exists:
-
-| Order | Credential | Typical use |
-|---|---|---|
-| 1 | `--api-key <key>` | A one-off command with another key |
-| 2 | The sign-in stored by `xping login` | Your machine |
-| 3 | `XPING_APIKEY`, then `Xping__ApiKey` / `XPING__APIKEY`, then `Xping:ApiKey` in `appsettings*.json` | CI, where nobody signs in |
-
-The stored sign-in comes before `XPING_APIKEY` because, on a developer machine, that variable
-usually holds the SDK's upload key, which cannot read. When the sign-in stops being valid (revoked
-or expired), the CLI deletes it, prints the `Run xping login` line, and tries the key
-from row 3 if there is one. It never falls back on a network error.
-
-Upload keys write test runs and nothing else; reading needs a key with read scope, on a plan that
-includes API access. Otherwise the report says so and stays local.
+The URL must use `https`. `http` is accepted only for `localhost` and `127.0.0.1`. Each Cloud URL has
+its own sign-in.
 
 ---
 
 ## Exit codes
 
+Every code any command returns:
+
 | Code | Meaning | Commands |
 |---|---|---|
 | `0` | Success | all |
-| `1` | A finding reached `--fail-on`; `where` or `clear` failed; `xping` run with no command | `report`, `where`, `clear`, `xping` |
-| `2` | Invalid option (including `--cloud-url`, `--project`, `--workspace`); no report could be produced; for `login`, `logout` and `auth status`, an invalid `XPING_CLOUDURL` or settings file (`report` prints a hint instead) | all |
+| `1` | A finding reached `--fail-on`; `where` or `clear` failed; `xping` was run with no arguments | `report`, `where`, `clear`, `xping` |
+| `2` | An invalid option or value (including `--cloud-url`, `--project` and `--workspace`); `report` could not produce a report; for `login`, `logout` and `auth status`, an invalid `XPING_CLOUDURL` or settings file (`report` prints a hint instead) | all |
 | `3` | The `--id` finding is not in the report; no test matches `--test`, or none of its runs is in the window | `report` |
-| `4` | `--test` matches more than one test | `report` |
+| `4` | `--test` matches more than one test; `--id` without `--assembly` is reported by more than one assembly | `report` |
 | `10` | No credential | `auth status` |
 | `11` | You declined the sign-in | `login` |
 | `12` | The sign-in timed out, or the device code expired | `login` |
 | `13` | Not an interactive terminal, or `CI` is set | `login` |
-| `14` | Any other sign-in failure | `login` |
+| `14` | Another sign-in failure | `login` |
 | `15` | Xping Cloud could not be reached | `login` |
 | `16` | Xping Cloud does not accept this CLI version | `login` |
 | `17` | The credential store failed | `login`, `logout`, `auth status` |
-| `70` | The CLI crashed: an unexpected error stopped the command. stderr says what failed; add `--verbose` for the stack trace | all |
-| `130` | Cancelled with Ctrl+C | all |
+| `70` | The CLI crashed. stderr says `xping: <message>`. Add `--verbose` for the stack trace | all |
+| `130` | You pressed Ctrl+C | `login`, `logout`, `auth status` |
 
-Xping Cloud never changes the exit code of `report`: Cloud problems are one line on stderr.
-
----
-
-## `xping --version`
-
-Prints the tool version, e.g. `1.0.0-rc.5`.
+`login`, `logout` and `auth status` stop on Ctrl+C, print `Cancelled.` and exit `130`. `report`,
+`where` and `clear` do not handle Ctrl+C themselves. The operating system ends them, and the exit
+code is the one your shell reports for an interrupted process.
 
 ---
 
@@ -1635,15 +926,16 @@ Prints the tool version, e.g. `1.0.0-rc.5`.
 
 | Variable | Effect |
 |---|---|
-| `XPING_LOCAL_STORE` | Overrides the store location. Must match the value the SDK used. |
-| `XPING_NO_BANNER` | Suppresses the cloud invitation. |
-| `XPING_SHELL` | The shell printed commands are quoted for: `posix` or `powershell`. Default: `powershell` on Windows, `posix` elsewhere. Any other value prints a warning and the default applies. |
-| `XPING_APIKEY` | API key for Cloud data when you are not signed in. See [Credentials](#credentials). |
-| `XPING_PROJECTID` | The Cloud project to read. `--project` overrides it. |
-| `XPING_CLOUDURL` | The Xping Cloud to use. `--cloud-url` overrides it. |
-| `CI` | When `true`, `1` or `yes`, `xping login` refuses to run. |
-
-See [Local Store](../configuration/local-store.md) for details.
+| `XPING_LOCAL_STORE` | Moves the local store. Set the same value the SDK used. See [LocalStorePath](../configuration/configuration-reference.md#localstorepath) |
+| `XPING_NO_BANNER` | Any non-empty value hides the [Cloud invitation](#the-cloud-invitation) |
+| `XPING_SHELL` | The shell printed commands are quoted for: `posix` or `powershell`. Default: `powershell` on Windows, `posix` elsewhere. Any other value prints a warning, and the default applies |
+| `XPING_APIKEY` | An API key for Xping Cloud data when you are not signed in. `Xping__ApiKey` and `XPING__APIKEY` work too. See [What you need](cloud-data.md#what-you-need) |
+| `XPING_PROJECTID` | The Xping Cloud project to read. `--project` overrides it. `Xping__ProjectId` and `XPING__PROJECTID` work too |
+| `XPING_CLOUDURL` | The Xping Cloud to use. `--cloud-url` overrides it. `Xping__CloudUrl` and `XPING__CLOUDURL` work too |
+| `ASPNETCORE_ENVIRONMENT`, `DOTNET_ENVIRONMENT` | Choose `appsettings.{environment}.json`. The default is `Production` |
+| `NO_COLOR` | Any value turns off colour. The same as `--no-color` |
+| `FORCE_COLOR` | Any value turns on colour when stdout is not a terminal. `NO_COLOR` and `--no-color` win over it. It does not turn on the Cloud invitation |
+| `CI` | When `true`, `1` or `yes`, `xping login` refuses to run |
 
 ### Files under `~/.xping`
 
@@ -1651,17 +943,18 @@ See [Local Store](../configuration/local-store.md) for details.
 |---|---|
 | `~/.xping/credentials.json` | Sign-ins, only when no OS credential store is available. Mode `0600` |
 | `~/.xping/cache/discovery/` | Xping Cloud's endpoints, kept for 24 hours |
-| `~/.xping/cache/projects/` | Cloud projects per workspace, kept for 24 hours |
-| `~/.xping/locks/` | Lock files that keep two commands from refreshing a sign-in at once |
+| `~/.xping/cache/projects/` | Xping Cloud projects per workspace, kept for 24 hours |
+| `~/.xping/locks/` | Lock files that stop two commands from refreshing a sign-in at the same time |
 
-`xping logout` removes the sign-in; deleting the caches is always safe. This folder is not the local
-run store, which lives in `.xping/` in your repository.
+`xping logout` removes the sign-in and the caches for that Cloud URL. You can delete the caches at
+any time. This folder is not the local run store. See [Local store](../configuration/local-store.md).
 
 ---
 
-## See Also
+## See also
 
-- [Running Without an Account](../getting-started/local-first.md)
-- [Local Store](../configuration/local-store.md)
-- [Configuration Reference](../configuration/configuration-reference.md)
-- [Connect to Xping Cloud](../index.md#connect-to-xping-cloud)
+- [Reading the report](reading-the-report.md)
+- [Xping Cloud data in the CLI](cloud-data.md)
+- [Run without an account](../getting-started/local-first.md)
+- [Local store](../configuration/local-store.md)
+- [Configuration reference](../configuration/configuration-reference.md)

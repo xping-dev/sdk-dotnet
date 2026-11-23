@@ -1594,11 +1594,21 @@ internal static partial class ReportFixtures
         };
 
     /// <summary>
+    /// A fingerprint shaped like the SDK's, lower-case hex, derived from the name.
+    /// </summary>
+    /// <remarks>
+    /// The documented samples print its first 8 characters as the value <c>--test</c> accepts. A
+    /// placeholder such as <c>fp-Name</c> printed <c>--test fp-Sampl</c>, which no real test has.
+    /// </remarks>
+    internal static string Fingerprint(string name) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(name)));
+
+    /// <summary>
     /// A single-test subject named the way the builder names one, at a given location.
     /// </summary>
     private static SubjectDto SampleSubject(string qualifiedName, string sourceFile, int line) =>
         new(
-            "test", $"fp-{qualifiedName}", qualifiedName, qualifiedName,
+            "test", Fingerprint(qualifiedName), qualifiedName, qualifiedName,
             SubjectNames.ShortName(qualifiedName, qualifiedName), null,
             sourceFile, line, "SampleApp.XUnit", null, null, null);
 
@@ -1967,7 +1977,7 @@ internal static partial class ReportFixtures
             10,
             ToCamelCase(PopulationRules.For(Enum.Parse<FindingKind>(kind)).ToString()),
             new SubjectDto(
-                "test", $"fp-{name}", name, name, SubjectNames.ShortName(name, name), null,
+                "test", Fingerprint(name), name, name, SubjectNames.ShortName(name, name), null,
                 null, null, "MyApp.Tests", null, null, null),
             null,
             headline,
@@ -2078,7 +2088,7 @@ internal static partial class ReportFixtures
         return new LatestRunFailureDto(
             status,
             new SubjectDto(
-                "test", $"fp-{name}", qualified, name, SubjectNames.ShortName(qualified, name), null,
+                "test", Fingerprint(name), qualified, name, SubjectNames.ShortName(qualified, name), null,
                 sourceFile, sourceFile == null ? null : 42, "MyApp.Tests", null, null, null),
             contrast,
             failureSummary,

@@ -9,7 +9,7 @@ FINDING                                                       row 1 of 1
     CheckoutTests.Completes
     failed 0% at concurrency 1 and 75% at 14, rising with concurrency
     across 4 levels in 18 runs
-    evidence adequate | -env | f_329c8bef | .../CheckoutTests.cs:42
+    evidence adequate | -env | f_ad0bfdc6 | .../CheckoutTests.cs:42
 
     test      MyApp.Tests.CheckoutTests.Completes
     assembly  MyApp.Tests
@@ -24,7 +24,7 @@ FINDING                                                       row 1 of 1
 
 rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
+https://docs.xping.io/cli/reading-the-report.html#the-population-marker
 
 Showing 1 of 1 finding | all: xping report --all --assembly MyApp.Tests
-History: xping report --test fp-MyApp --assembly MyApp.Tests
+History: xping report --test 5a915b19 --assembly MyApp.Tests

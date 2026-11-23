@@ -1,6 +1,6 @@
 # CLI Report — `LATEST RUN` Section
 
-**Status:** Draft, binding once merged
+**Status:** Shipped (#215).
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/Report/**`
 **Schema:** `1.19` → `1.20`
 **Depends on:** `cli-report-format-spec.md`, **as amended by its Amendment 1**. D1

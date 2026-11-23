@@ -273,7 +273,7 @@ xping report --no-color --ascii   # for log viewers that do not show color codes
 `xping report` adds Xping Cloud's confidence for each test when its key can read Xping Cloud data.
 A key with only the Upload scope cannot. In a pipeline, create a second key with the Read scope, and
 pass it only to the report step. Reading also needs a plan that includes API access. See
-[Credentials](../cli/command-reference.md#credentials).
+[Credentials](../cli/cloud-data.md#what-you-need).
 
 
 ```yaml
@@ -286,7 +286,7 @@ pass it only to the report step. Reading also needs a plan that includes API acc
 
 `xping login` does not work in a pipeline: it needs a terminal, and it does not run when `CI` is
 set. When the key cannot read, the report says so on stderr and shows only local data. Xping Cloud
-data never changes the exit code. See [Credentials](../cli/command-reference.md#credentials).
+data never changes the exit code. See [Credentials](../cli/cloud-data.md#what-you-need).
 
 ---
 

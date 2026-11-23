@@ -119,7 +119,7 @@ internal static class ReportVocabulary
     [
         "rates: the marker on each finding says which runs its percentage was",
         "counted out of; compare two only where the markers match.",
-        "https://docs.xping.io/cli/command-reference.html#the-population-marker"
+        "https://docs.xping.io/cli/reading-the-report.html#the-population-marker"
     ];
 
     /// <summary>
