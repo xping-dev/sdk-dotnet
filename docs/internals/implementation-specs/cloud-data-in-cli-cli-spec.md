@@ -1,6 +1,6 @@
 # Cloud data in the CLI — CLI implementation specification
 
-**Status:** Draft for review, written 2026-11-01 from the CLI inventory of the same day.
+**Status:** Shipped (#343, #359, #366).
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/**` and `tests/Xping.Cli.Tests/**`. No change
 in `src/Xping.Sdk.Core` (§14).
 **Implements:** `xping-dev/dashboard:specs/cloud-data-in-cli/cloud-data-in-cli-contract-spec.md`,

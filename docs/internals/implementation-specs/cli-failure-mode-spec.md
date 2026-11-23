@@ -1,6 +1,6 @@
 # CLI Report — Failure Modes (`FAILURE MODES` in `--id` and `--test`)
 
-**Status:** Draft, binding once merged
+**Status:** Shipped (#316).
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/**`
 **Schema:** `1.24` → `1.25`, then `1.26` (Amendment 6E), then `1.27` (Amendment 7C)
 **Depends on:** `cli-report-format-spec.md` D5 (heading machinery), D10 (example/rule authority,

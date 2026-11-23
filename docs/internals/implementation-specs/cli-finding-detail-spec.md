@@ -1,6 +1,6 @@
 # CLI Report — Finding Detail (`xping report --id <finding-id>`)
 
-**Status:** Draft, binding once merged
+**Status:** Shipped (#216).
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/**`
 **Schema:** `1.20` → `1.21`
 **Depends on:** `cli-report-format-spec.md` **as amended by its Amendment 2**, which supersedes its
@@ -711,7 +711,7 @@ The format spec's §3 report, unchanged inside the fence, now ends:
 all runs: every execution in the window; -env: environmental runs set
 aside; -env-cluster: those and clustered failures; -partial: runs that
 covered part of the suite. Compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
+https://docs.xping.io/cli/reading-the-report.html#the-population-marker
 
 Detail of row 1: xping report --id f_c7b87f12 --assembly SampleApp.XUnit
 ```

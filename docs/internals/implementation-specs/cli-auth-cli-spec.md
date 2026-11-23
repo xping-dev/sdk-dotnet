@@ -1,6 +1,6 @@
 # `xping login` — CLI implementation specification
 
-**Status:** Draft for review, written 2026-09-29 from the CLI P0 inventory of the same day.
+**Status:** Shipped (#265, #349).
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/**`, plus one small change in `src/Xping.Sdk.Core` (§11.2) and the CLI test projects.
 **Implements:** `xping-dev/dashboard:docs/implementation-plans/cli-auth-contract-spec.md`, read at dashboard commit `b2e930eb1595991f02b65b2c5f6aff8099d660c7` (2026-09-29) and re-read at `60a64fc4329b1d5f00766ba7bd53436f32a55dbe` (2026-10-03) for contract OQ-17 to OQ-20 (§20). Section references written as "contract §n" point at that document. Bare "§n" points at this one.
 **Reference only:** `xping-dev/dashboard:docs/implementation-plans/cli-auth-cloud-spec.md`, same commit. Written as "Cloud spec §n". It is not authoritative for the CLI; where it and the contract disagree, the contract wins.
