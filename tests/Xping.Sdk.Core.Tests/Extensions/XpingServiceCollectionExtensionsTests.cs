@@ -1192,6 +1192,86 @@ public sealed class XpingServiceCollectionExtensionsTests : IDisposable
         Assert.Contains(ex.Failures, f => f.Contains("BatchSize", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("30", 0, 0, 30)]
+    [InlineData("00:00:30", 0, 0, 30)]
+    [InlineData("00:01:00", 0, 1, 0)]
+    [InlineData("1.00:00:00", 24, 0, 0)]
+    [InlineData("-5", 0, 0, -5)]
+    public void TryParseDuration_ReadsWholeSecondsOrATimeWithColons(string value, int hours, int minutes, int seconds)
+    {
+        Assert.True(XpingServiceCollectionExtensions.TryParseDuration(value, out TimeSpan duration));
+        Assert.Equal(new TimeSpan(hours, minutes, seconds), duration);
+    }
+
+    [Theory]
+    [InlineData("1.5")]
+    [InlineData("0.5")]
+    [InlineData("30s")]
+    public void TryParseDuration_RejectsAValueThatIsNeitherWholeSecondsNorATime(string value)
+    {
+        // TimeSpan.TryParse read "1.5" as one day and five hours.
+        Assert.False(XpingServiceCollectionExtensions.TryParseDuration(value, out _));
+    }
+
+    [Fact]
+    public void BindEnvVars_AFractionalRetryDelayIsIgnored()
+    {
+        using var _ = WithEnv("XPING_RETRYDELAY", "1.5");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration());
+
+        var bound = services.BuildServiceProvider().GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal(TimeSpan.FromSeconds(2), bound.RetryDelay);
+        Assert.Equal([new KeyValuePair<string, string>("XPING_RETRYDELAY", "1.5")], bound.IgnoredDurations);
+    }
+
+    [Fact]
+    public void BindEnvVars_ANegativeUploadTimeoutFailsValidation()
+    {
+        // Dropped as unreadable, "-5" left the 30-second default in place and strict mode never fired.
+        using var _ = WithEnv("XPING_UPLOADTIMEOUT", "-5");
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromInstance(new XpingConfiguration { ApiKey = "k" });
+
+        var provider = services.BuildServiceProvider();
+        var ex = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<XpingConfiguration>>().Value);
+
+        Assert.Contains("UploadTimeout must be at least 1 second.", ex.Failures);
+    }
+
+    [Fact]
+    public void AConfiguredDurationIsReadAsTheEnvironmentVariableWouldBe()
+    {
+        // The binder read "30" as thirty days and "1.5" as a day and five hours, while
+        // XPING_FLUSHINTERVAL=30 meant thirty seconds.
+        // Blank counts as unset, so a variable left on the machine cannot override the section.
+        using var _flush = WithEnv("XPING_FLUSHINTERVAL", "");
+        using var _retry = WithEnv("XPING_RETRYDELAY", "");
+        using var _timeout = WithEnv("XPING_UPLOADTIMEOUT", "");
+        var memConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Xping:FlushInterval"] = "30",
+                ["Xping:RetryDelay"] = "1.5",
+                ["Xping:UploadTimeout"] = "00:01:00",
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddXpingConfigurationFromConfiguration(memConfig);
+        var bound = services.BuildServiceProvider().GetRequiredService<IOptions<XpingConfiguration>>().Value;
+
+        Assert.Equal(TimeSpan.FromSeconds(30), bound.FlushInterval);
+        Assert.Equal(TimeSpan.FromSeconds(2), bound.RetryDelay);
+        Assert.Equal(TimeSpan.FromMinutes(1), bound.UploadTimeout);
+        Assert.Equal([new KeyValuePair<string, string>("Xping:RetryDelay", "1.5")], bound.IgnoredDurations);
+    }
+
     [Fact]
     public void OptionsValidation_ReportsEachOutOfRangeSettingOnce()
     {

@@ -311,10 +311,10 @@ public static class XpingServiceCollectionExtensions
         IConfiguration configuration)
     {
         // 1. Bind from IConfiguration (includes JSON files and Xping__* env vars)
-        services.Configure<XpingConfiguration>(
-            configuration
-                .RequireNotNull()
-                .GetSection(key: ConfigurationSectionName));
+        IConfigurationSection section = configuration
+            .RequireNotNull()
+            .GetSection(key: ConfigurationSectionName);
+        services.Configure<XpingConfiguration>(options => BindSection(section, options));
 
         // 2. XPING_* environment variables override everything bound above
         services.PostConfigure<XpingConfiguration>(options =>
@@ -639,7 +639,7 @@ public static class XpingServiceCollectionExtensions
         try
         {
             var probe = new XpingConfiguration();
-            configuration.GetSection(ConfigurationSectionName).Bind(probe);
+            BindSection(configuration.GetSection(ConfigurationSectionName), probe);
             BindEnvironmentVariablesWithPrefix(probe, EnvironmentVariablePrefix);
             NormalizeBlankSettings(probe);
             return probe;
@@ -671,14 +671,8 @@ public static class XpingServiceCollectionExtensions
         if (GetEnv("BATCHSIZE") is { } batchSize && int.TryParse(batchSize, out var bs))
             config.BatchSize = bs;
 
-        if (GetEnv("FLUSHINTERVAL") is { } flushInterval)
-        {
-            // Try parsing as seconds first, then as TimeSpan
-            if (int.TryParse(flushInterval, out var seconds))
-                config.FlushInterval = TimeSpan.FromSeconds(seconds);
-            else if (TimeSpan.TryParse(flushInterval, out var ts))
-                config.FlushInterval = ts;
-        }
+        if (GetDuration("FLUSHINTERVAL") is { } fi)
+            config.FlushInterval = fi;
 
         // Environment Options
         if (GetEnv("ENVIRONMENT") is { } environment)
@@ -710,22 +704,12 @@ public static class XpingServiceCollectionExtensions
         if (GetEnv("MAXRETRIES") is { } maxRetries && int.TryParse(maxRetries, out var mr))
             config.MaxRetries = mr;
 
-        if (GetEnv("RETRYDELAY") is { } retryDelay)
-        {
-            if (int.TryParse(retryDelay, out var seconds))
-                config.RetryDelay = TimeSpan.FromSeconds(seconds);
-            else if (TimeSpan.TryParse(retryDelay, out var ts))
-                config.RetryDelay = ts;
-        }
+        if (GetDuration("RETRYDELAY") is { } rd)
+            config.RetryDelay = rd;
 
         // Timeout Options
-        if (GetEnv("UPLOADTIMEOUT") is { } uploadTimeout)
-        {
-            if (int.TryParse(uploadTimeout, out var seconds))
-                config.UploadTimeout = TimeSpan.FromSeconds(seconds);
-            else if (TimeSpan.TryParse(uploadTimeout, out var ts))
-                config.UploadTimeout = ts;
-        }
+        if (GetDuration("UPLOADTIMEOUT") is { } ut)
+            config.UploadTimeout = ut;
 
         // PR Detection Options
         if (GetEnv("ENABLEPULLREQUESTDETECTION") is { } enablePr
@@ -769,6 +753,88 @@ public static class XpingServiceCollectionExtensions
             && !string.IsNullOrWhiteSpace(value)
                 ? value.Trim()
                 : null;
+
+        TimeSpan? GetDuration(string name)
+        {
+            if (GetEnv(name) is not { } value)
+                return null;
+
+            if (TryParseDuration(value, out TimeSpan duration))
+                return duration;
+
+            config.IgnoredDurations.Add(new KeyValuePair<string, string>(prefix + name, value));
+            return null;
+        }
+    }
+
+    private static readonly string[] DurationKeys =
+    [
+        nameof(XpingConfiguration.FlushInterval),
+        nameof(XpingConfiguration.RetryDelay),
+        nameof(XpingConfiguration.UploadTimeout),
+    ];
+
+    /// <summary>
+    /// Binds the <c>Xping</c> section, reading the duration settings with <see cref="TryParseDuration"/>.
+    /// </summary>
+    /// <remarks>
+    /// The binder's <see cref="TimeSpan"/> conversion reads <c>30</c> as thirty days and throws on
+    /// <c>1.5</c>, while the same values set as <c>XPING_FLUSHINTERVAL</c> mean seconds or are
+    /// ignored. So the binder never sees the duration keys: they are read here, the same way the
+    /// variables are. A value that is neither whole seconds nor a time with colons is ignored and the
+    /// setting keeps its default.
+    /// </remarks>
+    private static void BindSection(IConfigurationSection section, XpingConfiguration config)
+    {
+        IConfiguration withoutDurations = new ConfigurationBuilder()
+            .AddInMemoryCollection(section
+                .AsEnumerable(makePathsRelative: true)
+                .Where(entry => !DurationKeys.Contains(entry.Key, StringComparer.OrdinalIgnoreCase)))
+            .Build();
+        withoutDurations.Bind(config);
+
+        foreach (string key in DurationKeys)
+        {
+            if (section[key] is not { } raw || string.IsNullOrWhiteSpace(raw))
+                continue;
+
+            if (!TryParseDuration(raw.Trim(), out TimeSpan duration))
+            {
+                config.IgnoredDurations.Add(new KeyValuePair<string, string>($"{section.Path}:{key}", raw));
+                continue;
+            }
+
+            switch (key)
+            {
+                case nameof(XpingConfiguration.FlushInterval): config.FlushInterval = duration; break;
+                case nameof(XpingConfiguration.RetryDelay): config.RetryDelay = duration; break;
+                default: config.UploadTimeout = duration; break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads a duration setting: whole seconds (<c>30</c>, <c>-5</c>) or a time with colons
+    /// (<c>00:00:30</c>, <c>1.00:00:00</c>).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="TimeSpan.TryParse(string, out TimeSpan)"/> alone reads <c>1.5</c> as one day and five
+    /// hours, not a second and a half, so a value without a colon is accepted only as whole seconds.
+    /// A sign is accepted so a negative value still reaches validation and is reported there.
+    /// </remarks>
+    internal static bool TryParseDuration(string value, out TimeSpan duration)
+    {
+        if (int.TryParse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int seconds))
+        {
+            duration = TimeSpan.FromSeconds(seconds);
+            return true;
+        }
+
+        if (value.IndexOf(':') >= 0 && TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out duration))
+            return true;
+
+        duration = default;
+        return false;
     }
 
     /// <summary>

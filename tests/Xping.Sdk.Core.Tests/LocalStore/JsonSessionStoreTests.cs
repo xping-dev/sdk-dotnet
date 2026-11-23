@@ -164,6 +164,21 @@ public sealed class JsonSessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void ARelativeStorePathIsReadFromTheRepositoryRoot()
+    {
+        // Used as given, a relative path landed under the test host's current directory, the test
+        // project's output folder, while the CLI looked under its own.
+        string repo = Path.Combine(_root, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, ".git"));
+        string bin = Path.Combine(repo, "tests", "MyTests", "bin", "Release", "net10.0");
+        Directory.CreateDirectory(bin);
+
+        var store = new JsonSessionStore(new LocalStoreOptions(), NullLogger.Instance, startDirectory: bin, storePath: ".xping-ci");
+
+        Assert.Equal(Path.Combine(repo, ".xping-ci"), store.StorePath);
+    }
+
+    [Fact]
     public void ASessionLandsInTheRepositoryStoreWhenXpingLocalStoreIsSetAfterTheStoreIsBuilt()
     {
         // The SDK builds its store at Initialize but resolves the root on the first write, at the

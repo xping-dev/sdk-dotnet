@@ -25,11 +25,12 @@ internal static class LocalSessionStore
     /// <param name="options">Retention settings. Defaults are used when <see langword="null"/>.</param>
     /// <param name="logger">Diagnostics sink. Storage problems are logged here at debug level.</param>
     /// <param name="startDirectory">
-    /// Directory to begin repository-root discovery from. Defaults to the entry assembly's location.
+    /// Directory to begin repository-root discovery from. Defaults to the SDK assembly's folder.
     /// </param>
     /// <param name="storePath">
-    /// The store root, when the caller has one (from <c>XPING_LOCAL_STORE</c>, say). Skips
-    /// repository-root discovery. The store never reads the environment itself.
+    /// The store root, when the caller has one (from <c>XPING_LOCAL_STORE</c>, say). A relative
+    /// path is read from the repository root or project folder found from
+    /// <paramref name="startDirectory"/>. The store never reads the environment itself.
     /// </param>
     /// <returns>A store, which may report <see cref="ILocalSessionStore.IsAvailable"/> as false.</returns>
     public static ILocalSessionStore Create(
