@@ -169,7 +169,7 @@ The reliability line compares each project's [session reliability score](session
 
 > **Reliability** · Reliable 0.86 · −0.03 vs `main` (2026-11-08)
 
-- The session reliability score uses the same fixed formula for every project and branch, so the two values are comparable.
+- Both values use the same fixed formula. They can still differ because different tests ran: a pull request often runs a part of the suite. See [What the session score reads](session-reliability-score.md#what-the-session-score-reads).
 - The category (*Highly Reliable*, *Reliable*, *Moderately Reliable*, *Unreliable* or *Highly Unreliable*) comes from the score.
 - When the category changed, the line shows both: `Moderately Reliable 0.74 · Reliable → Moderately Reliable · −0.06 vs main (2026-11-08)`.
 - `+0.02` or `−0.03` is the change from the target branch, rounded to two decimals. *no change* means the rounded change is zero.

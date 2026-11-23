@@ -69,9 +69,10 @@ the run. Two results follow:
   pull-request run often runs a part of the suite, and the weakest term reacts strongly to which tests
   ran. Xping Cloud shows no trend of session scores for this reason.
 
-The run's page compares the score with one earlier run of the same project, environment, framework,
-and CI or local origin. A pull-request run is compared with an earlier run of its branch, or else with
-the branch it targets. When no earlier run matches, the page shows no comparison.
+The run's page compares the score with one earlier run from the last 30 days. That run has the same
+project, environment, framework, and CI or local origin. It is the previous run of the same branch.
+When a pull-request run has none, Xping Cloud compares it with the branch the pull request targets.
+When no earlier run matches, the page shows no comparison.
 
 ---
 
@@ -80,7 +81,8 @@ the branch it targets. When no earlier run matches, the page shows no comparison
 A session also has an evidence level: `Sparse`, `Adequate` or `Robust`. It is the lower of two
 measurements:
 
-- the share of the run's tests that have a confidence score;
+- the share of the run's tests that have a confidence score: below 30% is `Sparse`, 30% to below
+  70% is `Adequate`, and 70% or more is `Robust`;
 - the weakest evidence level of the tests that have one.
 
 A run with full coverage can still have `Sparse` evidence when one of its tests has `Sparse`

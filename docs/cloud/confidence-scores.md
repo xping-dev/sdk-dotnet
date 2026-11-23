@@ -43,13 +43,13 @@ It measures the **effective sample size** (ESS): a weighted count of the test's 
 - A run in a pull request, or on another branch, counts much less. Its code can still change.
 - A run outside CI, or a run with no commit, counts more than a pull-request run but less than a
   default-branch run.
-- Recent runs count more than older runs. A run's weight halves about every week.
 
 A test needs an ESS of at least 10 within the last two weeks. Below that, its category is
 **Insufficient Data** and it has no score. Ten default-branch runs are enough. Ten pull-request runs
-are not.
+are not. The age of a run within the two weeks does not change the ESS.
 
-The score itself reads about the last five weeks of runs.
+The score itself reads about the last five weeks of runs. In the factors, recent runs count more than
+older runs: a run's weight halves about every week.
 
 > [!NOTE]
 > The SDK records the branch, the commit and the pull request when your CI provides them. See
@@ -100,7 +100,7 @@ score = level × (discount from each of the five other factors)
 
 Each discount factor has a maximum effect. Execution Stability can lower the score the most. Then
 come Environment Consistency, Concurrency Sensitivity, and Retry Behavior and Failure Pattern, which
-have the same, smallest effect. No single factor can bring a score to zero.
+have the same, smallest effect. No discount factor can bring a score to zero.
 
 Environment Consistency compares the environment names that the SDK records, for example `Staging`
 and `Production`. You set the name with the
@@ -190,8 +190,8 @@ scores.
 
 ### Why does a test that passes every run have a low score?
 
-The pass rate sets only the level. A test that passes, but needs retries, varies a lot in duration
-or fails in one environment, loses part of its score to those factors. Open **Why this score** to see
+The pass rate sets only the level. A test that passes, but needs retries or varies a lot in
+duration, loses part of its score to those factors. Open **Why this score** to see
 which factor lowered it.
 
 A test with few runs also has a level below its raw pass rate. Xping Cloud pulls the pass rate toward
