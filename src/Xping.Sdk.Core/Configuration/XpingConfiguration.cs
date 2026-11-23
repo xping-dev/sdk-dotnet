@@ -441,6 +441,16 @@ public sealed class XpingConfiguration
     internal bool HasApiKey => !string.IsNullOrWhiteSpace(ApiKey);
 
     /// <summary>
+    /// Duration settings that were set to a value the SDK could not read, as (setting, value) pairs.
+    /// </summary>
+    /// <remarks>
+    /// Such a value is ignored and the setting keeps its default, the way every unreadable
+    /// <c>XPING_*</c> value is. It is recorded so the orchestrator can say so: a duration is easy to
+    /// get wrong (<c>1.5</c> is not a second and a half), and a silent default looks like it took.
+    /// </remarks>
+    internal List<KeyValuePair<string, string>> IgnoredDurations { get; } = [];
+
+    /// <summary>
     /// Gets the pinned project, or <see langword="null"/> when project identity is derived from the
     /// test assembly.
     /// </summary>

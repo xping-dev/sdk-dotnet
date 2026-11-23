@@ -25,8 +25,8 @@ internal interface ILocalSessionStoreFactory
     /// </summary>
     /// <param name="options">Retention settings, or <see langword="null"/> for the defaults.</param>
     /// <param name="startDirectory">
-    /// Directory to start the repository walk from. Ignored when <c>XPING_LOCAL_STORE</c> names
-    /// the store.
+    /// Directory to start the repository walk from. When <c>XPING_LOCAL_STORE</c> names the store,
+    /// it still decides where a relative value is read from.
     /// </param>
     /// <returns>The store, which may report itself unavailable.</returns>
     ILocalSessionStore Create(LocalStoreOptions? options = null, string? startDirectory = null);

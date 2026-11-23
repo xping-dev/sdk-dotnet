@@ -205,6 +205,14 @@ public abstract class XpingContextOrchestrator : IAsyncDisposable
             // instance, so the raw sources are consulted as well.
             _strictMode = configuration.StrictMode || IsStrictModeEnabled(services);
 
+            foreach (KeyValuePair<string, string> ignored in configuration.IgnoredDurations)
+            {
+                _logger.LogWarning(
+                    "{Setting} '{Value}' is not a duration and was ignored. " +
+                    "Use whole seconds (30) or a time with colons (00:00:30).",
+                    ignored.Key, ignored.Value);
+            }
+
             _collector = services.GetRequiredService<ITestExecutionCollector>();
             _uploader = services.GetRequiredService<IXpingUploader>();
             _environmentDetector = services.GetRequiredService<IEnvironmentDetector>();

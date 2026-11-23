@@ -83,6 +83,35 @@ public sealed class LocalStorePathResolverTests : IDisposable
     }
 
     [Fact]
+    public void ARelativeExplicitPathWithNoRepositoryOrProjectIsReadFromTheCurrentDirectory()
+    {
+        // The start directory can be an external runner's install folder (nunit3-console from a
+        // tools folder), which is outside the repository and often read-only.
+        string runner = Path.Combine(_temp, "tools", "nunit.consolerunner");
+        Directory.CreateDirectory(runner);
+
+        Assert.Equal(
+            Path.GetFullPath("store"),
+            LocalStorePathResolver.ResolveExplicit("store", runner));
+    }
+
+    [Theory]
+    [InlineData(@"C:\xping-store", true, true)]
+    [InlineData("C:/xping-store", true, true)]
+    [InlineData(@"\\server\share\store", true, true)]
+    [InlineData(@"\xping-store", true, false)]
+    [InlineData("C:xping-store", true, false)]
+    [InlineData("xping-store", true, false)]
+    [InlineData("/var/tmp/store", false, true)]
+    [InlineData("xping-store", false, false)]
+    public void OnlyAPathThatNamesOneLocationIsUsedAsItIs(string path, bool windows, bool expected)
+    {
+        // On Windows "\xping-store" is on the current drive and "C:xping-store" in that drive's current
+        // directory, so the testhost and the CLI read either as a different store.
+        Assert.Equal(expected, LocalStorePathResolver.IsFullyQualified(path, windows));
+    }
+
+    [Fact]
     public void AnAbsoluteExplicitPathIsUsedAsItIs()
     {
         string store = Path.Combine(_temp, "elsewhere", "store");

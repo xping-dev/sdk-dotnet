@@ -212,6 +212,28 @@ public sealed class XpingContextOrchestratorEnvVarTests
             logs.Messages);
     }
 
+    [Fact]
+    public async Task AnIgnoredDurationIsLoggedAsAWarning()
+    {
+        using var _ = WithEnv(("XPING_APIKEY", null), ("XPING_MODE", "LocalOnly"), ("XPING_RETRYDELAY", "1.5"));
+        using var logs = new CapturingLoggerProvider();
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        ServiceHelper.SetupDefaultMocks(uploaderMock, envDetectorMock);
+        using var store = new ScratchStore();
+
+        using IHost host = ServiceHelper.BuildRegisteredOrchestratorHost(
+            new XpingConfiguration { LocalStorePath = store.Path }, uploaderMock, envDetectorMock,
+            configureServices: services => services.AddSingleton<ILoggerProvider>(logs));
+        var orchestrator = new TestOrchestrator(host);
+        await orchestrator.DisposeAsync();
+
+        Assert.Contains(
+            "XPING_RETRYDELAY '1.5' is not a duration and was ignored. " +
+            "Use whole seconds (30) or a time with colons (00:00:30).",
+            logs.Messages);
+    }
+
     [Theory]
     [InlineData(true, "Mode=Disabled")]
     [InlineData(false, "Enabled=false")]
