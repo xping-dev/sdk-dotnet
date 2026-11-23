@@ -444,7 +444,6 @@ examples, see [Common flaky patterns](flaky-tests/common-flaky-patterns.md).
 - [Confidence scores](cloud/confidence-scores.md)
 - [Session reliability score](cloud/session-reliability-score.md)
 - [Reading the PR comment](cloud/reading-the-pr-comment.md)
-- [Interpreting test results](cloud/interpreting-test-results.md)
 
 #### [Flaky tests](flaky-tests/finding-flaky-tests.md)
 

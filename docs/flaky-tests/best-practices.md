@@ -322,66 +322,7 @@ Include reliability in regular ceremonies:
 
 ## Common Questions
 
-### Q: Why is my passing test showing a low confidence score?
-
-**A:** Confidence isn't just about pass/fail. A test that passes 100% of the time but requires retries, has wildly varying execution times, or only passes in certain environments will have a lower confidence score. Xping is telling you the test is unreliable even if it technically passes eventually.
-
-### Q: How long does it take to get a confidence score?
-
-**A:** You need at least 10 test executions before a confidence score is calculated. After 10 runs, you'll see a score with "Low Confidence" level. The score becomes more reliable as you accumulate more executions:
-- 25+ runs: Medium Confidence
-- 50+ runs: High Confidence
-- 100+ runs: Very High Confidence
-
-### Q: My test has a low score but I know why it's flaky. Can I override it?
-
-**A:** No, confidence scores are calculated objectively based on actual behavior. However, you can:
-- Add tags/categories to provide context (e.g., `[Category("external-service")]`)
-- Use filters to exclude these tests from your main view
-- Create separate test suites for inherently unstable tests (like external service health checks)
-- Focus on improving the test rather than overriding the score
-
-### Q: What's the difference between Success Rate and Confidence Score?
-
-**A:**
-- **Success Rate**: Simple percentage of passed executions (e.g., 85 passed out of 100 = 85%)
-- **Confidence Score**: Holistic reliability assessment that considers pass rate, execution consistency, retry behavior, environment consistency, and more
-
-A test with 100% success rate can have a low confidence score if it frequently needs retries or shows inconsistent behavior.
-
-### Q: Should I disable all tests below 0.60?
-
-**A:** Not necessarily. First, understand **why** the score is low:
-- Check the confidence level - is it based on enough data?
-- Review the factor breakdown - which specific factors are problematic?
-- Look at the trend - is it improving?
-
-Then decide:
-- If it's providing value and failures are legitimate → Fix the flakiness
-- If it's flaky and nobody trusts it → Fix or disable
-- If it's testing something inherently unstable → Reconsider test design or move to a separate suite
-
-### Q: How do I share a specific test's data with my team?
-
-**A:** Each test has a unique URL (e.g., `/tests/{test-id}`). Copy and share this URL in your issue tracker, pull request, or team chat. Anyone with access to Xping Cloud can view the full test details.
-
-### Q: Can I get notifications when a test's confidence drops?
-
-**A:** The current implementation calculates scores and flags low-confidence tests in the Flaky Tests tab. Check Xping Cloud regularly, or consider implementing your own alerting using the Xping API. Future versions may include built-in alerting capabilities.
-
-### Q: Why does a test show "Insufficient Data"?
-
-**A:** The test hasn't reached the minimum 10 executions required for confidence score calculation. Keep running your tests, and once it hits 10 executions, you'll see a confidence score appear.
-
-### Q: The confidence score seems wrong. What should I do?
-
-**A:**
-1. Check the **Confidence Level** - if it's Low, the score may change significantly as more data is collected
-2. Review the **Factor Breakdown** to see which factors are affecting the score
-3. Verify the **Sample Size** - small samples can be less accurate
-4. Look at the **Execution History** to verify the data matches reality
-
-If something still seems incorrect, this may indicate an edge case worth investigating further.
+Questions about confidence scores are answered in [Confidence scores](../cloud/confidence-scores.md#common-questions).
 
 ---
 

@@ -1,101 +1,104 @@
-# Session Reliability Score
+---
+uid: cloud-session-reliability-score
+title: Session reliability score
+---
 
-The **session reliability score** is a single number between 0 and 1 that summarises the overall reliability of all tests that ran in a given test session. It gives you an at-a-glance answer to the question: *"How trustworthy was this test run as a whole?"*
+# Session reliability score
+
+The **session reliability score** is one number from 0.00 to 1.00 for one test run. It combines the
+[confidence scores](confidence-scores.md) of the tests that ran in it. It answers the question:
+"How much can I trust this run as a whole?"
 
 ---
 
-## How the Score Is Calculated
+## The formula
 
-When a test session completes, Xping aggregates the individual [confidence scores](confidence-scores.md) of every test that ran using the following formula:
-
+```text
+session reliability = 0.6 × mean + 0.4 × weakest
 ```
-Session Reliability = α × WeightedMean(scores) + (1 − α) × Min(scores)
+
+- **mean** is the average confidence score of the tests in the run. A test with more evidence counts
+  more: a `Robust` test counts three times as much as a `Sparse` test, and an `Adequate` test twice as
+  much.
+- **weakest** is the lowest confidence score of any test in the run.
+
+The weights 0.6 and 0.4 are fixed. They are the same for every project, so you can compare the
+scores of different projects. You cannot change them.
+
+The weakest test always moves the score. A run with one broken test never looks as healthy as a run
+with none, however large the suite.
+
+Tests without a confidence score are left out of both terms. A run in which no test has a score has
+no session score.
+
+The run's page shows the calculation, for example:
+
+```text
+0.60 × 0.94 mean + 0.40 × 0.20 weakest = 0.64
 ```
 
-- **WeightedMean** — a confidence-weighted average where tests backed by more execution history carry more weight than newly tracked tests.
-- **Min** — the lowest individual confidence score in the session (the worst-performing test).
-- **α (alpha)** — a blend factor between 0 and 1 that controls how much the average dominates relative to the minimum. This value is set by your project's **Reliability Scoring** preset (see below).
-
-When all tests perform consistently well the two terms converge and the preset has no visible effect. The preset only matters when there is spread between the best and worst tests in a session — that is, when one or more tests are flaky or underperforming.
+The total is the stored score. The two rounded values next to it do not always add up to it exactly.
 
 ---
 
-## Reliability Scoring Presets
+## Example
 
-The blend factor α is controlled by the **Reliability Scoring** setting, found in **Project Settings → Settings tab → Reliability Scoring**. Three named presets are available.
-
-### Lenient (α = 0.8)
-
-The weighted average dominates. A single underperforming test has relatively little influence on the session score.
-
-**Best for:** projects with a large test suite where occasional flaky tests in non-critical paths are tolerable. Teams that want the session score to reflect the overall health of the suite rather than its weakest link.
-
-**Example:** 50 tests at score 0.95, 1 test at score 0.20.
+A run has 50 tests that score 0.95 and 1 test that scores 0.20. All 51 tests have the same evidence
+level.
 
 | Term | Value |
-|------|-------|
-| WeightedMean | ≈ 0.936 |
-| Min | 0.20 |
-| **Session score** | **0.80 × 0.936 + 0.20 × 0.20 = 0.789** |
+|---|---|
+| mean | 0.935 |
+| weakest | 0.20 |
+| **session reliability** | **0.6 × 0.935 + 0.4 × 0.20 = 0.64** |
+
+When every test has the same score, the mean and the weakest are equal, and the session score is
+that score.
 
 ---
 
-### Balanced (α = 0.6) — *Default*
+## What the session score reads
 
-An equal-weighted blend that gives meaningful weight to both the average and the worst-case. This is the recommended starting point for most projects.
+The session score reads each test's current confidence score. It is not a separate measurement of
+the run. Two results follow:
 
-**Best for:** general-purpose projects where you want the session score to reflect typical reliability while still being sensitive to persistent outliers.
+- **Pull-request runs and default-branch runs use the same formula.** The confidence score already
+  counts pull-request runs less than default-branch runs. The session score adds no weighting of its
+  own.
+- **Two session scores are not always comparable.** Two runs can contain different tests. A
+  pull-request run often runs a part of the suite, and the weakest term reacts strongly to which tests
+  ran. Xping Cloud shows no trend of session scores for this reason.
 
-**Example (same suite as above):**
-
-| Term | Value |
-|------|-------|
-| WeightedMean | ≈ 0.936 |
-| Min | 0.20 |
-| **Session score** | **0.60 × 0.936 + 0.40 × 0.20 = 0.642** |
-
----
-
-### Strict (α = 0.3)
-
-The minimum score dominates. A single unreliable test pulls the session score down significantly.
-
-**Best for:** projects with zero-tolerance reliability requirements — such as safety-critical paths, payment flows, or any suite where one flaky test is considered a genuine signal that needs immediate attention.
-
-**Example (same suite as above):**
-
-| Term | Value |
-|------|-------|
-| WeightedMean | ≈ 0.936 |
-| Min | 0.20 |
-| **Session score** | **0.30 × 0.936 + 0.70 × 0.20 = 0.421** |
+The run's page compares the score with one earlier run from the last 30 days. That run has the same
+project, environment, framework, and CI or local origin. It is the previous run of the same branch.
+When a pull-request run has none, Xping Cloud compares it with the branch the pull request targets.
+When no earlier run matches, the page shows no comparison.
 
 ---
 
-## Preset Comparison
+## Evidence
 
-The table below shows how the same test suite produces different session scores depending on the active preset:
+A session also has an evidence level: `Sparse`, `Adequate` or `Robust`. It is the lower of two
+measurements:
 
-| Preset | α | Session Score (example) | Sensitivity to worst test |
-|--------|---|------------------------|--------------------------|
-| Lenient | 0.8 | 0.789 | Low |
-| Balanced | 0.6 | 0.642 | Medium |
-| Strict | 0.3 | 0.421 | High |
+- the share of the run's tests that have a confidence score: below 30% is `Sparse`, 30% to below
+  70% is `Adequate`, and 70% or more is `Robust`;
+- the weakest evidence level of the tests that have one.
 
----
-
-## Important Behaviour Details
-
-- **Default is Balanced.** Projects that have never changed this setting use α = 0.6 automatically — no action is required to get this behaviour.
-- **The setting is per-project.** Different projects in the same workspace can use different presets independently.
-- **Only affects session-level scores.** Individual test confidence scores and the project health distribution (Highly Reliable / Reliable / etc.) are not affected by this setting.
-- **Takes effect on the next session.** Changing the preset does not retroactively recalculate historical session scores. The new value is applied from the next completed test session onwards.
-- **When all tests score identically**, the preset has no effect — min equals mean and the blend is a no-op regardless of α.
+A run with full coverage can still have `Sparse` evidence when one of its tests has `Sparse`
+evidence.
 
 ---
 
-## See Also
+## What the session score does not change
 
-- [Understanding Confidence Scores](confidence-scores.md) — How individual test confidence scores are calculated
-- [Interpreting Test Results](interpreting-test-results.md) — How to act on confidence scores and session results
-- [Monitoring Test Health](../flaky-tests/monitoring-test-health.md) — Tracking trends over time
+The session score does not change any test's confidence score. It does not change how many of a
+project's tests fall into each [score category](confidence-scores.md#score-categories).
+
+---
+
+## See also
+
+- [Confidence scores](confidence-scores.md)
+- [Reading the PR comment](reading-the-pr-comment.md#reliability): the PR comment compares the
+  session score with your target branch.
