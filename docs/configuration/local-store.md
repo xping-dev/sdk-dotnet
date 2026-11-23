@@ -19,8 +19,9 @@ In `Disabled` mode, the SDK writes nothing.
 The SDK uses the first of these locations:
 
 1. The path in the `XPING_LOCAL_STORE` environment variable, or in the
-   [LocalStorePath](configuration-reference.md#localstorepath) setting. The SDK uses it as it is,
-   without checking that it can write there. Use an absolute path.
+   [LocalStorePath](configuration-reference.md#localstorepath) setting. The SDK does not check that
+   it can write there. A relative path is read from the repository root, else from the test
+   project's folder.
 2. A `.xping` folder at the **repository root**: the nearest folder above the test assembly that
    holds `.git`, a `*.sln` file or a `*.slnx` file.
 3. A folder under your user profile, `Xping/stores/<key>`, when there is no repository root or the
@@ -175,8 +176,9 @@ and reads the rest.
 | `XPING_LOCAL_STORE` | SDK and CLI | Moves the store. See [LocalStorePath](configuration-reference.md#localstorepath). |
 | `XPING_NO_BANNER` | SDK and CLI | Any non-empty value hides the SDK's retry hint after a test run and the CLI's Xping Cloud invitation |
 
-If you set `XPING_LOCAL_STORE` for the test run, set it for `xping report` too, to the same absolute
-path. Otherwise the CLI looks in another place and finds nothing.
+If you set `XPING_LOCAL_STORE` for the test run, set it for `xping report` too, to the same value.
+Otherwise the CLI looks in another place and finds nothing. A relative value names the same folder
+for both, as long as you run `xping report` inside the repository.
 
 ```bash
 export XPING_LOCAL_STORE=/var/tmp/xping-store
