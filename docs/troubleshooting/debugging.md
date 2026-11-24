@@ -585,7 +585,7 @@ To measure SDK overhead:
 
 **Using BenchmarkDotNet:**
 
-See [Performance Testing](../performance/overview.md) for detailed benchmarking instructions.
+See [the benchmarks README](https://github.com/xping-dev/sdk-dotnet/blob/main/tests/Xping.Sdk.Benchmarks/README.md) for how to run the SDK benchmarks.
 
 **Using dotnet-trace:**
 
@@ -660,7 +660,7 @@ dotnet add package Xping.Sdk.NUnit --version 1.0.4
 
 - [Common Issues](common-issues.md) - Solutions to frequently encountered problems
 - [Configuration Reference](../configuration/configuration-reference.md) - Complete configuration guide
-- [Performance Testing](../performance/overview.md) - Performance benchmarking and optimization
+- [Performance](../performance/performance.md) - What the SDK does during a run, and how to measure it
 - [CI/CD Setup Guide](../getting-started/ci-cd-setup.md) - CI/CD integration instructions
 
 ---
