@@ -71,7 +71,7 @@ public sealed class DocumentedSampleTests
         "docs/getting-started/quickstart-nunit.md",
         "docs/getting-started/local-first.md",
         "docs/troubleshooting/known-limitations.md",
-        "docs/flaky-tests/common-flaky-patterns.md"
+        "docs/flaky-tests/patterns-and-fixes.md"
     ];
 
     [Theory]
