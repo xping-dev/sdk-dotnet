@@ -1,161 +1,138 @@
-# Performance Overview
+---
+uid: performance
+title: Performance
+---
 
-Understanding the performance characteristics of the Xping SDK helps you make informed decisions about test observability. This guide explains what to expect from the SDK's performance impact on your test suite.
+# Performance
+
+This page describes the work the SDK does during a test run, and when it does it. It also lists the
+settings that change that work, and how to find out whether the SDK slows a run down.
+
+The page gives no timings. They depend on the machine, the framework and the suite. To measure the
+SDK yourself, see [Measure the SDK](#measure-the-sdk).
 
 ---
 
-## At a Glance
+## The work for each test
 
-The Xping SDK is designed for **negligible performance impact** on your test suite:
+When a test ends, the adapter builds one record of it: the test's identity, its outcome and
+duration, its error text and stack trace when it failed, its retry attempt, and how many tests ran
+at the same time. The SDK adds the record to an in-memory queue.
 
-- **~0.7-0.8 microseconds** per test overhead
-- **~1KB memory** per test for rich metadata
-- **Zero blocking** on test execution (async upload)
-- **Automatic batching** for efficient network usage
+This step does no file or network I/O, and it does not wait for other work.
 
-**Bottom line:** For most test suites, Xping's overhead is unmeasurable compared to test execution time.
-
----
-
-## Understanding SDK Overhead
-
-### What Gets Tracked?
-
-Every test execution captures rich metadata:
-
-- **Test Identity**: Framework, class, method, parameters
-- **Execution Data**: Start time, duration, outcome, error details
-- **Environment Context**: OS, runtime, CI/CD platform, git commit
-- **Custom Metadata**: Tags, annotations, flaky detection signals
-
-This metadata enables powerful analysis while maintaining minimal overhead.
-
-### Performance Impact by Test Suite Size
-
-Here's what Xping overhead looks like in practice:
-
-| Test Suite Size | Test Execution Time | Xping Overhead | Impact |
-|----------------|---------------------|----------------|--------|
-| **10 tests** | 5 seconds | ~8 µs | 0.0002% |
-| **100 tests** | 30 seconds | ~75 µs | 0.0003% |
-| **1,000 tests** | 5 minutes | ~750 µs | 0.0003% |
-| **10,000 tests** | 30 minutes | ~7.5 ms | 0.0004% |
-
-**Real-world example:**
-- Test suite: 5,000 tests @ 10ms each = 50 seconds
-- Xping overhead: ~4ms total
-- **Impact: <0.01%** - completely negligible
-
-### Where Time Is Spent
-
-Breaking down the 0.7-0.8µs per test:
-
-1. **Data Collection** (~300ns)
-   Capture test identity and outcome, record execution timing, and gather environment context
-
-2. **Buffering** (~200ns)
-   Add to in-memory buffer, check batch threshold, minimal allocation (Gen0 only)
-
-3. **Processing** (~200-300ns)
-   Enrich with metadata and prepare for upload
-
-**Network upload happens asynchronously** - it never blocks your tests.
+The SDK does not sample. It records every test that runs.
 
 ---
 
-## Memory Usage
+## The work at other times
 
-### Per-Test Memory
+| When | `LocalOnly` mode | `Cloud` mode |
+|---|---|---|
+| The session starts | The SDK reads the configuration and detects the CI, the branch and the environment, once. | The same. |
+| During the run | Nothing. | The SDK uploads a batch when [`BatchSize`](../configuration/configuration-reference.md#batchsize) records are waiting, and when the [`FlushInterval`](../configuration/configuration-reference.md#flushinterval) timer fires. |
+| The session ends | The SDK writes the run to the [local store](../configuration/local-store.md), and removes old runs. | The SDK writes the run to the local store first. Then it uploads the records that are left, and a final upload that closes the session. |
 
-Each test consumes approximately **700-1,100 bytes** of memory:
+`Auto`, the default mode, is `Cloud` with an API key and `LocalOnly` without one. See
+[Mode](../configuration/configuration-reference.md#mode).
 
-- **Test metadata**: ~400B (identity, parameters, attributes)
-- **Environment data**: ~200B (OS, runtime, CI context, git info)
-- **Execution data**: ~100B (timing, outcome, error summary)
-- **Framework metadata**: ~200B (adapter-specific attributes)
+### Uploads during the run
 
-**Total: ~1KB per test** - less memory than a small JSON object.
+In `Cloud` mode, a batch upload starts on the thread of the test that filled the batch. That thread
+takes the batch from the queue, serializes it to JSON and compresses it, before the request goes over
+the network. The test thread does not wait for the network. The timer upload runs on a thread-pool
+thread.
 
-### Memory Characteristics
+Only one upload runs at a time. An upload that is due while another one runs waits for it.
 
-✅ **Short-lived allocations**: Most memory is Gen0 (cheapest GC)
-✅ **Automatic cleanup**: Batches are released after upload
-✅ **Bounded growth**: Buffer limits prevent runaway memory
-✅ **No leaks**: Comprehensive testing validates cleanup
+### The end of the session
 
-**Example memory footprint:**
-- 1,000 tests buffered: ~1MB
-- 10,000 tests buffered: ~10MB
-- Typical peak (500 batch size): ~500KB
+The session ends after the last test. The SDK writes the local store before any upload, so the run
+is on disk even when the upload fails or the process is stopped.
 
-Even large test suites have minimal memory impact.
-
----
-
-## Network Performance
-
-### Asynchronous Upload
-
-**Key principle:** Xping **never blocks** your test execution for network I/O.
-
-**How it works:**
-1. Tests complete and data is buffered locally
-2. When batch size is reached, upload starts **asynchronously**
-3. Tests continue running while upload happens in background
-4. No waiting, no blocking, no delays
-
-### Batch Upload Efficiency
-
-Xping batches tests before uploading to minimize network overhead:
-
-| Batch Size | Tests/Request | Typical Upload Time |
-|-----------|---------------|---------------------|
-| **100** (default) | 100 | 32-42µs |
-| **500** | 500 | ~150µs |
-| **1,000** | 1,000 | ~300µs |
-
-**Upload time is measured for the API call itself**, not including network latency. Network requests happen in the background and don't affect test execution.
-
-### Network Resilience
-
-- **Retry logic**: Automatic retry with exponential backoff
-- **Graceful degradation**: SDK continues if network fails
-- **No test failures**: Network issues never fail your tests
+Each upload, with its retries and the delays between them, stops after twice
+[`UploadTimeout`](../configuration/configuration-reference.md#uploadtimeout): 60 seconds by default.
+When a batch upload fails, the SDK sends no more batches, and it still sends the final upload. A
+failing upload therefore adds a bounded wait to the end of the run. It does not fail the run, unless
+[`StrictMode`](../configuration/configuration-reference.md#strictmode) is on.
 
 ---
 
-## Performance Philosophy
+## Memory
 
-**Xping's design principle:** Test observability should be **invisible** to developers.
+The SDK keeps every record of the run in memory for the whole session, in every mode except
+`Disabled`. It needs them all to write the run to the local store at the end. An upload during the
+run does not free them.
 
-We achieve this through:
-- **Asynchronous everything**: No blocking on I/O
-- **Efficient data structures**: Minimal allocations
-- **Smart batching**: Reduce network overhead
-- **Fail gracefully**: Never impact test reliability
-
-**Our promise:** Xping's overhead will **never** be the reason your tests are slow.
-
-If you experience performance issues, we want to know - open an issue and we'll investigate thoroughly.
+Memory therefore grows with the size of the run: the number of test executions, retries included,
+and the length of their error messages and stack traces. A run with many failures and deep stacks
+uses more. `BatchSize` does not limit it.
 
 ---
 
-## Benchmarks and Validation
+## Settings that change the work
 
-Detailed benchmark results and methodology are available in the benchmark project (`tests/Xping.Sdk.Benchmarks/README.md`) and [Performance Benchmark Results](benchmark-results.md).
-
-**Key validated metrics:**
-- ✅ Test tracking overhead: **700-800ns** (7× better than 5ms target)
-- ✅ Memory per test: **700-1,100B** (within 1KB target)
-- ✅ Throughput: **1.2-1.4M tests/sec** (100× better than 10k target)
-- ✅ Batch upload: **32-42µs** (12,000× better than 500ms target)
-
-All benchmarks use [BenchmarkDotNet](https://benchmarkdotnet.org/) for precise, reliable measurements.
+| Setting | Effect |
+|---|---|
+| [`Mode`](../configuration/configuration-reference.md#mode) | `LocalOnly` makes no uploads. `Disabled` records nothing. |
+| [`Enabled`](../configuration/configuration-reference.md#enabled) | `false` records nothing, the same as `Disabled`. |
+| [`BatchSize`](../configuration/configuration-reference.md#batchsize) | `Cloud` only. A larger batch makes fewer uploads, and each one serializes more records on one test thread. |
+| [`FlushInterval`](../configuration/configuration-reference.md#flushinterval) | `Cloud` only. The time between timer uploads. |
+| [`EnableCompression`](../configuration/configuration-reference.md#enablecompression) | Compresses uploads larger than 1 KB. It costs CPU and saves bandwidth. |
+| [`UploadStackTraces`](../configuration/configuration-reference.md#uploadstacktraces) | Off by default. On, it adds stack trace text to the uploads. The local store keeps the traces either way. |
+| [`UploadTimeout`](../configuration/configuration-reference.md#uploadtimeout) | Sets the longest wait for one upload: twice this value. |
+| [`MaxRetries`](../configuration/configuration-reference.md#maxretries), [`RetryDelay`](../configuration/configuration-reference.md#retrydelay) | How often, and after how long, a failed upload is retried, within the limit above. |
 
 ---
 
-## See Also
+## Find out whether the SDK slows a run
 
-- [Performance Configuration](performance-configuration.md) - Tuning performance settings
-- [Performance Troubleshooting](performance-troubleshooting.md) - Diagnosing performance issues
-- [Performance Benchmark Results](benchmark-results.md) - Detailed benchmark data
+1. **Measure the run without the SDK.** `XPING_ENABLED=false` turns the SDK off for one run:
+
+   ```bash
+   XPING_ENABLED=false dotnet test -c Release
+   dotnet test -c Release
+   ```
+
+   Compare the two durations over several runs, because test durations vary from run to run. On
+   Windows PowerShell, set the variable with `$env:XPING_ENABLED = "false"` first.
+
+2. **Check the end of the run.** A long pause after the last test is usually an upload. The SDK logs
+   each upload and its result. Set
+   [`LogLevel`](../configuration/configuration-reference.md#loglevel) to `Debug` for more detail. For
+   upload errors, see [Common issues](../troubleshooting/common-issues.md).
+
+3. **Profile the test process.** `dotnet-counters` shows memory and GC activity while the tests run.
+   `dotnet-trace` records where the time goes.
+
+   ```bash
+   dotnet tool install -g dotnet-counters
+   dotnet tool install -g dotnet-trace
+
+   dotnet-counters monitor --name testhost
+   dotnet-trace collect --name testhost
+   ```
+
+   Open the `.nettrace` file in Visual Studio or PerfView, or convert it with
+   `dotnet-trace convert --format speedscope`. Look for `Xping` frames.
+
+When you find SDK work that slows a run, open an issue at
+[github.com/xping-dev/sdk-dotnet](https://github.com/xping-dev/sdk-dotnet/issues) with the trace and
+the run's size.
+
+---
+
+## Measure the SDK
+
+The repository has a BenchmarkDotNet project for the SDK's own code paths: recording, batching,
+serialization, configuration, environment detection and the local store. It measures on your
+machine. See
+[the benchmarks README](https://github.com/xping-dev/sdk-dotnet/blob/main/tests/Xping.Sdk.Benchmarks/README.md).
+
+---
+
+## See also
+
+- [Configuration reference](../configuration/configuration-reference.md)
+- [Local store](../configuration/local-store.md)
+- [Common issues](../troubleshooting/common-issues.md)

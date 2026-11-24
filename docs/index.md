@@ -459,10 +459,6 @@ examples, see [Common flaky patterns](flaky-tests/common-flaky-patterns.md).
 #### [Performance](performance/performance.md)
 
 - [Performance](performance/performance.md)
-- [Performance configuration](performance/performance-configuration.md)
-- [Performance troubleshooting](performance/performance-troubleshooting.md)
-- [Benchmark overview](performance/overview.md)
-- [Benchmark results](performance/benchmark-results.md)
 
 #### [Troubleshooting](troubleshooting/common-issues.md)
 

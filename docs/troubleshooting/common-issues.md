@@ -178,6 +178,27 @@ If uploads fail (network issues, invalid credentials), the SDK logs errors but d
 
 ---
 
+### An Upload Failure Fails the Run
+
+**Symptom:** the test run fails at its end with an upload error, such as
+`XpingNetworkException`, although the tests passed.
+
+By default, an upload failure never fails your tests. The SDK retries the upload, logs the error,
+and the local store still gets the run. With [`StrictMode`](../configuration/configuration-reference.md#strictmode)
+on (`XPING_STRICTMODE=true`), the same failure fails the run, so a CI pipeline notices that it
+could not record its tests. Every test that ran stays in the TRX file and the other reports.
+
+**Solution:**
+- Fix the cause of the upload failure. The SDK logs it. The sections on this page cover the common
+  causes.
+- Check that the CI agent can reach `https://upload.xping.io` over HTTPS, through any firewall or
+  proxy.
+- For a build with no network, use `XPING_MODE=LocalOnly`, or leave the API key unset. The SDK then
+  keeps the run on the machine and makes no uploads. `XPING_ENABLED=false` also turns off the local
+  history.
+
+---
+
 ### Connection Timeout Errors
 
 **Symptoms:**
@@ -563,62 +584,11 @@ Configuration property names are **case-sensitive** in JSON:
 
 **Symptoms:**
 - Tests take longer to complete than expected
-- Performance degradation after adding Xping SDK
+- The run pauses after the last test
 
-**Expected Overhead:**
-
-The Xping SDK is designed to add minimal overhead:
-- **<5ms per test** on average
-- **<1KB memory per test execution**
-- **<5% CPU overhead**
-
-See [Performance Testing Overview](../performance/overview.md) for detailed benchmarks.
-
-**If you're seeing higher overhead:**
-
-#### 1. Synchronous Flushing
-
-Avoid calling `FlushAsync()` after every test—this blocks test execution:
-
-❌ **Bad:**
-```csharp
-[Test]
-public async Task MyTest()
-{
-    // Test code
-    await XpingContext.FlushAsync();  // Don't do this!
-}
-```
-
-✅ **Good:**
-```csharp
-[OneTimeTearDown]  // Upload once, after all tests
-public async Task Cleanup()
-{
-    await XpingContext.FinalizeAndShutdownAsync();
-}
-```
-
-#### 2. Network Issues
-
-Slow network connections can impact performance if batches fill up frequently.
-
-**Solution:**
-- Increase `BatchSize` to batch more tests
-- Increase `FlushInterval` to reduce upload frequency
-
-#### 3. Compression Overhead
-
-Compression reduces payload size but adds CPU overhead.
-
-**Solution:** Disable compression if network bandwidth is not an issue:
-```json
-{
-  "Xping": {
-    "EnableCompression": false
-  }
-}
-```
+To find out whether the SDK causes it, run once with `XPING_ENABLED=false` and compare. A pause after
+the last test is usually the final upload, which stops after twice `UploadTimeout`. See
+[Performance](../performance/performance.md#find-out-whether-the-sdk-slows-a-run).
 
 ---
 
@@ -652,37 +622,9 @@ For small or fast test suites, framework/runtime overhead can easily dominate th
 - Increased memory consumption during test execution
 - Out of memory errors in large test suites
 
-**Expected Memory Usage:**
-
-- **<1KB per test execution** for metadata
-- **<50MB for 10,000 tests** buffered in memory
-
-**If memory usage is higher:**
-
-#### 1. Large Batch Sizes
-
-Larger batches keep more data in memory before uploading:
-
-**Solution:** Reduce `BatchSize`:
-```json
-{
-  "Xping": {
-    "BatchSize": 50  // Smaller batches = less memory
-  }
-}
-```
-
-#### 2. Stack Traces
-
-Every failed test's stack trace is kept in memory until the run ends, and written to the local store. No setting turns this off: `UploadStackTraces` only decides whether the text is sent to Xping Cloud. A run with many failures and deep stacks uses memory in proportion.
-
-#### 3. Upload Failures
-
-If uploads fail repeatedly, tests accumulate in memory:
-
-**Solution:**
-- Fix upload issues (network, credentials)
-- Monitor logs for upload errors
+The SDK keeps every test execution of the run in memory for the whole session, with its error
+message and stack trace, so it can write the run to the local store. Memory grows with the size of
+the run. `BatchSize` does not limit it. See [Performance](../performance/performance.md#memory).
 
 ---
 
@@ -926,5 +868,5 @@ If you're still experiencing issues after trying these solutions:
 
 - [Debugging Guide](debugging.md) - Enable logging and diagnose SDK issues
 - [Configuration Reference](../configuration/configuration-reference.md) - Complete configuration guide
-- [Performance Overview](../performance/performance.md) - Optimize SDK performance
+- [Performance](../performance/performance.md) - What the SDK does during a run
 - [CI/CD Setup Guide](../getting-started/ci-cd-setup.md) - Platform-specific CI/CD instructions
