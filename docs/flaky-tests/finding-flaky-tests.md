@@ -103,9 +103,10 @@ A flaky test gets one **category**: the most likely cause.
 | Concurrency | The pass rate differs between runs with more and fewer tests running at the same time. |
 | Unknown | No other category matched. |
 
-Environment specific compares the environment names that the SDK records. Set the
-[`Environment` option](../configuration/configuration-reference.md#environment) in each place you run
-the tests.
+Environment specific compares the environment names that the SDK records. An environment name is the
+deployment that the tests run against, such as `Staging`, set with the
+[`Environment` option](../configuration/configuration-reference.md#environment). Use one name for
+all runs against the same deployment. A new name splits the test's history.
 
 ### Severity
 

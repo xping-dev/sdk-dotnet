@@ -44,7 +44,7 @@ for i in {1..10}; do dotnet test -e XPING_ENABLED=false --filter "FullyQualified
 | [Race conditions](#race-conditions) | `flaky`, `concurrency` | Concurrency, Timing |
 | [External services](#external-services) | `flaky`, `shared failure`, `timing out` | Network, External dependency |
 | [Shared state and test order](#shared-state-and-test-order) | `flaky`, `concurrency`, `broken fixture` | Order dependency, Concurrency |
-| [Environment differences](#environment-differences) | nothing on one machine | Environment specific |
+| [Environment differences](#environment-differences) | nothing on one machine | Environment specific, between deployments |
 | [Time-based failures](#time-based-failures) | `time sensitive` | Unknown |
 | [Random data](#random-data) | `flaky` | Unknown |
 | [Retries that hide a regression](#retries-that-hide-a-regression) | `masked by retry`, `deeper retries`, `out of retries` | any category |
@@ -159,12 +159,16 @@ that method.
 **In Xping Cloud.** The category is Order dependency when the result follows the test that ran just
 before it. It is Concurrency when they follow how many tests ran at the same time.
 
-**Fix.** Give each test its own state. Create it in the setup method, not in a static field:
+**Fix.** Give each test its own state. Create it in the setup method, not in a static field. NUnit
+uses one instance of the class for all its tests by default, so tests that run in parallel also
+need an instance each:
 
 ```csharp
+// One instance per test, so parallel tests do not share _database.
+[FixtureLifeCycle(LifeCycle.InstancePerTestCase)]
 public class UserServiceTests
 {
-    // A static field is shared by every test in the class, and by parallel runs.
+    // Not static: a static field is shared by every test in the class.
     private Database _database = null!;
 
     [SetUp]
@@ -215,10 +219,12 @@ Linux.
 **On your machine.** `xping report` reads the runs of one machine, so it cannot compare two
 environments.
 
-**In Xping Cloud.** The category is Environment specific when the test fails in one environment much
-more than in another. Xping Cloud compares the environment names that the SDK records, so set the
-[`Environment` option](../configuration/configuration-reference.md#environment) in each place you
-run the tests.
+**In Xping Cloud.** Xping Cloud compares the environment names that the SDK records. An environment
+name is the deployment that the tests run against, such as `Staging` or `Production`, set with the
+[`Environment` option](../configuration/configuration-reference.md#environment). It is not the
+machine. Your machine and CI testing the same deployment share one name, so Cloud does not compare
+them. The category is Environment specific when the test fails against one deployment much more than
+against another.
 
 **Fix.** Look for what differs between the two environments:
 
@@ -417,9 +423,11 @@ always examined, and it can be flaky with any category. See
 investigate, and for a test of a real external service that you do not control. It is not a fix for
 a race condition or for shared state.
 
-How well the SDK sees each attempt depends on the framework. See
-[Known limitations](../troubleshooting/known-limitations.md). Where an adapter cannot record each
-attempt, the report cannot tell a retried test from one that passed the first time.
+How much the SDK sees of each attempt depends on the framework and the retry library. On xUnit v3
+with xRetry.v3, it records only the last attempt, with its attempt number. The report then sees a
+pass on retry, but not the failures of the earlier attempts. With a retry library that the SDK does
+not support, it sees no retries, and the report cannot tell a retried test from one that passed the
+first time. See [Known limitations](../troubleshooting/known-limitations.md).
 
 ---
 
