@@ -189,7 +189,7 @@ Detail of row 1: xping report --id f_2b84a621 --assembly MyTestProject
 Xping Cloud adds confidence scores, flaky-test detection and pull request comments, across CI and
 every machine. Access is by invitation.
 
-1. In Xping Cloud, open **Settings → API keys** and create a key with only the Upload scope.
+1. In Xping Cloud, open **Settings → API keys** and create a key with only the Upload scope. See [API keys](../cloud/connect.md#api-keys).
 2. Set the key as an environment variable:
 
    ```bash

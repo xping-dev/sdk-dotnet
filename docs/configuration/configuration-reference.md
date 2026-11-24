@@ -169,7 +169,7 @@ export XPING_APIENDPOINT="https://upload.xping.io/v1"
 
 The key that authorizes uploads to Xping Cloud. Without a key, the SDK runs [local-only](#mode).
 
-To create one, open **Settings → API keys** in Xping Cloud. Create it with only the Upload scope.
+To create one, open **Settings → API keys** in Xping Cloud. Create it with only the Upload scope. See [API keys](../cloud/connect.md#api-keys).
 
 Set the key as an environment variable or a CI secret:
 

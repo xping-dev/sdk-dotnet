@@ -1,6 +1,12 @@
+- name: Connect to Xping Cloud
+  href: connect.md
 - name: Confidence scores
   href: confidence-scores.md
 - name: Session reliability score
   href: session-reliability-score.md
 - name: Reading the PR comment
   href: reading-the-pr-comment.md
+- name: Plans and retention
+  href: plans-and-retention.md
+- name: Read API
+  href: read-api.md

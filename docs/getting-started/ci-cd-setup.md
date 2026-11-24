@@ -15,7 +15,7 @@ project. If you do not, start with a quick start for
 ## What every pipeline needs
 
 1. In Xping Cloud, open **Settings → API keys** and create a key. Create it with only the Upload
-   scope.
+   scope. See [API keys](../cloud/connect.md#api-keys).
 2. Store the key as a secret in your CI platform. Do not store it as a plain variable, and do not
    put it in `appsettings.json`.
 3. Pass the secret to the test step as the `XPING_APIKEY` environment variable.

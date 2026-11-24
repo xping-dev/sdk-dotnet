@@ -284,7 +284,7 @@ Set one environment variable. Your packages and test code stay the same.
 export XPING_APIKEY="your-api-key"
 ```
 
-Create the key in Xping Cloud under **Settings → API keys**. Create it with only the Upload scope.
+Create the key in Xping Cloud under **Settings → API keys**. Create it with only the Upload scope. See [API keys](cloud/connect.md#api-keys).
 Set it as an environment variable on each machine and in CI. Never commit it.
 
 Each test assembly becomes its own Xping Cloud project. Xping Cloud creates the project the first
@@ -439,11 +439,14 @@ examples, see [Common flaky patterns](flaky-tests/common-flaky-patterns.md).
 
 - [Command reference](cli/command-reference.md): `report`, `where`, `clear`, `login`, the flags and the JSON output
 
-#### [Xping Cloud](cloud/confidence-scores.md)
+#### [Xping Cloud](cloud/connect.md)
 
+- [Connect to Xping Cloud](cloud/connect.md): API keys, roles and repository connections
 - [Confidence scores](cloud/confidence-scores.md)
 - [Session reliability score](cloud/session-reliability-score.md)
 - [Reading the PR comment](cloud/reading-the-pr-comment.md)
+- [Plans and retention](cloud/plans-and-retention.md)
+- [Read API](cloud/read-api.md)
 
 #### [Flaky tests](flaky-tests/finding-flaky-tests.md)
 

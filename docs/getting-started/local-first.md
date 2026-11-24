@@ -279,7 +279,7 @@ need, and your test code stays the same:
 export XPING_APIKEY="your-key"
 ```
 
-Create the key in Xping Cloud under **Settings → API keys**, with only the Upload scope.
+Create the key in Xping Cloud under **Settings → API keys**, with only the Upload scope. See [API keys](../cloud/connect.md#api-keys).
 
 You do not name a project. Xping Cloud creates one project for each test assembly, on the first
 upload. `XPING_PROJECTID` is optional. It sends several assemblies to one project. See
