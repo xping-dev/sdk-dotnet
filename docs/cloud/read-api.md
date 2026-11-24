@@ -51,7 +51,7 @@ A request with both headers is refused with `400`. A request with neither is ref
 | `400` | `Error.Authentication.AmbiguousCredentials` | The request has both an `X-API-Key` header and a bearer token. |
 | `401` | `Error.Authentication.MissingCredentials` | The request has no credential. |
 | `401` | | The API key or the token is not valid, or it expired. |
-| `403` | | The API key has no `Read` scope, or the workspace plan has no API access. |
+| `403` | | The API key has no `Read` scope, the workspace plan has no API access, or the token has no `user:read` scope. |
 
 The data is always the data of the credential's workspace. No path names a workspace.
 
@@ -85,7 +85,8 @@ explains it:
 ### Rate limits
 
 Xping Cloud limits the number of requests per credential: per minute, per hour, per day, and a
-short burst limit over 10 seconds. A request must pass all four. The limits depend on your plan.
+short burst limit over 10 seconds. A request must pass each limit that applies. Not every plan has a
+per-day limit. The limits depend on your plan.
 
 Each answered request carries these headers:
 
@@ -93,7 +94,7 @@ Each answered request carries these headers:
 |---|---|
 | `X-RateLimit-Limit` | The requests allowed per minute. |
 | `X-RateLimit-Remaining` | The requests left in the current minute. |
-| `X-RateLimit-Reset` | When the minute ends, in Unix seconds. |
+| `X-RateLimit-Reset` | 60 seconds after the request, in Unix seconds. |
 
 A refused request gets `429`, the same headers with `X-RateLimit-Remaining: 0`, and a `Retry-After`
 header with the number of seconds to wait. Wait that long before you send the next request.
@@ -129,7 +130,8 @@ A page-number list has this shape around its `items`:
 
 - Times are UTC, in ISO 8601: `2026-11-23T22:12:10.760496Z`. A time you send must carry its zone,
   for example a trailing `Z`.
-- Durations are `hh:mm:ss.fffffff` strings, for example `00:00:00.0940750`. In runs of a test, the
+- Durations are `hh:mm:ss` strings with an optional fraction of a second, for example
+  `00:00:00.0940750` or `00:00:00`. In runs of a test, the
   duration is `durationMs`, a number of milliseconds.
 - Scores and rates are numbers from 0 to 1.
 - A field without a value is `null`. The digest and test health endpoints leave out a block that
@@ -155,7 +157,7 @@ The digest and test health endpoints also use these values:
 |---|---|
 | `verdict` | `known-flaky`, `broken`, `unstable`, `passing`, `no-history` |
 | `flaky.state` | `flaky`, `not-flaky`, `inconclusive`, `not-examined` |
-| `flaky.category` | `timing`, `resource-contention`, `network`, `environment-specific`, `order-dependency`, `concurrency`, `external-dependency`, `state-management`, `isolation`, `unknown` |
+| `flaky.category` | `timing`, `resource-contention`, `network`, `environment-specific`, `order-dependency`, `concurrency`, `external-dependency`, `state-management`, `isolation`, `unknown`. Xping Cloud does not assign `resource-contention`, `state-management` or `isolation`. |
 | `flaky.severity` | `minor`, `moderate`, `major`, `critical` |
 | `confidence.state` | `scored`, `insufficient-evidence`, `not-scored` |
 | `freshness` | `current`, `pending`, `none` |
@@ -355,7 +357,8 @@ The response holds the project and a page of its tests:
 
 | Field | Meaning |
 |---|---|
-| `confidenceScore`, `scoreCategory`, `evidenceLevel` | The test's current [confidence score](confidence-scores.md). `null` while the test has Insufficient Data. |
+| `confidenceScore`, `scoreCategory` | The test's newest [confidence score](confidence-scores.md). `null` until the test has its first score. A test that later drops below the evidence floor keeps its last score and category. |
+| `evidenceLevel` | The evidence of the newest calculation, or `No Data` before the first one. |
 | `scoreDelta` | The change from the previous score. |
 | `scoreTrend` | The [trend](confidence-scores.md#trends), or `null` before the test has enough scores. |
 | `isFlaky` | `true` when Xping Cloud flags the test flaky. `null` when flaky detection has not examined it. |
@@ -947,7 +950,7 @@ has the fields of [Describe a batch of tests](#describe-a-batch-of-tests). A hea
 | Parameter | Meaning |
 |---|---|
 | `cursor` | The `next` of the previous page. Leave it out for the first page. |
-| `pageSize` | Tests per page, 1 to 500. Default 500. |
+| `pageSize` | Tests per page, 1 to 500. Default 500. A value outside that range returns `400` `Validation.PageSize`. |
 | `sessionKeys` | Up to 5 session keys, as in the digest. Repeat the parameter for each key. |
 
 A page can hold fewer tests than `pageSize`, or none, when tests became healthy during the request.

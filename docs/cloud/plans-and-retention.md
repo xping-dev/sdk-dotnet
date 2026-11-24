@@ -50,7 +50,9 @@ The limits on Pro and Team grow with the number of seats.
 
 ## Retention
 
-Each plan keeps your data for a fixed number of days. Higher plans keep it longer.
+Each plan keeps your data for a fixed number of days. Trial and Basic keep it the shortest time,
+Pro keeps it longer, and Team and Enterprise keep it the longest. See
+[xping.io/pricing](https://xping.io/pricing) for the days.
 
 When a test session is older than your plan's retention, Xping Cloud deletes it, with its test
 executions and its uploads. It also deletes PR comment data whose newest run is that old. A test's
