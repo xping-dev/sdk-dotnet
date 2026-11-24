@@ -417,7 +417,7 @@ Patterns that show up in the run history:
 - **Random data**: random inputs that sometimes hit an edge case.
 
 The local report shows the behaviour. Xping Cloud also gives a cause category. For worked
-examples, see [Common flaky patterns](https://docs.xping.io/flaky-tests/common-flaky-patterns.html).
+examples, see [Flaky patterns and fixes](https://docs.xping.io/flaky-tests/patterns-and-fixes.html).
 
 ---
 

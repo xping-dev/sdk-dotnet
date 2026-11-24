@@ -2,10 +2,3 @@
   href: finding-flaky-tests.md
 - name: Flaky patterns and fixes
   href: patterns-and-fixes.md
-# Merged into the two pages above in P9, then deleted.
-- name: Monitoring test health
-  href: monitoring-test-health.md
-- name: Common flaky patterns
-  href: common-flaky-patterns.md
-- name: Best practices
-  href: best-practices.md

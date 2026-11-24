@@ -1,150 +1,176 @@
-# Identifying Flaky Tests
+---
+uid: flaky-tests-finding-flaky-tests
+title: Finding flaky tests
+---
 
-Flaky tests—tests that sometimes pass and sometimes fail without code changes—are one of the most frustrating problems in software testing. They erode trust in your test suite, waste developer time, and can mask real issues. Xping helps you identify and understand flaky tests through intelligent detection and confidence scoring.
+# Finding flaky tests
+
+A **flaky** test passes and fails on the same code. It costs time, because each failure makes you
+check whether the code is broken, and it hides real failures among the false ones.
+
+You can find flaky tests in two places:
+
+- **On your machine**, with `xping report`. It reads the runs that the SDK keeps on your machine. It
+  needs no account.
+- **In Xping Cloud**, which reads the runs that every machine and CI job uploads. It decides whether
+  each test is flaky, and why.
+
+To fix a flaky test, see [Flaky patterns and fixes](patterns-and-fixes.md).
 
 ---
 
-## What Makes a Test Flaky?
+## On your machine
 
-Flaky tests fail intermittently for reasons unrelated to code correctness. Common causes include:
+Run your tests a few times, then run `xping report`. The report needs at least 5 runs that contain
+the test. See [Get started locally](../getting-started/local-first.md).
 
-- **Timing Issues**: Race conditions, timeouts, or slow external services
-- **Environment Dependencies**: File system state, network conditions, or resource availability
-- **Non-Deterministic Logic**: Random data, date/time dependencies, or unordered collections
-- **Test Isolation Problems**: Shared state between tests or improper cleanup
-- **External Service Flakiness**: Third-party APIs, databases, or infrastructure instability
+These [finding kinds](../cli/reading-the-report.md#finding-kinds) point at a flaky test:
 
----
+| Printed as | What the report observed |
+|---|---|
+| `flaky` | The test both passes and fails, or fails in different ways. |
+| `masked by retry` | The test failed and then passed on a retry, so the build stayed green. |
+| `deeper retries` | The test needs more attempts to pass than it did before. |
+| `out of retries` | The retries ran out, and the test failed the run. |
+| `concurrency` | The test fails more, or less, when more tests run at the same time. |
+| `time sensitive` | The failures gather at one time of day, at weekends, or on one side of a daylight saving change. |
 
-## How Xping Detects Flakiness
+Two kinds describe a test that fails, but not a flaky one:
 
-Xping doesn't just track pass/fail results—it analyzes multiple dimensions of test behavior to identify flakiness patterns. By collecting rich telemetry data across test runs, Xping builds a comprehensive understanding of each test's reliability.
+- `always failing`: the test fails almost every run, mostly in one way. It is broken, not flaky.
+- `timing out`: the test mostly hangs until its timeout.
 
-The confidence score combines six key factors to give you a complete picture of test reliability. Tests with low confidence scores (below 0.60) exhibit patterns that indicate flakiness rather than consistent failures.
+A test can have more than one finding. To see all of a test's findings and runs, use
+`xping report --test <name>`. See [Test history](../cli/reading-the-report.md#test-history).
 
-> **Related**: For details on how confidence scores are calculated, see [Understanding Confidence Scores](../cloud/confidence-scores.md).
+### Fail a CI step on findings
 
----
-
-## Using the Flaky Tests Tab
-
-The easiest way to find flaky tests is through the **Flaky Tests** tab in Xping Cloud:
-
-1. Navigate to the [Xping Cloud](https://app.xping.io)
-2. Click on the **Flaky Tests** tab
-3. View tests filtered to show only those detected as flaky (with confidence scores below 0.60)
-4. Sort by confidence score (ascending) to see the most problematic tests first
-
-This filtered view helps you prioritize reliability improvements by showing only tests that need attention.
+`xping report --fail-on <severity>` exits with code `1` when a finding reaches that severity:
+`high`, `medium` or `low`. Add it as a step after the tests. It reads only the local findings on
+that CI agent. See [Fail the build on findings](../getting-started/ci-cd-setup.md#fail-the-build-on-findings).
 
 ---
 
-## Investigating a Flaky Test
+## In Xping Cloud
 
-When you identify a test with a low confidence score, follow this investigation process:
+Xping Cloud decides for each test whether it is flaky. This decision is the **flaky verdict**. It is
+separate from the [confidence score](../cloud/confidence-scores.md): no score makes a test flaky.
 
-### 1. Review the Test Detail Page
+### Which tests Cloud examines
 
-Navigate to the test detail page to understand:
-- **Which factors are pulling the score down?** Look at the factor breakdown
-- **What's the confidence level?** If it's Low or Medium, you may need more data
-- **What's the trend?** Is it getting worse or has it always been flaky?
+Cloud examines tests that score below Reliable, are already flagged, or recovered on a retry.
 
-### 2. Check the Confidence Score Breakdown
+A test that recovered on a retry is examined even when it scores well. The confidence score reads
+each run by its last attempt, so a retried test can end most runs green and score Reliable. Flaky
+detection reads the first attempt of each run, so it sees the failures.
 
-The breakdown shows individual scores for each of the six factors:
-- **Historical Pass Rate**: Is the test failing frequently?
-- **Execution Stability**: Are execution times varying wildly?
-- **Retry Behavior**: Is it failing then passing on retry?
-- **Environment Consistency**: Does it behave differently in different environments?
-- **Failure Pattern Analysis**: Are failures random or predictable?
-- **Dependency Impact**: Does it fail when other tests fail?
+See [Score and flaky are independent](../cloud/confidence-scores.md#score-and-flaky-are-independent).
 
-Low scores in specific factors point to the type of flakiness.
+### When Cloud can decide
 
-### 3. Examine Environment Analysis
+Xping Cloud reads the test's runs from the last 14 days. It reads the first attempt of each run, and
+leaves out runs with no result, such as skipped runs.
 
-If "Environment Consistency" has a low score:
-- Compare pass rates across Local vs. CI
-- Look for environment-specific failures
-- Common causes:
-  - File path differences (Windows backslashes vs. Unix forward slashes)
-  - Environment variables not set in CI
-  - Network connectivity differences
-  - Timing differences (CI machines may be slower)
+- It needs at least 10 runs.
+- The runs must show clearly whether the test is **broken** (passes 10% of runs or less),
+  **intermittent** (between 10% and 95%) or **stable** (95% or more). With few runs, or with a pass
+  rate close to 10% or 95%, the runs do not show this yet. For example, ten passing runs in a row are
+  not enough to call a test stable. Sixteen are.
 
-### 4. Review Execution History
+When the runs are enough, several signals vote on the verdict: the pass rate, the variation in
+duration, recoveries on a retry, the gap between environments, the exception types of the failures, and
+whether the
+result follows the test that ran before it. When the votes do not agree enough, Cloud gives no
+verdict.
 
-Look for patterns in recent executions:
-- Do failures happen at specific times of day?
-- Do they occur during parallel execution?
-- Do they correlate with high system load?
-- Are certain environments more problematic?
+A test that failed from one point on and kept failing is not flaky. Its code changed at that point.
+The same is true of a test that fails on one branch only. Cloud keeps a flaky verdict in these cases
+only when the runs since the change still pass and fail, or when one commit both passed and failed.
 
-### 5. Check the Flaky Detection Analysis
+When Cloud cannot decide, the test keeps its earlier verdict.
 
-If the test is flagged as flaky, the Flaky Detection Analysis section provides:
-- **Flakiness Category**: Type of flakiness detected (Timing, Environment, Concurrency, etc.)
-- **Root Cause Analysis**: Specific indicators found
-- **Recommendations**: Actionable suggestions for fixing the issue
-- **Confidence**: How certain the system is about the categorization
+### Categories
 
----
+A flaky test gets one **category**: the most likely cause.
 
-## Common Flakiness Indicators
+| Category | What Cloud saw |
+|---|---|
+| Timing | The duration varies a lot, and runs time out or fail with a timeout or cancellation exception. |
+| Network | Failures with network exceptions, such as `SocketException` or `HttpRequestException`. |
+| External dependency | Failures with database or file-system exceptions, such as `DbException` or `IOException`. |
+| Environment specific | The test passes in one environment much more often than in another. |
+| Order dependency | The result follows the test that ran just before it. |
+| Concurrency | The pass rate differs between runs with more and fewer tests running at the same time. |
+| Unknown | No other category matched. |
 
-### Retry Behavior (Low Score)
-- The test is failing initially but passing on retry
-- Classic sign of timing issues or race conditions
-- Example: Timeout on first attempt, success on second attempt
+Environment specific compares the environment names that the SDK records. Set the
+[`Environment` option](../configuration/configuration-reference.md#environment) in each place you run
+the tests.
 
-### Environment Consistency (Low Score)
-- Works locally, fails in CI (or vice versa)
-- Different pass rates across operating systems
-- Example: 100% pass on macOS, 60% pass on Linux
+### Severity
 
-### Execution Stability (Low Score)
-- Wide variance in execution times
-- Occasional performance spikes
-- Example: Usually 120ms, occasionally 2400ms
+A flaky test also gets a **severity**, from how often its first attempt fails:
 
-### Failure Pattern (Low Score)
-- Random, unpredictable failures
-- No correlation with code changes
-- Example: Fails 3 times, passes 47 times with no pattern
+| Severity | Fails |
+|---|---|
+| `minor` | up to about 10% of runs |
+| `moderate` | about 10% to 30% of runs |
+| `major` | about 30% to 50% of runs |
+| `critical` | more than about 50% of runs |
 
-### Dependency Impact (Low Score)
-- Fails when other tests fail
-- Shared resource contention
-- Example: 80% of failures occur when another specific test also fails
+The rates are approximate. Cloud moves a test to another severity only when the runs show clearly
+that its failure rate crossed an edge.
 
----
+### What Cloud reports about a flaky test
 
-## False Positives: When Low Scores Don't Mean Flakiness
+For a flaky test, Xping Cloud gives:
 
-A low confidence score doesn't automatically mean flakiness. Consider these scenarios:
+- the category and the severity;
+- the root causes it found, and how far the signals agreed;
+- the environments the test ran in, and which of them use retries;
+- recommended actions for the category;
+- on the Pro, Team and Enterprise plans, an AI summary of why the test is flaky. See
+  [Plans and retention](../cloud/plans-and-retention.md#features-that-need-a-plan).
 
-**Consistently Broken Test:**
-- Test fails 100% of the time due to a real bug
-- Low score because it's failing
-- **Not flaky** - just broken
+### When the verdict changes
 
-**Recently Introduced Test:**
-- Fewer than 25 executions
-- Confidence level is "Low"
-- **May not be flaky** - just needs more data
+Flaky detection runs after Xping Cloud scores an upload, for each test in it that Cloud examines. It
+does not run on a schedule.
 
-**Environment-Specific Bug:**
-- Fails consistently in one environment
-- Passes consistently in another
-- **May not be flaky** - could be environment-specific bug
+- A test's first verdict applies at once.
+- After that, a test becomes flaky, or stops being flaky, when two detections in a row agree. One
+  detection alone does not change the verdict.
+- A detection that cannot decide does not change the verdict.
+- A flagged test that stops running stays flagged, because no new detection runs for it.
 
-Xping's Flaky Detection Analysis helps distinguish between these cases and true flakiness.
+Xping Cloud lists the tests that became flaky or recovered, with the time of the change.
+
+### Needs attention
+
+Xping Cloud lists a test as **needs attention** when it is flaky, or when its score is Moderately
+Reliable or lower. A flaky test with a high score needs attention. A test with a low score needs
+attention even when it is not flaky.
 
 ---
 
-## See Also
+## Cloud's verdict in the CLI
 
-- [Common Flaky Patterns](common-flaky-patterns.md) - Catalog of flakiness patterns and detection signatures
-- [Fixing Flaky Tests](patterns-and-fixes.md) - Strategies for addressing flaky tests
-- [Understanding Confidence Scores](../cloud/confidence-scores.md) - How scores are calculated
+When the CLI has a Xping Cloud credential, for example after `xping login`, `xping report` adds Xping Cloud's verdict to the local report:
+
+- A `flaky` or `always failing` finding takes Cloud's verdict as its label, such as
+  `cloud known-flaky` or `cloud broken`.
+- Every other finding keeps its local label, and Cloud's flaky state goes on a `cloud:` line, such as
+  `flaky (cause: timing, major)`.
+- A `FLAGGED IN CLOUD` section lists the tests that Cloud flags and that have no local finding.
+
+Cloud's verdict never changes the local findings, `--fail-on` or the exit code. See
+[Xping Cloud data in the CLI](../cli/cloud-data.md).
+
+---
+
+## See also
+
+- [Flaky patterns and fixes](patterns-and-fixes.md)
+- [Reading the report](../cli/reading-the-report.md)
+- [Confidence scores](../cloud/confidence-scores.md)
+- [Xping Cloud data in the CLI](../cli/cloud-data.md)

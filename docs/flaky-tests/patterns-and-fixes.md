@@ -1,446 +1,458 @@
-# Fixing Flaky Tests
+---
+uid: flaky-tests-patterns-and-fixes
+title: Flaky patterns and fixes
+---
 
-Once you've identified a flaky test, it's time to fix it. This guide provides a systematic approach to investigating and fixing flaky tests, with specific strategies for each common flakiness pattern.
+# Flaky patterns and fixes
+
+This page lists the common causes of flaky tests. For each cause, it gives the symptom, what
+`xping report` shows on your machine, what Xping Cloud reports, and a fix.
+
+To find the flaky tests first, see [Finding flaky tests](finding-flaky-tests.md).
 
 ---
 
-## Investigation Workflow
+## Reproduce the failure
 
-Follow this six-step workflow to systematically address flaky tests:
+Open the finding with `xping report --id <id>`. Its `repro` line says how many runs you need to see
+a failure 95% of the time. The `Repro:` line below the block is the command that reruns only that
+test. Run it that many times, from the repository root. When the command names no project, run it
+from the project folder. `-e XPING_ENABLED=false` keeps the reruns out of your history.
 
-### 1. Review Xping Telemetry
+`xping report --test <name>` prints the same `repro` line under each finding about the test, and the
+command as `Repro of row N:`. See
+[Reproducing a finding](../cli/reading-the-report.md#reproducing-a-finding) for the output, and for
+which findings get a command.
 
-Check the test detail page in Xping Cloud:
-- Execution times across runs
-- Environment pass rates (Local vs. CI)
-- Failure messages and patterns
-- Which confidence score factors are low
-
-### 2. Look for Patterns
-
-Use the six confidence score factors to hypothesize the cause:
-- **Execution Stability (Low)**: Likely timing or race condition issues
-- **Retry Behavior (Low)**: Test passes after retry - transient failure
-- **Environment Consistency (Low)**: Environment-specific configuration or dependencies
-- **Dependency Impact (Low)**: Shared state or external service issues
-- **Failure Pattern (Low)**: Random failures suggest non-deterministic data
-- **Historical Pass Rate (Low)**: Could be consistently broken, not flaky
-
-> **Related**: For detailed pattern recognition, see [Common Flaky Patterns](common-flaky-patterns.md).
-
-### 3. Reproduce Locally
-
-Open the finding with `xping report --id <id>`. Its `repro` line says how many runs it takes to see
-a failure 95% of the time, and the `Repro:` line below the block is the command that reruns just
-that test. Run it that many times, from the repository root, or from the project directory when the
-command names no project. `-e XPING_ENABLED=false` keeps the reruns out of your history.
-`xping report --test <name>` prints the same `repro` line under each finding about the test, and
-the command as `Repro of row N:`.
-[Reproducing a finding](../cli/reading-the-report.md#reproducing-a-finding) shows the output and
-says which findings get a command.
-
-With no `Repro:` line because the runner wasn't recorded (the xUnit console runner, a custom host),
-loop it yourself. Use `=`, not `~`: `~Calc.Add` also runs `Calc.AddRange`. When a retry masks the
-failure, take the retry attribute off first, or every run stays green.
+When the report prints no `Repro:` line, for example under the xUnit console runner, rerun the test
+in a loop yourself. Use `=` in the filter, not `~`: `~Calc.Add` also runs `Calc.AddRange`.
 
 ```bash
 for i in {1..10}; do dotnet test -e XPING_ENABLED=false --filter "FullyQualifiedName=MyApp.Tests.CalcTests.Add"; done
 ```
 
-If it never fails in isolation, run the full suite: a test that only fails alongside others points
-at shared state.
-
-```bash
-dotnet test
-```
-
-### 4. Check Environment Differences
-
-Compare behavior between environments:
-- Environment variables set in CI but not locally
-- File path differences (Windows vs. Linux)
-- Network connectivity and timeouts
-- Resource limits (memory, file handles)
-- Timing (CI machines may be slower)
-
-### 5. Review Recent Changes
-
-Use Xping's historical data to identify when flakiness started:
-- Check the confidence score trend
-- Look at the execution history timeline
-- Correlate with recent code changes or deployments
-
-### 6. Monitor After Fixes
-
-After implementing a fix:
-1. Let the test run at least 20-30 more times
-2. Watch the confidence score trend in Xping
-3. Verify the score moves toward Reliable or Highly Reliable
-4. Check that the problematic factor scores improve
-
-**Expected timeline:**
-- **Immediate**: Recent executions show fewer failures
-- **3-5 days**: Pass rate improves noticeably
-- **1-2 weeks**: Confidence score reflects new stability
-- **2-4 weeks**: Confidence level increases as more data is collected
+- When a retry hides the failure, remove the retry attribute first. Otherwise every run passes.
+- When the test never fails alone, run the full suite. A test that fails only next to other tests
+  points at shared state or at parallel runs.
 
 ---
 
-## Fix Strategies by Pattern
+## The patterns at a glance
 
-### Race Conditions
+| Pattern | `xping report` on your machine | Xping Cloud category |
+|---|---|---|
+| [Race conditions](#race-conditions) | `flaky`, `concurrency` | Concurrency, Timing |
+| [External services](#external-services) | `flaky`, `shared failure`, `timing out` | Network, External dependency |
+| [Shared state and test order](#shared-state-and-test-order) | `flaky`, `concurrency`, `broken fixture` | Order dependency, Concurrency |
+| [Environment differences](#environment-differences) | nothing on one machine | Environment specific |
+| [Time-based failures](#time-based-failures) | `time sensitive` | Unknown |
+| [Random data](#random-data) | `flaky` | Unknown |
+| [Retries that hide a regression](#retries-that-hide-a-regression) | `masked by retry`, `deeper retries`, `out of retries` | any category |
 
-**Indicators:**
-- Low Execution Stability (high timing variance)
-- Passes on retry
-- Failures during parallel execution
-
-**Fixes:**
-
-1. **Add Explicit Waits**
-   ```csharp
-   // BAD: Arbitrary delay
-   await Task.Delay(1000);
-
-   // GOOD: Wait for specific condition
-   await WaitForConditionAsync(
-       () => order.Status == OrderStatus.Completed,
-       timeout: TimeSpan.FromSeconds(10)
-   );
-   ```
-
-2. **Use Proper Synchronization**
-   ```csharp
-   // BAD: No synchronization
-   processor.ProcessAsync(order); // Fire and forget
-   Assert.That(order.Status, Is.EqualTo(OrderStatus.Completed));
-
-   // GOOD: Await completion
-   await processor.ProcessAsync(order);
-   Assert.That(order.Status, Is.EqualTo(OrderStatus.Completed));
-   ```
-
-3. **Polling with Timeout**
-   ```csharp
-   public async Task WaitForConditionAsync(Func<bool> condition, TimeSpan timeout)
-   {
-       var stopwatch = Stopwatch.StartNew();
-       while (!condition() && stopwatch.Elapsed < timeout)
-       {
-           await Task.Delay(100);
-       }
-       if (!condition())
-           throw new TimeoutException($"Condition not met within {timeout}");
-   }
-   ```
+Xping Cloud gives a flaky test one category and a severity. The severity comes from how often the
+test fails, not from the pattern. See [Finding flaky tests](finding-flaky-tests.md#categories).
 
 ---
 
-### External Service Dependencies
+## Race conditions
 
-**Indicators:**
-- Low Environment Consistency
-- High Dependency Impact
-- Clustered failures (multiple tests fail together)
+**Symptom.** The test fails now and then with no code change. It fails more when tests run in
+parallel. It passes in the debugger.
 
-**Fixes:**
+**On your machine.** `xping report` shows `flaky`. When the failures follow the number of tests
+running at the same time, it also shows `concurrency`.
 
-1. **Mock External Services**
-   ```csharp
-   // BAD: Real HTTP call
-   var client = new HttpClient();
-   var response = await client.GetAsync("https://api.example.com/user/123");
+**In Xping Cloud.** The category is Concurrency when the failures follow how many tests ran at the
+same time. It is Timing when the duration varies a lot and runs time out.
 
-   // GOOD: Mock the HTTP client
-   var mockClient = new Mock<IHttpClient>();
-   mockClient.Setup(c => c.GetAsync(It.IsAny<string>()))
-       .ReturnsAsync(new HttpResponseMessage
-       {
-           StatusCode = HttpStatusCode.OK,
-           Content = new StringContent("{\"name\":\"John Doe\"}")
-       });
-   ```
-
-2. **Use Contract Testing**
-   ```csharp
-   // Instead of calling real API, verify your code works with contract
-   [Test]
-   public void ProcessUser_WithValidResponse_ParsesCorrectly()
-   {
-       var contractJson = File.ReadAllText("contracts/user-response.json");
-       var user = JsonSerializer.Deserialize<User>(contractJson);
-
-       Assert.That(user.Name, Is.EqualTo("John Doe"));
-   }
-   ```
-
-3. **Tag Tests That Need External Services**
-   ```csharp
-   [Test]
-   [Category("external-service")]
-   [Category("integration")]
-   [Category("slow")]
-   public async Task RealApiIntegration_Works()
-   {
-       // Only run these occasionally or in specific CI jobs
-   }
-   ```
-
----
-
-### Shared State
-
-**Indicators:**
-- Pass when run alone, fail in suite
-- High Dependency Impact
-- Order-dependent failures
-
-**Fixes:**
-
-1. **Independent Setup/Teardown**
-   ```csharp
-   // BAD: Shared static state
-   private static Database _database = new Database();
-
-   // GOOD: Instance per test
-   private Database _database;
-
-   [SetUp]
-   public void SetUp()
-   {
-       _database = new Database();
-   }
-
-   [TearDown]
-   public void TearDown()
-   {
-       _database.Dispose();
-   }
-   ```
-
-2. **Use Unique Resources Per Test**
-   ```csharp
-   [Test]
-   public void CreateFile_Succeeds()
-   {
-       // BAD: Fixed filename (collides in parallel execution)
-       var filename = "test.txt";
-
-       // GOOD: Unique filename per test
-       var filename = $"test-{Guid.NewGuid()}.txt";
-
-       File.WriteAllText(filename, "content");
-       try
-       {
-           Assert.That(File.Exists(filename), Is.True);
-       }
-       finally
-       {
-           File.Delete(filename);
-       }
-   }
-   ```
-
-3. **Reset Static State**
-   ```csharp
-   public class ConfigurationCache
-   {
-       private static Dictionary<string, string> _cache = new();
-
-       // Provide a way to reset for testing
-       public static void ResetForTesting()
-       {
-           _cache.Clear();
-       }
-   }
-
-   [TearDown]
-   public void TearDown()
-   {
-       ConfigurationCache.ResetForTesting();
-   }
-   ```
-
----
-
-### Time-Based Flakiness
-
-**Indicators:**
-- A `TimeSensitive` finding from `xping report`
-- Fails at specific local times or dates
-- Inconsistent with no clear environmental cause
-
-**Fixes:**
-
-1. **Mock System Time**
-   ```csharp
-   // Create a time provider abstraction
-   public interface ITimeProvider
-   {
-       DateTime Now { get; }
-       DateTime UtcNow { get; }
-   }
-
-   // Use it in your code
-   public class EventScheduler
-   {
-       private readonly ITimeProvider _timeProvider;
-
-       public EventScheduler(ITimeProvider timeProvider)
-       {
-           _timeProvider = timeProvider;
-       }
-
-       public Event CreateEvent(string name)
-       {
-           return new Event
-           {
-               Name = name,
-               CreatedAt = _timeProvider.UtcNow
-           };
-       }
-   }
-
-   // Test with fixed time
-   [Test]
-   public void ScheduleEvent_CreatesEventWithCurrentTime()
-   {
-       var mockTime = new Mock<ITimeProvider>();
-       var fixedTime = new DateTime(2024, 1, 15, 10, 30, 0, DateTimeKind.Utc);
-       mockTime.Setup(t => t.UtcNow).Returns(fixedTime);
-
-       var scheduler = new EventScheduler(mockTime.Object);
-       var event = scheduler.CreateEvent("Meeting");
-
-       Assert.That(event.CreatedAt, Is.EqualTo(fixedTime));
-   }
-   ```
-
-2. **Use Relative Time Comparisons**
-   ```csharp
-   // BAD: Absolute time comparison
-   Assert.That(event.CreatedAt, Is.EqualTo(DateTime.Now));
-
-   // GOOD: Relative comparison with tolerance
-   Assert.That(event.CreatedAt, Is.EqualTo(DateTime.UtcNow).Within(TimeSpan.FromSeconds(5)));
-   ```
-
----
-
-### Non-Deterministic Data
-
-**Indicators:**
-- Random failure patterns
-- No correlation with environment or timing
-- Truly unpredictable failures
-
-**Fixes:**
-
-1. **Use Fixed Seeds for Random Data**
-   ```csharp
-   // BAD: Random seed
-   var random = new Random();
-   var testData = Enumerable.Range(0, 100).Select(_ => random.Next()).ToList();
-
-   // GOOD: Fixed seed
-   var random = new Random(12345); // Always generates same sequence
-   var testData = Enumerable.Range(0, 100).Select(_ => random.Next()).ToList();
-   ```
-
-2. **Avoid Non-Deterministic Functions in Assertions**
-   ```csharp
-   // BAD: GUID comparison
-   var userId = Guid.NewGuid();
-   var user = service.GetUser(userId);
-   Assert.That(user.Id, Is.EqualTo(Guid.NewGuid())); // Different GUID!
-
-   // GOOD: Use the same GUID
-   var userId = Guid.Parse("12345678-1234-1234-1234-123456789012");
-   var user = service.GetUser(userId);
-   Assert.That(user.Id, Is.EqualTo(userId));
-   ```
-
-3. **Be Explicit About Collection Order**
-   ```csharp
-   // BAD: Assumes order
-   var users = service.GetUsers();
-   Assert.That(users[0].Name, Is.EqualTo("Alice"));
-
-   // GOOD: Sort explicitly or check without order
-   var users = service.GetUsers().OrderBy(u => u.Name).ToList();
-   Assert.That(users[0].Name, Is.EqualTo("Alice"));
-
-   // Or check for presence without order
-   Assert.That(users.Select(u => u.Name), Contains.Item("Alice"));
-   ```
-
----
-
-## Using Metadata to Track Flaky Tests
-
-While investigating, tag tests with metadata to help with analysis:
-
-**NUnit:**
-```csharp
-[Test]
-[Category("flaky")]
-[Category("under-investigation")]
-[Description("Intermittent timeout - investigating race condition")]
-public void ProcessOrder_CompletesSuccessfully()
-{
-    // Test implementation
-}
-```
-
-**xUnit:**
-```csharp
-[Fact]
-[Trait("Status", "flaky")]
-[Trait("Issue", "race-condition")]
-[Trait("InvestigatedBy", "alice")]
-public void ProcessOrder_CompletesSuccessfully()
-{
-    // Test implementation
-}
-```
-
-**MSTest:**
-```csharp
-[TestMethod]
-[TestCategory("flaky")]
-[TestCategory("under-investigation")]
-[Description("Intermittent timeout - investigating race condition")]
-public void ProcessOrder_CompletesSuccessfully()
-{
-    // Test implementation
-}
-```
-
----
-
-## When to Disable a Flaky Test
-
-Temporarily disable highly flaky tests (confidence < 0.30) if:
-- Investigation will take time and the test is blocking CI
-- The test is not critical to current development
-- You need to unblock the team while fixing
+**Fix.** Await the work that the test checks.
 
 ```csharp
 [Test]
-[Ignore("Flaky test - tracked in JIRA-12 3")]
-public void HighlyFlakyTest()
+public async Task ProcessOrder_CompletesTheOrder()
 {
-    // Will be re-enabled after fix
+    var order = Fixtures.CreateTestOrder();
+    var processor = new OrderProcessor();
+
+    // Without await, the assertion can run before ProcessAsync finishes.
+    await processor.ProcessAsync(order);
+
+    Assert.That(order.Status, Is.EqualTo(OrderStatus.Completed));
 }
 ```
 
-**Important**: Always track disabled tests and re-enable them after fixing!
+When the test cannot await the work, wait for a condition with a time limit. Do not wait a fixed
+time with `Task.Delay`.
+
+```csharp
+public static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+{
+    var stopwatch = Stopwatch.StartNew();
+    while (!condition())
+    {
+        if (stopwatch.Elapsed > timeout)
+        {
+            throw new TimeoutException($"The condition was not met within {timeout}.");
+        }
+
+        await Task.Delay(TimeSpan.FromMilliseconds(50));
+    }
+}
+```
 
 ---
 
-## See Also
+## External services
 
-- [Common Flaky Patterns](common-flaky-patterns.md) - Pattern catalog for diagnosis
-- [Identifying Flaky Tests](finding-flaky-tests.md) - How to find flaky tests
-- [Monitoring Test Health](monitoring-test-health.md) - Track improvements over time
-- [Best Practices](best-practices.md) - Prevent flakiness from the start
+**Symptom.** The test fails when a service is slow or down. It passes on your machine and fails in
+CI. Several tests that call the same service fail together.
+
+**On your machine.** `xping report` shows `flaky`. When three or more tests fail with the same error
+in one run, it shows them as one `shared failure`. A test that mostly hangs until its timeout shows
+`timing out`.
+
+**In Xping Cloud.** The category is Network when the failures are network exceptions, such as
+`SocketException` or `HttpRequestException`. It is External dependency when they are database or
+file-system exceptions, such as `DbException` or `IOException`.
+
+**Fix.** Replace the real service with a stub in unit tests. With `HttpClient`, give it a handler
+that returns a fixed response:
+
+```csharp
+public sealed class StubHandler(HttpStatusCode status, string json) : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request, CancellationToken cancellationToken) =>
+        Task.FromResult(new HttpResponseMessage(status)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json"),
+        });
+}
+
+[Test]
+public async Task GetUser_ReadsTheName()
+{
+    var handler = new StubHandler(HttpStatusCode.OK, """{"id":123,"name":"John Doe"}""");
+    var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.example.com/") };
+    var client = new UserClient(http);
+
+    var user = await client.GetUserAsync(123);
+
+    Assert.That(user?.Name, Is.EqualTo("John Doe"));
+}
+```
+
+Keep a few tests against the real service, and run them in a separate CI job. A failure there then
+tells you about the service, not about your code.
+
+---
+
+## Shared state and test order
+
+**Symptom.** The test passes alone and fails in the full suite. The result depends on which test ran
+before it. The errors say "already exists" or "in use".
+
+**On your machine.** `xping report` shows `flaky`, and `concurrency` when parallel runs make it
+worse. When several tests fail in the same setup method, it shows one `broken fixture` and names
+that method.
+
+**In Xping Cloud.** The category is Order dependency when the result follows the test that ran just
+before it. It is Concurrency when they follow how many tests ran at the same time.
+
+**Fix.** Give each test its own state. Create it in the setup method, not in a static field:
+
+```csharp
+public class UserServiceTests
+{
+    // A static field is shared by every test in the class, and by parallel runs.
+    private Database _database = null!;
+
+    [SetUp]
+    public void SetUp() => _database = new Database();
+
+    [TearDown]
+    public void TearDown() => _database.Dispose();
+
+    [Test]
+    public void Insert_AddsOneUser()
+    {
+        _database.Insert(new User(1, "Alice"));
+
+        Assert.That(_database.Count(), Is.EqualTo(1));
+    }
+}
+```
+
+Give each test its own files and other named resources:
+
+```csharp
+[Test]
+public void WriteFile_CreatesTheFile()
+{
+    // A fixed name collides when two tests run at the same time.
+    var path = Path.Combine(Path.GetTempPath(), $"test-{Guid.NewGuid()}.txt");
+
+    try
+    {
+        File.WriteAllText(path, "content");
+
+        Assert.That(File.Exists(path), Is.True);
+    }
+    finally
+    {
+        File.Delete(path);
+    }
+}
+```
+
+---
+
+## Environment differences
+
+**Symptom.** The test passes on your machine and fails in CI, or passes on Windows and fails on
+Linux.
+
+**On your machine.** `xping report` reads the runs of one machine, so it cannot compare two
+environments.
+
+**In Xping Cloud.** The category is Environment specific when the test fails in one environment much
+more than in another. Xping Cloud compares the environment names that the SDK records, so set the
+[`Environment` option](../configuration/configuration-reference.md#environment) in each place you
+run the tests.
+
+**Fix.** Look for what differs between the two environments:
+
+- environment variables that CI sets and your machine does not, or the other way round;
+- file paths: `\` on Windows and `/` elsewhere, and file names that differ only in case;
+- the culture and the time zone of the machine;
+- network access, and the time a call takes;
+- memory, CPU and file-handle limits. CI machines are often slower.
+
+Build file paths with `Path.Combine`, and set the culture in tests that format numbers or dates.
+
+---
+
+## Time-based failures
+
+**Symptom.** The test fails at one time of day, at weekends, or near a daylight saving change. It
+compares dates or times.
+
+**On your machine.** `xping report` shows `time sensitive` when the failures gather at one time. It
+compares three splits of the runs:
+
+- each six-hour quarter of the local day against the rest of the day;
+- weekend runs against weekday runs;
+- when the runs have two UTC offsets for one time zone, as at a daylight saving change, the runs on
+  each side of the change.
+
+The finding needs at least five runs on each side, and failures on at least three different local
+days. A single weekday, such as "only fails on Mondays", cannot be detected in the default window,
+because the window holds at most two of each weekday. See
+[`time sensitive`](../cli/reading-the-report.md#time-sensitive).
+
+A test that reads the clock:
+
+```csharp
+[Test]
+public void ScheduleEvent_CreatesEventForToday()
+{
+    var scheduler = new EventScheduler(TimeProvider.System);
+
+    var evt = scheduler.CreateEvent("Meeting");
+
+    // Fails when the test runs across midnight: the date changes between the two calls.
+    Assert.That(evt.CreatedAt.Date, Is.EqualTo(DateTime.Now.Date));
+}
+```
+
+The report shows:
+
+<!-- xping:sample docs-time-sensitive rows -->
+```
+1.  MED   time sensitive
+    SchedulerTests.ScheduleEvent_CreatesEventForToday
+    failed 100% in 00:00-06:00 local against 0% in the rest of the day,
+    gap 100 pts across 4 days
+    evidence adequate | -env | f_3b0e91c4 | .../SchedulerTests.cs:18
+```
+
+The finding says when the test fails, not why. Its severity is never above medium, because the time
+of day tells you where to look and not what to fix.
+
+**In Xping Cloud.** Xping Cloud does not compare the time of day. A time-based test can still be
+flaky there, with the category Unknown.
+
+**Fix.** Pass the clock to the code as a `TimeProvider`, and use `FakeTimeProvider` in the test. It
+is in the `Microsoft.Extensions.TimeProvider.Testing` package.
+
+```csharp
+public sealed class EventScheduler(TimeProvider clock)
+{
+    public Event CreateEvent(string name) => new() { Name = name, CreatedAt = clock.GetUtcNow() };
+}
+
+[Test]
+public void CreateEvent_UsesTheCurrentTime()
+{
+    var now = new DateTimeOffset(2026, 1, 15, 23, 59, 59, TimeSpan.Zero);
+    var clock = new FakeTimeProvider(now);
+    var scheduler = new EventScheduler(clock);
+
+    var evt = scheduler.CreateEvent("Meeting");
+
+    Assert.That(evt.CreatedAt, Is.EqualTo(now));
+}
+```
+
+When the code must read the real clock, compare with a tolerance:
+
+```csharp
+Assert.That(evt.CreatedAt, Is.EqualTo(DateTimeOffset.UtcNow).Within(TimeSpan.FromSeconds(5)));
+```
+
+---
+
+## Random data
+
+**Symptom.** The test fails now and then with an unexpected value, with no link to the time, the
+environment or parallel runs.
+
+**On your machine.** `xping report` shows `flaky`. A test that fails in different ways shows more
+than one failure mode.
+
+**In Xping Cloud.** The category is usually Unknown, because no other signal matches.
+
+**Fix.** Give random data a fixed seed, and do not depend on an order that the code does not
+promise.
+
+```csharp
+[Test]
+public void Sort_PutsTheSmallestFirst()
+{
+    // A fixed seed gives the same numbers on every run.
+    var random = new Random(12345);
+    var numbers = Enumerable.Range(0, 100).Select(_ => random.Next()).ToList();
+
+    numbers.Sort();
+
+    Assert.That(numbers[0], Is.EqualTo(numbers.Min()));
+}
+
+[Test]
+public void GetUsers_ReturnsAlice()
+{
+    var users = UserService.GetUsers();
+
+    // GetUsers promises no order, so check for the item, not for its position.
+    Assert.That(users.Select(u => u.Name), Does.Contain("Alice"));
+}
+```
+
+---
+
+## Retries that hide a regression
+
+**Symptom.** The build is green, but the suite gets slower. A test with a retry attribute has "always
+been a bit flaky". Or a test with a retry attribute fails the build anyway.
+
+**On your machine.** `xping report` reads the attempts that the adapter recorded, never the limit in
+the retry attribute. It shows one of three kinds:
+
+- **`masked by retry`**: the test failed and then passed on a retry. The build stayed green.
+- **`deeper retries`**: the test still passes, but its recent runs need more attempts than earlier
+  runs. This kind appears while the build is still green. Its severity is never above medium,
+  because no build has failed yet.
+- **`out of retries`**: the retries ran out, and the test failed the run.
+
+A test gets at most one of the three: `out of retries` first, then `deeper retries`, then
+`masked by retry`. See [Retry kinds](../cli/reading-the-report.md#retry-kinds).
+
+A test whose service got slower:
+
+```csharp
+[RetryFact(3)]
+public async Task Checkout_CompletesWithinTheServiceBudget()
+{
+    var checkout = new CheckoutService();
+
+    // The retry still saves the build. This test used to pass on the first attempt.
+    // Now it needs the third.
+    var result = await checkout.CompleteAsync();
+
+    Assert.True(result.Succeeded);
+}
+```
+
+The report shows:
+
+<!-- xping:sample docs-retry-deepening rows -->
+```
+1.  MED   deeper retries
+    CheckoutTests.Checkout_CompletesWithinTheServiceBudget
+    attempts to pass 1 -> 3 (+2) over 3 runs against 14 before, 2.4s
+    spent retrying
+    evidence adequate | -env | f_5da7c018 | .../CheckoutTests.cs:27
+```
+
+And when the retries no longer save the build:
+
+<!-- xping:sample docs-retry-exhausted rows -->
+```
+1.  HIGH  out of retries
+    CheckoutTests.Checkout_CompletesWithinTheServiceBudget
+    gave up after 3 attempts in 7 of 8 retried runs (87.5%), 41s spent
+    retrying
+    evidence robust | -env | f_9c14ab63 | .../CheckoutTests.cs:27
+```
+
+The second block is the reason to remove the retry attribute, not to raise its limit. The retries
+cost time and no longer keep the build green.
+
+**In Xping Cloud.** The confidence score reads each run by its last attempt, so a retried test can
+score well. Flaky detection reads the first attempt of each run. A test that recovered on a retry is
+always examined, and it can be flaky with any category. See
+[Score and flaky are independent](../cloud/confidence-scores.md#score-and-flaky-are-independent).
+
+**Fix.** Fix the cause, then remove the retry. A retry is reasonable for a short time while you
+investigate, and for a test of a real external service that you do not control. It is not a fix for
+a race condition or for shared state.
+
+How well the SDK sees each attempt depends on the framework. See
+[Known limitations](../troubleshooting/known-limitations.md). Where an adapter cannot record each
+attempt, the report cannot tell a retried test from one that passed the first time.
+
+---
+
+## Skip a test while you fix it
+
+To stop a flaky test from failing builds while you fix it, skip it with your framework's attribute.
+Xping does not skip or quarantine tests. Base the decision on the flaky verdict and its severity, not
+on the confidence score. A `critical` flaky test fails more than about half of its runs.
+
+| Framework | Attribute |
+|---|---|
+| NUnit | `[Ignore("Flaky: race in OrderProcessor, see issue 123")]` |
+| xUnit | `[Fact(Skip = "Flaky: race in OrderProcessor, see issue 123")]` |
+| MSTest | `[Ignore("Flaky: race in OrderProcessor, see issue 123")]` |
+
+Put the reason and an issue link in the message, so the test is not forgotten. The SDK does not
+record ignored tests on NUnit and MSTest. See
+[Known limitations](../troubleshooting/known-limitations.md#ignored-tests-are-not-tracked).
+
+---
+
+## After a fix
+
+- **On your machine.** The finding goes away when the failing runs leave the report's window. The
+  default window is the last 20 runs from the last 14 days.
+- **In Xping Cloud.** The flaky verdict clears when two detections in a row find the test not flaky.
+  Detection runs when an upload contains the test, and reads the last 14 days of runs. The old
+  failures count until they are older than that.
+
+---
+
+## See also
+
+- [Finding flaky tests](finding-flaky-tests.md)
+- [Reading the report](../cli/reading-the-report.md)
+- [Confidence scores](../cloud/confidence-scores.md)
