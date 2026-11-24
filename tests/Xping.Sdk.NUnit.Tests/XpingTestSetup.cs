@@ -28,7 +28,7 @@ public class XpingTestSetup
     public void BeforeAllTests()
     {
         // Loads configuration from environment variables, unless a test in this process already
-        // installed a context or left a configuration behind (see docs/troubleshooting/known-limitations.md)
+        // installed a context or left a configuration behind (see docs/internals/nunit-tests-shared-context-race.md)
         XpingContext.Initialize();
     }
 
@@ -38,7 +38,7 @@ public class XpingTestSetup
         // Not FinalizeAndShutdownAsync(), which user fixtures should call: it fails the process fast on a
         // strict-mode network error. xUnit tests in this project share the static context and install
         // strict-mode contexts aimed at an unreachable endpoint, and this teardown can run while one of
-        // them is live (see docs/troubleshooting/known-limitations.md). Here that would crash the test host.
+        // them is live (see docs/internals/nunit-tests-shared-context-race.md). Here that would crash the test host.
         try
         {
             await XpingContext.FinalizeAsync().ConfigureAwait(true);
