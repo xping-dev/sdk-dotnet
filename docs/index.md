@@ -413,7 +413,7 @@ Patterns that show up in the run history:
 - **Random data**: random inputs that sometimes hit an edge case.
 
 The local report shows the behaviour. Xping Cloud also gives a cause category. For worked
-examples, see [Common flaky patterns](flaky-tests/common-flaky-patterns.md).
+examples, see [Flaky patterns and fixes](flaky-tests/patterns-and-fixes.md).
 
 > Xping Cloud gives each test a confidence score from 0 to 1, based on its run history.
 > See [Confidence scores](cloud/confidence-scores.md).
@@ -452,9 +452,6 @@ examples, see [Common flaky patterns](flaky-tests/common-flaky-patterns.md).
 
 - [Finding flaky tests](flaky-tests/finding-flaky-tests.md)
 - [Flaky patterns and fixes](flaky-tests/patterns-and-fixes.md)
-- [Monitoring test health](flaky-tests/monitoring-test-health.md)
-- [Common flaky patterns](flaky-tests/common-flaky-patterns.md)
-- [Best practices](flaky-tests/best-practices.md)
 
 #### [Performance](performance/performance.md)
 

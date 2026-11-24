@@ -27,7 +27,7 @@ are corrected here so that no phase below inherits them.
 | Was | Now | Where established |
 |---|---|---|
 | "28 golden files" | **50** files: 25 fixtures × 2 glyph sets | `ReportFixtures.Keys` (`tests/Xping.Cli.Tests/Report/ReportFixtures.cs:39-66`), `GoldenReportTests.Modes` (`GoldenReportTests.cs:41-45`), `EveryGoldenOnDiskBelongsToAFixture` (`GoldenReportTests.cs:89-106`) |
-| documented samples in "README, nuspec, command-reference, four quickstart pages, known-limitations" | **ten** documents: `README.md`, `nuspec/README.Cli.md`, `docs/index.md`, `docs/cli/command-reference.md`, three quickstarts, `docs/getting-started/local-first.md`, `docs/troubleshooting/known-limitations.md`, `docs/flaky-tests/common-flaky-patterns.md` | `DocumentedSampleTests.Documents` (`tests/Xping.Cli.Tests/Report/DocumentedSampleTests.cs:61-73`) |
+| documented samples in "README, nuspec, command-reference, four quickstart pages, known-limitations" | **ten** documents: `README.md`, `nuspec/README.Cli.md`, `docs/index.md`, `docs/cli/command-reference.md`, three quickstarts, `docs/getting-started/local-first.md`, `docs/troubleshooting/known-limitations.md`, `docs/flaky-tests/patterns-and-fixes.md` | `DocumentedSampleTests.Documents` (`tests/Xping.Cli.Tests/Report/DocumentedSampleTests.cs:61-73`) |
 
 ### Amendment 1 — from the P0 inventory
 
