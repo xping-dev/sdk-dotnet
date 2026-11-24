@@ -193,9 +193,9 @@ could not record its tests. Every test that ran stays in the TRX file and the ot
   causes.
 - Check that the CI agent can reach `https://upload.xping.io` over HTTPS, through any firewall or
   proxy.
-- For a build with no network, use `XPING_MODE=LocalOnly`, or leave the API key unset. The SDK then
-  keeps the run on the machine and makes no uploads. `XPING_ENABLED=false` also turns off the local
-  history.
+- For a build with no network, set `XPING_MODE=LocalOnly`. The SDK then keeps the run on the
+  machine and makes no uploads. Do not just leave the API key unset: with `StrictMode` on, a missing
+  key fails the run before any test runs. `XPING_ENABLED=false` also turns off the local history.
 
 ---
 
@@ -587,7 +587,9 @@ Configuration property names are **case-sensitive** in JSON:
 - The run pauses after the last test
 
 To find out whether the SDK causes it, run once with `XPING_ENABLED=false` and compare. A pause after
-the last test is usually the final upload, which stops after twice `UploadTimeout`. See
+the last test is usually the uploads at the end of the session. Each upload stops after twice
+`UploadTimeout`, but a failing endpoint can hold up the end of the run for several of these waits.
+See
 [Performance](../performance/performance.md#find-out-whether-the-sdk-slows-a-run).
 
 ---

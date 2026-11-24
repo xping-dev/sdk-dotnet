@@ -21,10 +21,10 @@ namespace Xping.Sdk.Benchmarks;
 /// characteristics of the Xping SDK, including test execution overhead,
 /// memory usage, throughput, and latency.
 /// 
-/// Usage:
-/// - Run all benchmarks: dotnet run -c Release
-/// - Run specific benchmark: dotnet run -c Release --filter *CollectorBenchmarks*
-/// - Run with profiler: dotnet run -c Release --profiler EP
+/// Usage (see README.md):
+/// - Run one class: dotnet run -c Release -- --filter '*CollectorBenchmarks*'
+/// - Run everything: dotnet run -c Release -- --filter '*'
+/// - Without --filter, BenchmarkDotNet asks which benchmarks to run.
 /// 
 /// Results are exported to BenchmarkDotNet.Artifacts/ directory in multiple formats.
 /// </remarks>

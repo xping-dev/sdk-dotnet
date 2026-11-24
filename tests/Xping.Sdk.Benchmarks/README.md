@@ -55,12 +55,12 @@ a run until the session ends, so its retained memory grows with the run.
 ## Compare two versions
 
 Run the affected benchmarks on `main` and on your branch, on the same machine, and compare the two
-reports:
+reports. Move the first results out of the repository, so they are not committed:
 
 ```bash
 git switch main
 dotnet run -c Release -- --filter '*Collector*'
-mv BenchmarkDotNet.Artifacts BenchmarkDotNet.Artifacts.main
+mv BenchmarkDotNet.Artifacts "${TMPDIR:-/tmp}/xping-benchmarks-main"
 
 git switch my-branch
 dotnet run -c Release -- --filter '*Collector*'

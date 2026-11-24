@@ -33,7 +33,8 @@ The SDK does not sample. It records every test that runs.
 | During the run | Nothing. | The SDK uploads a batch when [`BatchSize`](../configuration/configuration-reference.md#batchsize) records are waiting, and when the [`FlushInterval`](../configuration/configuration-reference.md#flushinterval) timer fires. |
 | The session ends | The SDK writes the run to the [local store](../configuration/local-store.md), and removes old runs. | The SDK writes the run to the local store first. Then it uploads the records that are left, and a final upload that closes the session. |
 
-`Auto`, the default mode, is `Cloud` with an API key and `LocalOnly` without one. See
+`Auto`, the default mode, is `Cloud` with an API key or with `StrictMode` on, and `LocalOnly`
+otherwise. See
 [Mode](../configuration/configuration-reference.md#mode).
 
 ### Uploads during the run
@@ -52,9 +53,14 @@ is on disk even when the upload fails or the process is stopped.
 
 Each upload, with its retries and the delays between them, stops after twice
 [`UploadTimeout`](../configuration/configuration-reference.md#uploadtimeout): 60 seconds by default.
-When a batch upload fails, the SDK sends no more batches, and it still sends the final upload. A
-failing upload therefore adds a bounded wait to the end of the run. It does not fail the run, unless
+At the end of the session, the SDK first waits for an upload that is still running. Then it uploads
+the records that are left, in batches. When one of these batches fails, it sends no more of them,
+and it still sends the final upload. With a failing endpoint, the end of the run can therefore wait
+for up to three uploads. A failing upload does not fail the run, unless
 [`StrictMode`](../configuration/configuration-reference.md#strictmode) is on.
+
+During the run, a failed upload does not stop the next one. Each batch tries again, until the
+circuit breaker pauses uploads. See [`MaxRetries`](../configuration/configuration-reference.md#maxretries).
 
 ---
 
@@ -94,8 +100,14 @@ uses more. `BatchSize` does not limit it.
    dotnet test -c Release
    ```
 
-   Compare the two durations over several runs, because test durations vary from run to run. On
-   Windows PowerShell, set the variable with `$env:XPING_ENABLED = "false"` first.
+   In PowerShell:
+
+   ```powershell
+   $env:XPING_ENABLED = "false"; dotnet test -c Release
+   Remove-Item Env:XPING_ENABLED; dotnet test -c Release
+   ```
+
+   Compare the two durations over several runs, because test durations vary from run to run.
 
 2. **Check the end of the run.** A long pause after the last test is usually an upload. The SDK logs
    each upload and its result. Set
@@ -103,7 +115,12 @@ uses more. `BatchSize` does not limit it.
    upload errors, see [Common issues](../troubleshooting/common-issues.md).
 
 3. **Profile the test process.** `dotnet-counters` shows memory and GC activity while the tests run.
-   `dotnet-trace` records where the time goes.
+   `dotnet-trace` records where the time goes. Start the tool while the tests run, and name the
+   process that runs them:
+
+   - On vstest (`dotnet test` without Microsoft.Testing.Platform), the process is `testhost`.
+   - On Microsoft.Testing.Platform, the tests run in the test project's own executable, such as
+     `MyApp.Tests`.
 
    ```bash
    dotnet tool install -g dotnet-counters
@@ -112,6 +129,9 @@ uses more. `BatchSize` does not limit it.
    dotnet-counters monitor --name testhost
    dotnet-trace collect --name testhost
    ```
+
+   For a short run that ends before you can attach, start the test executable under the tool
+   instead: `dotnet-trace collect -- ./bin/Release/net10.0/MyApp.Tests`.
 
    Open the `.nettrace` file in Visual Studio or PerfView, or convert it with
    `dotnet-trace convert --format speedscope`. Look for `Xping` frames.
