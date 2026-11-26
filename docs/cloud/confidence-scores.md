@@ -5,6 +5,9 @@ title: Confidence scores
 
 # Confidence scores
 
+This page explains how Xping Cloud scores each test, and how to read the score. It is for anyone
+who reads scores in Xping Cloud, in the CLI or in a pull request comment.
+
 A **confidence score** is Xping Cloud's estimate of how much you can trust a test's result. It is a
 number from 0.00 to 1.00. A high score means the test gives the same answer on the same code. A low
 score means its result carries less signal.
@@ -18,7 +21,7 @@ These values belong to the current scoring version and can change.
 
 ## Score categories
 
-Each score falls into one category:
+Each score falls into one **score category**:
 
 | Score | Category |
 |---|---|
@@ -81,7 +84,8 @@ runs give a wide range. Many runs give a narrow one.
 
 ## How the score is calculated
 
-One factor sets the level of the score. Five factors can only lower it.
+The score has six inputs. Each one is a **factor**. One factor sets the level of the score. Five
+factors can only lower it.
 
 ```text
 score = level × (discount from each of the five other factors)

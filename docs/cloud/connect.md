@@ -39,7 +39,7 @@ Xping Cloud shows the key once, when you create it. Copy it then. You cannot see
 | Scope | What the key can do | Plans |
 |---|---|---|
 | `Upload` | Upload test runs from the SDK. | Every plan |
-| `Read` | Read projects, tests, sessions and scores through the [read API](read-api.md). | Plans with API access. See [Plans and retention](plans-and-retention.md#features-that-need-a-plan). |
+| `Read` | Read projects, tests, runs and scores through the [read API](read-api.md). | Plans with API access. See [Plans and retention](plans-and-retention.md#features-that-need-a-plan). |
 
 Create the SDK's key with only the Upload scope. A CI log or a test machine can leak the key. A key
 with only the Upload scope cannot read your data.
@@ -75,13 +75,13 @@ Each member of a workspace has one role.
 |---|---|
 | **Owner** | Full control, including the plan, the seats, and who else is an Owner. A workspace always has at least one Owner. |
 | **Admin** | Manages projects, API keys, integrations and the team. Cannot change the plan or the Owners. |
-| **Member** | Sees every project, session, test and report in the workspace. Manages only their own account and CLI sessions. |
+| **Member** | Sees every project, run, test and report in the workspace. Manages only their own account and CLI sessions. |
 
 ### What each role can do
 
 | Action | Owner | Admin | Member |
 |---|---|---|---|
-| View projects, sessions, tests and reports | ✓ | ✓ | ✓ |
+| View projects, runs, tests and reports | ✓ | ✓ | ✓ |
 | View the member list | ✓ | ✓ | ✓ |
 | Edit, turn off or delete a project; change its branch and PR comment settings | ✓ | ✓ | – |
 | Create, revoke and delete API keys | ✓ | ✓ | – |

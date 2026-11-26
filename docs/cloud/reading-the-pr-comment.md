@@ -5,6 +5,9 @@ title: Reading the PR comment
 
 # Reading the PR comment
 
+This page explains each part of the pull request comment that Xping Cloud posts. It is for
+developers who review pull requests.
+
 When your CI runs tests on a pull request, Xping posts **one comment** on that pull request and keeps it up to date. Every commit you push, every test run and every finished analysis updates the same comment, so the pull request has one Xping comment, not one per run.
 
 The comment answers three questions, in this order:
@@ -17,7 +20,7 @@ PR comments are available on the **Team** and **Enterprise** plans, for GitHub, 
 
 ---
 
-## The Comment at a Glance
+## The comment at a glance
 
 From top to bottom:
 
@@ -28,7 +31,7 @@ From top to bottom:
 | **Status line** | What is still being analysed; it is gone once the analysis is finished |
 | **Failed tests** | One card per failed test, with a verdict, the reason and a next step |
 | **Became flaky during this PR** | Tests that started to pass and fail on the same code while this PR ran |
-| **Reliability** | How the suite's reliability score compares with the base branch |
+| **Reliability** | How the run's [session reliability score](session-reliability-score.md) compares with the base branch |
 | **Projects** (collapsed) | A table per project, tests whose reliability dropped, and earlier commits |
 | **Footer** | Links to Xping, this page, and the time of the last update |
 
@@ -36,7 +39,7 @@ A part that has nothing to say is left out.
 
 ---
 
-## The Headline
+## The headline
 
 The headline starts with an emoji and says what happened:
 
@@ -57,7 +60,7 @@ Failures are counted in three groups:
 
 ---
 
-## The Status Line
+## The status line
 
 Xping posts the comment as soon as the test results arrive, then finishes the analysis in the background:
 
@@ -69,7 +72,7 @@ The comment updates itself when each step finishes. You do not need to reload or
 
 ---
 
-## Failed Tests
+## Failed tests
 
 The first five failures are shown as full cards. Further failures are listed in a collapsed **more failed tests** section, and a very long list ends with a link to all failures in Xping.
 
@@ -139,7 +142,7 @@ The comment shows the class and method name, with its arguments for parameterise
 
 ---
 
-## AI Explanations
+## AI explanations
 
 On the **Team** and **Enterprise** plans, the first five failures of each commit get a short AI explanation, marked with âœ¨. It reads the same facts as the verdict, plus the error, and suggests a likely cause.
 
@@ -155,7 +158,7 @@ Each explanation counts toward your workspace's monthly AI analysis limit, share
 
 ---
 
-## Became Flaky During This PR
+## Became flaky during this PR
 
 This list names tests that flaky detection flagged while this PR ran but that did **not** fail at the head commit (for example, they passed after a retry). Each row shows the test, its project, the kind of flakiness and its severity. A flagged test that did fail is shown in **Failed tests** instead, with the verdict *Became flaky during this PR*.
 
@@ -179,7 +182,7 @@ The reliability line compares each project's [session reliability score](session
 
 ---
 
-## The Projects Section
+## The projects section
 
 The collapsed **Projects** section holds the details:
 
@@ -189,7 +192,7 @@ The collapsed **Projects** section holds the details:
 
 ---
 
-## The Failure Page
+## The failure page
 
 Every test name in the comment links to a page in Xping about that test **in this pull request**. It shows:
 
@@ -203,7 +206,7 @@ The comment's *compare* and *see the detection* links jump straight to the match
 
 ---
 
-## Common Questions
+## Common questions
 
 **The comment did not update after my last push.**
 The comment updates when results for your latest commit arrive. If your CI has not run the tests yet, the comment still shows the previous commit (its commit is in the counts line and in the footer).
@@ -219,7 +222,7 @@ Yes. An Owner or Admin can pause comments for the whole workspace (**Settings â†
 
 ---
 
-## See Also
+## See also
 
 - [Confidence scores](confidence-scores.md)
 - [Session reliability score](session-reliability-score.md)

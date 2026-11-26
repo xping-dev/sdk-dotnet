@@ -5,6 +5,9 @@ title: Xping Cloud data in the CLI
 
 # Xping Cloud data in the CLI
 
+This page explains the Xping Cloud data that `xping report` adds to the local report. It is for
+developers who use the CLI with a Xping Cloud account.
+
 `xping report` works without an account. When the CLI has a Xping Cloud credential, the report also
 shows what Xping Cloud knows about the tests it lists, and which other tests in your window Cloud
 flags. This is how you see Cloud's verdicts, such as `cloud known-flaky` or
@@ -27,7 +30,7 @@ A credential that can read Cloud data. The CLI uses the first of these it finds:
 
 - The stored sign-in comes before `XPING_APIKEY`. On a developer machine, that variable usually holds
   the SDK's upload key, which cannot read.
-- When the sign-in is no longer valid (revoked or expired), the CLI deletes it, prints the
+- When the sign-in is revoked or expired, the CLI deletes it, prints the
   `Run xping login` line, and tries the key from row 3 if there is one. It does not do this after a
   network error.
 - An API key can read only when it has the Read scope and the workspace's plan includes API access.
@@ -69,7 +72,7 @@ Cloud values belong to fixed windows, and each value names its window: `35 d`, `
   `cloud: no test flagged`. It ends in `(partial)` when Cloud did not finish reading the suite. The
   [overview](command-reference.md#scoping) prints the same line for each assembly.
 - **The confidence line** comes first under the name of every finding that Cloud has scored: the
-  score, its change, Cloud's score category and the window. With too little evidence, it reads
+  score, its change, Cloud's [score category](../cloud/confidence-scores.md#score-categories) and the window. With too little evidence, it reads
   `cloud: evidence sparse (ESS 4 of 10, 14 d)`. The score and the verdict are Cloud's own. The
   verdict is not a threshold on the score.
 - **The label** says whose word it is.
@@ -153,7 +156,7 @@ report, so it is copied with it:
 | Line | Meaning |
 |---|---|
 | `cloud: unavailable (budget) · showing local results only` | The four seconds ran out. Other reasons are `timeout`, `network`, `server`, `rate-limited`, `invalid-response` and `not-found` |
-| `cloud: login required · run xping login` | The sign-in is no longer valid |
+| `cloud: login required · run xping login` | The sign-in is revoked or expired |
 | `cloud: forbidden · API keys need the Team plan; run xping login instead` | The workspace's plan does not let an API key read |
 | `cloud: forbidden · showing local results only` | Cloud refused to answer for this sign-in |
 | `cloud: partial, 9 of 14 tests answered (timeout)` | Cloud answered for some tests |

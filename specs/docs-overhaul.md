@@ -2068,6 +2068,7 @@ No open questions remain from Phase 0. If a later phase finds a new decision it 
 | Q6 | P8 | How are the read API samples captured? | **Decided (2026-11-23): live calls.** Claude runs the AppHost from a clean copy of dashboard `origin/main` on the existing dev volumes. The user signs in once with `xping login`. Every endpoint is called, and the output is anonymized. |
 | Q7 | P8 | `SubscriptionPlan` lists Score Breakdown (Basic+), Trend Analysis and Environment Comparison (Pro+), but no code checks these features (no `SubscriptionFeature.<name>` reference outside `Xping.Domain/Entities/Subscription`), so every plan sees them. Only `ApiAccess` (`ApiScope.RequiredFeature`, `ApiKeyValidator.cs:115-117`), `PrComments` and `AiTestAnalysis` are enforced. What does plans-and-retention say? | **Decided (2026-11-23): document the enforced gates only.** Link xping.io/pricing for the full feature list. xping-dev/dashboard#528 tracks the missing gates. |
 | Q8 | P8 | Does read-api publish the rate-limit numbers (`RateLimitPolicyResolver.cs:28-55`)? | **Decided (2026-11-23): no.** Describe the four windows, the `X-RateLimit-*` and `Retry-After` headers and the 429 body, and say the limits depend on the plan. |
+| Q9 | P12 | The glossary leaves "test run" vs "session" open. Pages use "run" about 1,200 times and "session" about 260 times. Which word do the docs use? | **Decided (2026-11-26): "run".** Prose says "run" everywhere. "Session" stays only inside names and identifiers: `SessionId`, `TestSession`, the read API's `sessions` endpoints and fields, the local store's `session-*.json.gz` files, and the Session reliability score. collected-data defines a run and says the SDK and the read API call it a session. |
 
 ---
 
@@ -2106,7 +2107,7 @@ No open questions remain from Phase 0. If a later phase finds a new decision it 
 
 | Term | Meaning | Defined on |
 |---|---|---|
-| test run / session | One `dotnet test` invocation recorded by the SDK. Pick one word in P12 and use it everywhere. The code uses "session" and the CLI says "runs". | collected-data |
+| run | One `dotnet test` invocation recorded by the SDK, for one test assembly or more. The SDK's API and the read API call it a session (Q9). | collected-data |
 | execution | One test's result within a session. | collected-data |
 | local store | The folder where the SDK writes sessions and the CLI reads them. | local-store |
 | finding | Something `xping report` observed in local history, with a kind. | reading-the-report |

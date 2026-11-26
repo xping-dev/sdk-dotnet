@@ -6,12 +6,13 @@ title: Reading the report
 # Reading the report
 
 `xping report` reads the runs in the [local store](../configuration/local-store.md) and prints what
-it observed in them. This page explains each part of that output. For the commands and options, see
+it observed in them. This page explains each part of that output, for developers who read the report. For the commands and options, see
 the [command reference](command-reference.md). For the lines Xping Cloud adds, see
 [Xping Cloud data in the CLI](cloud-data.md).
 
 The report describes what happened on this machine. It does not score a test, and it does not say
-why a test failed. Each [finding](#finding-kinds) is an observation with a count behind it.
+why a test failed. Each **finding** is an observation with a count behind it, and it has a
+[finding kind](#finding-kinds).
 
 ---
 
@@ -227,7 +228,7 @@ population marker, because it describes one run.
 
 ## Evidence
 
-The first part of a finding's trailer is its evidence level. It says how many runs the finding's
+The first part of a finding's trailer is its **evidence** level. It says how many runs the finding's
 claim was computed from:
 
 | Level | Runs behind the finding |
@@ -241,7 +242,8 @@ reads only the runs that recorded a clock. A `slower` finding reads only the run
 could be compared. So one test can have two findings with two different levels. `evidenceSessions`
 in the JSON gives the exact number.
 
-Xping Cloud uses the same three words for its own evidence level, with its own cut-offs (an
+Xping Cloud uses the same three words for its own
+[evidence level](../cloud/confidence-scores.md#evidence), with its own cut-offs (an
 effective sample size below 15 is `sparse`, and 40 or more is `robust`). A finding can be
 `evidence robust` locally and `cloud evidence adequate` at the same time.
 
@@ -322,7 +324,7 @@ either in such a run or not.
 
 ## Finding kinds
 
-Every value `--kind` accepts. The second column is how the report prints the kind.
+A **finding kind** says what the report observed. The table lists every value `--kind` accepts. The second column is how the report prints the kind.
 
 | Kind | Printed as | What the report observed |
 |---|---|---|
@@ -535,7 +537,7 @@ Each mode reads:
   - `since its first run in the window`: the mode was there in the test's first run in the window.
     A group reads `since its tests first ran in the window`. Under `--test`, a test whose only run is
     the newest reads `since its first run, the latest`.
-  - `first seen in the latest run`: the mode is new in the newest run.
+  - `first seen in the latest run`: the mode first appears in the newest run.
   - `first seen <date> at <sha>, N runs ago`: the mode appeared after the test's first run. The date
     and commit are those of the oldest failure the finding counted. When the mode's older failures
     are in runs the finding set aside, that failure can be newer than the mode, down to

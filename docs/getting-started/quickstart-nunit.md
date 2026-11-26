@@ -40,7 +40,7 @@ All Xping packages are prereleases, so the command needs `--prerelease`. To add 
 
 ---
 
-## Step 2: Start and end the session
+## Step 2: Start and end the run
 
 Add one file to the root of your test project, for example `XpingSetup.cs`:
 
@@ -64,8 +64,8 @@ public class XpingSetup
 
 - `[assembly: XpingTrack]` tracks every test in the assembly.
 - The setup fixture has no namespace, so it runs once for the whole assembly.
-- `FinalizeAndShutdownAsync` ends the session, writes it to the local store and uploads what is
-  left. **Without the `[OneTimeTearDown]` method, the session never ends:** the local store gets
+- `FinalizeAndShutdownAsync` ends the run, writes it to the [local store](../configuration/local-store.md) and uploads what is
+  left. **Without the `[OneTimeTearDown]` method, the run never ends:** the local store gets
   nothing, and Xping Cloud gets only the batches the SDK uploaded during the run.
 
 The project includes the file by default. Do not add a `<Compile Include="..." />` item for it: an
@@ -100,7 +100,7 @@ The setup fixture is still needed.
 dotnet test
 ```
 
-When you run `dotnet test` in a terminal, the SDK prints one line when the session starts:
+When you run `dotnet test` in a terminal, the SDK prints one line when the run starts:
 
 ```
 [Xping 17:28:04 INF] Initialized in local-only mode. SessionId: "6bec32b0-922b-4b9b-bcb9-fb4e1056180f", Environment: Default. No API key configured - results stay on this machine.
@@ -181,7 +181,7 @@ Detail of row 1: xping report --id f_2b84a621 --assembly MyTestProject
 
 ## Upload to Xping Cloud
 
-Xping Cloud adds confidence scores, flaky-test detection and pull request comments, across CI and
+Xping Cloud adds [confidence scores](../cloud/confidence-scores.md), flaky-test detection and pull request comments, across CI and
 every machine. Access is by invitation.
 
 1. In Xping Cloud, open **Settings → API keys** and create a key with only the Upload scope. See [API keys](../cloud/connect.md#api-keys).
@@ -193,20 +193,20 @@ every machine. Access is by invitation.
    set XPING_APIKEY=your-api-key             # Command Prompt
    ```
 
-3. Run `dotnet test`. The start line no longer says local-only:
+3. Run `dotnet test`. The start line does not say local-only:
 
    ```
    [Xping 09:14:02 INF] Initialized. SessionId: "0f3c9a1e-5b7d-4c2a-9e61-2d8b4f7a3c10", Environment: Default
    ```
 
    The SDK prints one line for each upload that Xping Cloud accepts. The upload at the end of the
-   session prints:
+   run prints:
 
    ```
    [Xping 09:14:05 INF] Finalization receipt 7c1e04b2 (312ms, 4.6 KB)
    ```
 
-   An upload during the session prints `Published 100 tests in 287ms (38.2 KB) · receipt 3a9d51f0`.
+   An upload during the run prints `Published 100 tests in 287ms (38.2 KB) · receipt 3a9d51f0`.
    When an upload fails, the SDK prints an error that says why. The test run does not fail, unless
    you turn on [strict mode](#strict-mode).
 

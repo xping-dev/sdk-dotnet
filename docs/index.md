@@ -23,11 +23,11 @@ When you, or a coding agent, fix a test from one red run, the usual fixes hide t
 
 | The fix | The result |
 | ------- | ---------- |
-| Loosen the assertion | The test runs, but it no longer checks the thing that broke. |
+| Loosen the assertion | The test runs, but it does not check the thing that broke. |
 | Add a retry | A real failure that you can reproduce passes on the third attempt. |
 | Increase the timeout | The race condition is still there. It happens less often, so it is harder to find in CI. |
 | Move the test into its own `[Collection]` | The tests run one after another. The shared-state bug is still there, and every build is slower. |
-| Mock the dependency that failed | The test always passes, because it no longer runs the code that broke. |
+| Mock the dependency that failed | The test always passes, because it does not run the code that broke. |
 
 Each of these fixes makes sense when you have only one run. Xping keeps the history of every run,
 so you can decide from many runs instead. Your test code does not change.
@@ -118,7 +118,7 @@ references:
 # [NUnit](#tab/nunit)
 
 Add one file. It tracks every test in the assembly, and its setup fixture starts and ends the Xping
-session:
+run:
 
 ```csharp
 using System.Threading.Tasks;
@@ -138,14 +138,14 @@ public class XpingSetup
 }
 ```
 
-Keep the `[OneTimeTearDown]` method. The SDK writes the run to the local store when the session
-ends, and without this method the session never ends.
+Keep the `[OneTimeTearDown]` method. The SDK writes the run to the local store when it ends,
+and without this method the run never ends.
 
 [Quick start: NUnit →](getting-started/quickstart-nunit.md)
 
 # [MSTest](#tab/mstest)
 
-Add one class that starts and ends the Xping session, and make your test classes inherit from
+Add one class that starts and ends the run, and make your test classes inherit from
 `XpingTestBase`:
 
 ```csharp
@@ -254,7 +254,7 @@ With several test projects, `xping report` prints one row per assembly. Add `--a
 the findings of one assembly. When the store holds several assemblies, `--kind`, `--top` and `--all` need `--assembly`. See
 [Scoping](cli/command-reference.md#scoping).
 
-For every flag, finding kind and the JSON schema, see the
+For every flag, [finding kind](cli/reading-the-report.md#finding-kinds) and the JSON schema, see the
 [Command reference](cli/command-reference.md).
 
 ---

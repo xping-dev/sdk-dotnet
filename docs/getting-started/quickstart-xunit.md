@@ -113,7 +113,7 @@ xUnit v3 takes the type of the framework, not its name.
 
 xUnit then runs your tests through the Xping test framework, which records every test in the
 assembly. You do not add attributes to your tests, and you do not write a setup class: the
-framework starts the session before the first test and ends it after the last one.
+framework starts the run before the first test and ends it after the last one.
 
 ---
 
@@ -123,7 +123,7 @@ framework starts the session before the first test and ends it after the last on
 dotnet test
 ```
 
-When you run `dotnet test` in a terminal, the SDK prints one line when the session starts:
+When you run `dotnet test` in a terminal, the SDK prints one line when the run starts:
 
 ```
 [Xping 17:28:04 INF] Initialized in local-only mode. SessionId: "6bec32b0-922b-4b9b-bcb9-fb4e1056180f", Environment: Default. No API key configured - results stay on this machine.
@@ -196,7 +196,7 @@ Detail of row 1: xping report --id f_2b84a621 --assembly MyTestProject
 
 ## Upload to Xping Cloud
 
-Xping Cloud adds confidence scores, flaky-test detection and pull request comments, across CI and
+Xping Cloud adds [confidence scores](../cloud/confidence-scores.md), flaky-test detection and pull request comments, across CI and
 every machine. Access is by invitation.
 
 1. In Xping Cloud, open **Settings → API keys** and create a key with only the Upload scope. See [API keys](../cloud/connect.md#api-keys).
@@ -209,27 +209,27 @@ every machine. Access is by invitation.
    ```
 
 3. Run `dotnet test`. On xUnit v3, run `dotnet run` instead, to see the SDK's lines. The start line
-   no longer says local-only:
+   does not say local-only:
 
    ```
    [Xping 09:14:02 INF] Initialized. SessionId: "0f3c9a1e-5b7d-4c2a-9e61-2d8b4f7a3c10", Environment: Default
    ```
 
    The SDK prints one line for each upload that Xping Cloud accepts. The upload at the end of the
-   session prints:
+   run prints:
 
    ```
    [Xping 09:14:05 INF] Finalization receipt 7c1e04b2 (312ms, 4.6 KB)
    ```
 
-   An upload during the session prints `Published 100 tests in 287ms (38.2 KB) · receipt 3a9d51f0`.
+   An upload during the run prints `Published 100 tests in 287ms (38.2 KB) · receipt 3a9d51f0`.
    When an upload fails, the SDK prints an error that says why. The test run does not fail, unless
    you turn on [strict mode](../configuration/configuration-reference.md#strictmode).
 
 Keep the key out of your repository. Do not put it in `appsettings.json`: that file is committed
 and copied into the build output. In CI, store it as a secret. See [Set up CI](ci-cd-setup.md).
 
-The SDK keeps writing the local store in Xping Cloud mode, so `xping report` still works.
+The SDK keeps writing the [local store](../configuration/local-store.md) in Xping Cloud mode, so `xping report` still works.
 
 You do not name a project. Xping Cloud creates one project for each test assembly, on the first
 upload. To send several assemblies to one project, set

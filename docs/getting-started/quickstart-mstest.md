@@ -14,7 +14,7 @@ is for developers who use MSTest 3.8 or later.
 
 - A test project that uses **MSTest 3.8** or later. To create one, run
   `dotnet new mstest -n MyTestProject`. MSTest 3.7 skips `[AssemblyCleanup]` when tests run in
-  parallel at method level, and that method ends the Xping session.
+  parallel at method level, and that method ends the run.
 - A test project that targets .NET Framework 4.6.2 or later, or .NET 8 or later.
 - The .NET 10 SDK or runtime, for the `xping` CLI.
 
@@ -41,7 +41,7 @@ All Xping packages are prereleases, so the command needs `--prerelease`. To add 
 
 ---
 
-## Step 2: Start and end the session
+## Step 2: Start and end the run
 
 Add one class to your test project, for example `XpingSetup.cs`:
 
@@ -62,13 +62,13 @@ public static class XpingSetup
 ```
 
 MSTest runs assembly hooks only from the test assembly itself, so this class must be in your test
-project. `FinalizeAndShutdownAsync` ends the session, writes it to the local store and uploads what
+project. `FinalizeAndShutdownAsync` ends the run, writes it to the [local store](../configuration/local-store.md) and uploads what
 is left.
 
-When no `[AssemblyCleanup]` method ends the session, the SDK ends it when the test process exits,
+When no `[AssemblyCleanup]` method ends the run, the SDK ends it when the test process exits,
 and prints a warning. The local store still gets the run. On vstest, the upload to Xping Cloud
 usually does not finish, because vstest stops the test process 100 ms after the run. See
-[Known limitations](../troubleshooting/known-limitations.md#mstest-a-session-finalized-by-the-process-exit-safety-net-loses-its-upload-on-vstest).
+[Known limitations](../troubleshooting/known-limitations.md#mstest-a-run-finalized-by-the-process-exit-safety-net-loses-its-upload-on-vstest).
 
 ---
 
@@ -102,7 +102,7 @@ records only the tests of classes that inherit from it.
 dotnet test
 ```
 
-When you run `dotnet test` in a terminal, the SDK prints one line when the session starts:
+When you run `dotnet test` in a terminal, the SDK prints one line when the run starts:
 
 ```
 [Xping 17:28:04 INF] Initialized in local-only mode. SessionId: "6bec32b0-922b-4b9b-bcb9-fb4e1056180f", Environment: Default. No API key configured - results stay on this machine.
@@ -133,7 +133,7 @@ Then run the test executable, or run `dotnet test` with this `global.json` next 
 
 For a TRX report, reference `Microsoft.Testing.Extensions.TrxReport` and pass `--report-trx`.
 
-Microsoft.Testing.Platform lets the SDK finish the upload when the process exits, so a session
+Microsoft.Testing.Platform lets the SDK finish the upload when the process exits, so a run
 that no `[AssemblyCleanup]` ended still reaches Xping Cloud.
 
 ---
@@ -186,7 +186,7 @@ Detail of row 1: xping report --id f_2b84a621 --assembly MyTestProject
 
 ## Upload to Xping Cloud
 
-Xping Cloud adds confidence scores, flaky-test detection and pull request comments, across CI and
+Xping Cloud adds [confidence scores](../cloud/confidence-scores.md), flaky-test detection and pull request comments, across CI and
 every machine. Access is by invitation.
 
 1. In Xping Cloud, open **Settings → API keys** and create a key with only the Upload scope. See [API keys](../cloud/connect.md#api-keys).
@@ -198,20 +198,20 @@ every machine. Access is by invitation.
    set XPING_APIKEY=your-api-key             # Command Prompt
    ```
 
-3. Run `dotnet test`. The start line no longer says local-only:
+3. Run `dotnet test`. The start line does not say local-only:
 
    ```
    [Xping 09:14:02 INF] Initialized. SessionId: "0f3c9a1e-5b7d-4c2a-9e61-2d8b4f7a3c10", Environment: Default
    ```
 
    The SDK prints one line for each upload that Xping Cloud accepts. The upload at the end of the
-   session prints:
+   run prints:
 
    ```
    [Xping 09:14:05 INF] Finalization receipt 7c1e04b2 (312ms, 4.6 KB)
    ```
 
-   An upload during the session prints `Published 100 tests in 287ms (38.2 KB) · receipt 3a9d51f0`.
+   An upload during the run prints `Published 100 tests in 287ms (38.2 KB) · receipt 3a9d51f0`.
    When an upload fails, the SDK prints an error that says why. The test run does not fail, unless
    you turn on [strict mode](#strict-mode).
 

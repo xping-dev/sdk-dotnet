@@ -5,10 +5,11 @@ title: Plans and retention
 
 # Plans and retention
 
-Xping Cloud has five plans: **Trial**, **Basic**, **Pro**, **Team** and **Enterprise**. Each plan
-includes every feature of the plans before it.
+This page explains what the plans change in Xping Cloud's behaviour, how long Xping Cloud keeps your
+data, and how committers are counted. It is for workspace Owners and Admins.
 
-This page describes what the plans change in Xping Cloud's behaviour. For prices, limits and the full
+Xping Cloud has five plans: **Trial**, **Basic**, **Pro**, **Team** and **Enterprise**. Each plan
+includes every feature of the plans before it. For prices, limits and the full
 feature list of each plan, see [xping.io/pricing](https://xping.io/pricing).
 
 ---
@@ -26,7 +27,7 @@ Uploads, confidence scores and flaky detection work on every plan. These feature
 The `xping` CLI reads Xping Cloud data on every plan after `xping login`. See
 [Xping Cloud data in the CLI](../cli/cloud-data.md).
 
-AI session summaries work on every plan.
+AI summaries of a run work on every plan.
 
 ---
 
@@ -54,8 +55,8 @@ Each plan keeps your data for a fixed number of days. Trial and Basic keep it th
 Pro keeps it longer, and Team and Enterprise keep it the longest. See
 [xping.io/pricing](https://xping.io/pricing) for the days.
 
-When a test session is older than your plan's retention, Xping Cloud deletes it, with its test
-executions and its uploads. It also deletes PR comment data whose newest run is that old. A test's
+When a test run is older than your plan's retention, Xping Cloud deletes it, with its test
+[executions](../configuration/collected-data.md#each-execution) and its uploads. It also deletes PR comment data whose newest run is that old. A test's
 confidence scores and flaky state stay.
 
 Confidence scores read about the last five weeks of runs. Every plan keeps runs for at least that

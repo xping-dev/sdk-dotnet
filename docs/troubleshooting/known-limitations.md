@@ -6,7 +6,7 @@ title: Known limitations
 # Known limitations
 
 This page lists what the SDK does not record, or records differently from what you might expect,
-for each test framework.
+for each test framework. It is for developers who set up the SDK or read its results.
 
 ## Requirements
 
@@ -39,7 +39,7 @@ workaround.
 
 #### Retry attempts are numbered by counting
 
-Two runs of the same test identity in one session are recorded as attempt 1 and attempt 2 of a
+Two executions of the same test identity in one run are recorded as attempt 1 and attempt 2 of a
 retry, whether or not a retry produced them.
 
 MSTest runs the whole per-test lifecycle again for each retried attempt. A retry attribute derived
@@ -185,7 +185,7 @@ identity under xUnit's console runner than under vstest or Microsoft.Testing.Pla
 
 #### The runner is unknown under xUnit's own console runner
 
-A session recorded by `xunit.v3.runner.console`, or by running the test executable directly without
+A run recorded by `xunit.v3.runner.console`, or by running the test executable directly without
 Microsoft.Testing.Platform, has no `Xping.Runner` property. `xping report` then prints no command to
 run a test again.
 
@@ -322,9 +322,9 @@ When `[ClassInitialize]` fails, MSTest stops the class before any `[TestInitiali
 
 To work around this, move the work into `[TestInitialize]`, which Xping records.
 
-### MSTest: a session finalized by the process-exit safety net loses its upload on vstest
+### MSTest: a run finalized by the process-exit safety net loses its upload on vstest
 
-When no `[AssemblyCleanup]` finalizes the session, the SDK finalizes it from a safety net that runs
+When no `[AssemblyCleanup]` finalizes the run, the SDK finalizes it from a safety net that runs
 as the process exits. It writes the local history, so `xping report` sees the run. But on vstest the
 **Xping Cloud upload is usually lost**. On Microsoft.Testing.Platform the upload completes.
 

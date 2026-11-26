@@ -5,6 +5,9 @@ title: Session reliability score
 
 # Session reliability score
 
+This page explains the score that Xping Cloud gives a whole test run. It is for anyone who reads
+run results in Xping Cloud or in a pull request comment.
+
 The **session reliability score** is one number from 0.00 to 1.00 for one test run. It combines the
 [confidence scores](confidence-scores.md) of the tests that ran in it. It answers the question:
 "How much can I trust this run as a whole?"
@@ -78,7 +81,7 @@ When no earlier run matches, the page shows no comparison.
 
 ## Evidence
 
-A session also has an evidence level: `Sparse`, `Adequate` or `Robust`. It is the lower of two
+A run also has an evidence level: `Sparse`, `Adequate` or `Robust`. It is the lower of two
 measurements:
 
 - the share of the run's tests that have a confidence score: below 30% is `Sparse`, 30% to below

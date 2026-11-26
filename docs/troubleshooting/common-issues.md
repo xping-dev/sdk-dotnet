@@ -5,7 +5,8 @@ title: Common issues
 
 # Common issues
 
-This page lists the problems people run into most often, and how to fix them. Most fixes start with
+This page lists the problems developers run into most often with the SDK and the CLI, and how to
+fix them. Most fixes start with
 the SDK's own output. To see it, and to read each line, see [Debugging](debugging.md).
 
 ---
@@ -53,20 +54,20 @@ the Upload scope. See [API keys](../cloud/connect.md#api-keys).
 The SDK records nothing. The line names each setting that breaks a rule. See
 [Validation rules](../configuration/configuration-reference.md#validation-rules).
 
-### The session never ends
+### The run never ends
 
-The SDK sends the last results when the session ends. On NUnit and MSTest, your own code ends it:
+The SDK sends the last results when the run ends. On NUnit and MSTest, your own code ends it:
 
 - **NUnit:** the `[OneTimeTearDown]` method of a `[SetUpFixture]` must call
   `XpingContext.FinalizeAndShutdownAsync()`. See the
   [NUnit quickstart](../getting-started/quickstart-nunit.md).
 - **MSTest:** an `[AssemblyCleanup]` method in the test assembly must call
   `XpingContext.FinalizeAndShutdownAsync()`. See the
-  [MSTest quickstart](../getting-started/quickstart-mstest.md). Without it, the SDK ends the session
+  [MSTest quickstart](../getting-started/quickstart-mstest.md). Without it, the SDK ends the run
   as the process exits, and on vstest the upload is usually lost. See
-  [Known limitations](known-limitations.md#mstest-a-session-finalized-by-the-process-exit-safety-net-loses-its-upload-on-vstest).
+  [Known limitations](known-limitations.md#mstest-a-run-finalized-by-the-process-exit-safety-net-loses-its-upload-on-vstest).
 
-xUnit v2 and v3 end the session themselves, through the `[assembly: TestFramework(...)]` attribute.
+xUnit v2 and v3 end the run themselves, through the `[assembly: TestFramework(...)]` attribute.
 See the [xUnit quickstart](../getting-started/quickstart-xunit.md).
 
 ### The upload failed
@@ -96,7 +97,7 @@ For example:
   plan limit, it says which limit the run reached.
 - The `Action:` is what the SDK suggests for that code.
 
-When the same error repeats in the session, the SDK prints a short line, such as
+When the same error repeats in the run, the SDK prints a short line, such as
 `Same HTTP 401 error (2nd occurrence, batch size: 0)`.
 
 The SDK retries a 5xx response and a 429. It does not retry any other 4xx response.
@@ -253,7 +254,7 @@ The active test run was aborted. Reason: Test host process crashed : …
 ```
 
 By default, an upload failure never fails your tests. The SDK retries the upload, logs the error,
-and the local store still gets the run. With [`StrictMode`](../configuration/configuration-reference.md#strictmode)
+and the [local store](../configuration/local-store.md) still gets the run. With [`StrictMode`](../configuration/configuration-reference.md#strictmode)
 on (`XPING_STRICTMODE=true`), the same failure fails the run, so a CI pipeline notices that it could
 not record its tests. Every test that ran stays in the TRX file and the other reports.
 
@@ -398,10 +399,10 @@ To find flaky tests from the runs on your machine, run `xping report`. See
 ## The run is slow, or uses a lot of memory
 
 To find out whether the SDK slows the run, run once with `XPING_ENABLED=false` and compare. A pause
-after the last test is usually the uploads at the end of the session. Each upload stops after twice
+after the last test is usually the uploads at the end of the run. Each upload stops after twice
 `UploadTimeout`, but a failing endpoint can hold up the end of the run for several of these waits.
 
-The SDK keeps every test execution of the run in memory until the session ends, so memory grows with
+The SDK keeps every test [execution](../configuration/collected-data.md#each-execution) of the run in memory until the run ends, so memory grows with
 the size of the run. `BatchSize` does not limit it.
 
 See [Performance](../performance/performance.md).

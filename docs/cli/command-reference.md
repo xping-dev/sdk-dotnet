@@ -1,15 +1,15 @@
 ---
 uid: cli-command-reference
-title: Xping CLI Reference
+title: Command reference
 ---
 
-# Xping CLI Reference
+# Command reference
 
-The `xping` command reads the local run store that the Xping SDK writes, and reports on it. The
+The `xping` command reads the [local store](../configuration/local-store.md) that the Xping SDK writes, and reports on it. The
 report needs no account, no API key and no network access.
 
-This page lists every command, option, exit code and output stream. Two other pages explain the
-output:
+This page lists every command, option, exit code and output stream. It is for developers, and for
+the scripts and CI steps that run the CLI. Two other pages explain the output:
 
 - [Reading the report](reading-the-report.md): the findings, evidence, population markers, failure
   modes, repro commands and test history.
@@ -260,7 +260,7 @@ The top-level keys are `schemaVersion`, `scope`, `window`, `context`, `summary`,
 - `evidence`, the raw values both were computed from;
 - `evidenceLevel` and `evidenceSessions`, the number of runs the level was computed from;
 - `population`: `allExecutions`, `excludesEnvironmental`, `excludesEnvironmentalAndClustered` or
-  `excludesPartialRuns`. It says what the finding's published rate was counted out of: executions,
+  `excludesPartialRuns`. It says what the finding's published rate was counted out of: [executions](../configuration/collected-data.md#each-execution),
   or runs for `excludesPartialRuns`. It applies to that rate only. A `stopped running` finding
   counts its appearances over full runs, while its `executionsInWindow` covers the whole window. See
   [the population marker](reading-the-report.md#the-population-marker);
@@ -947,7 +947,7 @@ code is the one your shell reports for an interrupted process.
 | `~/.xping/locks/` | Lock files that stop two commands from refreshing a sign-in at the same time |
 
 `xping logout` removes the sign-in and the caches for that Cloud URL. You can delete the caches at
-any time. This folder is not the local run store. See [Local store](../configuration/local-store.md).
+any time. This folder is not the local store. See [Local store](../configuration/local-store.md).
 
 ---
 
