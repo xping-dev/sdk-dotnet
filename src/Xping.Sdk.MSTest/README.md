@@ -1,95 +1,67 @@
 # Xping.Sdk.MSTest
 
-MSTest test framework adapter for Xping SDK. Automatically tracks MSTest test executions and uploads results to the Xping platform.
-
-## Features
-
-- **Automatic Test Tracking**: Inherit from `XpingTestBase` for automatic tracking
-- **Rich Metadata Extraction**: Captures test categories, properties, and data rows
-- **Outcome Mapping**: Maps all MSTest outcomes to Xping test outcomes
-- **Data-driven test support**: Tracks each `[DataRow]` execution separately
-- **Thread-Safe**: Fully safe for parallel test execution
+MSTest adapter for the Xping SDK, for MSTest 3.8 or later. It records each test execution to the
+local store and, with an API key, uploads it to Xping Cloud. The test project must target .NET
+Framework 4.6.2 or later, or .NET 8 or later.
 
 ## Installation
 
-Add the NuGet package reference to your MSTest test project:
-
-```xml
-<ItemGroup>
-  <PackageReference Include="Xping.Sdk.MSTest" Version="1.0.0" />
-</ItemGroup>
+```bash
+dotnet add package Xping.Sdk.MSTest --prerelease
 ```
 
-Requires **MSTest 3.8 or later** (`MSTest.TestFramework` and `MSTest.TestAdapter`). MSTest 3.7.x skips
-`[AssemblyCleanup]` under method-level parallelization, which is the hook that finalizes the session;
-see [Troubleshooting](#session-finalized-by-the-process-exit-safety-net).
+All Xping packages are prereleases, so the command needs `--prerelease`.
 
-## Quick Start
+The adapter needs **MSTest 3.8 or later** (`MSTest.TestFramework` and `MSTest.TestAdapter`). MSTest
+3.7 skips `[AssemblyCleanup]` when tests run in parallel at method level, and that method ends the
+Xping session.
 
-### 1. Add an assembly setup class
+## Quick start
 
-The setup class starts the SDK before the first test and finalizes the session after the last one,
-which is when results are written and uploaded. MSTest runs `[AssemblyInitialize]` and
-`[AssemblyCleanup]` only from the test assembly itself, so the class goes in your test project; the
-package cannot ship it for you. Add it once per test project:
+Add one class that starts and ends the session, and make each test class inherit from
+`XpingTestBase`:
 
 ```csharp
+using System.Threading.Tasks;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xping.Sdk.MSTest;
+
 [TestClass]
 public static class XpingSetup
 {
     [AssemblyInitialize]
-    public static void AssemblyInit(TestContext context)
-    {
-        XpingContext.Initialize();
-    }
+    public static void AssemblyInit(TestContext context) => XpingContext.Initialize();
 
     [AssemblyCleanup]
-    public static async Task AssemblyCleanup()
-    {
-        await XpingContext.FinalizeAndShutdownAsync();
-    }
+    public static async Task AssemblyCleanup() => await XpingContext.FinalizeAndShutdownAsync();
 }
-```
 
-Without it, `XpingTestBase` still starts the SDK, and the
-[process-exit safety net](#session-finalized-by-the-process-exit-safety-net) finalizes the session.
-Local history is still written, but on vstest the upload to Xping Cloud usually does not complete.
-
-### 2. Inherit from XpingTestBase
-
-Every test class that should be tracked inherits from `XpingTestBase`:
-
-```csharp
 [TestClass]
 public class CalculatorTests : XpingTestBase
 {
     [TestMethod]
-    [TestCategory("Unit")]
-    public void Add_ReturnsSum()
-    {
-        var result = Calculator.Add(2, 3);
-        Assert.AreEqual(5, result);
-    }
-    
-    [TestMethod]
-    [DataRow(1, 2, 3)]
-    [DataRow(5, 5, 10)]
-    [TestCategory("Integration")]
-    public void Add_MultipleInputs_ReturnsExpectedSum(int a, int b, int expected)
-    {
-        var result = Calculator.Add(a, b);
-        Assert.AreEqual(expected, result);
-    }
+    public void Add_TwoNumbers_ReturnsSum() => Assert.AreEqual(5, 2 + 3);
 }
 ```
 
-### 3. Run Tests
+- MSTest runs assembly hooks only from the test assembly itself, so `XpingSetup` must be in your
+  test project.
+- `FinalizeAndShutdownAsync` ends the session, writes it to the local store and uploads what is
+  left.
+- `XpingTestBase` records each test in its `[TestInitialize]` and `[TestCleanup]` methods. The SDK
+  records only the tests of classes that inherit from it.
 
-```bash
-dotnet test
+When you run `dotnet test` in a terminal, the SDK prints a line when the session starts, and with
+an API key one line for each upload that Xping Cloud accepts:
+
+```
+[Xping 17:28:04 INF] Initialized in local-only mode. SessionId: "6bec32b0-922b-4b9b-bcb9-fb4e1056180f", Environment: Default. No API key configured - results stay on this machine.
 ```
 
-Every test in a class that inherits `XpingTestBase` is recorded. Results go to the local store, and to Xping Cloud when an API key is set.
+When the output goes to a file or a pipe, for example in a CI log, `dotnet test` shows these lines
+only with `--logger "console;verbosity=normal"`.
+
+The full guide is [Quick start: MSTest](https://docs.xping.io/getting-started/quickstart-mstest.html).
 
 ## Running on Microsoft.Testing.Platform
 
@@ -111,312 +83,100 @@ Strict mode fails the run through `[AssemblyCleanup]` on both runners. On MTP th
 [process-exit safety net](#session-finalized-by-the-process-exit-safety-net) completes its upload
 without `VSTEST_TESTHOST_SHUTDOWN_TIMEOUT`.
 
+## What is recorded
+
+- The outcome, mapped from MSTest's outcome:
+
+  | MSTest outcome | Xping outcome |
+  |---|---|
+  | Passed | Passed |
+  | Failed | Failed |
+  | Inconclusive | Inconclusive |
+  | Stopped by `[Timeout]` | Timeout |
+  | Aborted | Failed |
+  | Any other outcome | NotExecuted |
+
+  A test stopped by `[Timeout]` is recorded as `Timeout`, with the budget it declared. A test
+  stopped by a run-wide `TestTimeout` is recorded as `Timeout` without a budget. With cooperative
+  cancellation (`CooperativeCancellation = true`, or turned on for the whole run), a timed-out test
+  is recorded as `Failed` if it observes its token, or `Passed` if it ignores the token, as MSTest
+  reports it. See
+  [Known limitations](https://docs.xping.io/troubleshooting/known-limitations.html#timeouts).
+- The duration, the start and end times, and the error message and stack trace of a failure. The
+  stack trace text is uploaded only with `UploadStackTraces`.
+- Each `[DataRow]` as a separate test, with its arguments
+- `[TestProperty]` values, and the other entries of `TestContext.Properties`, as custom attributes
+- A fingerprint pinned with `[XpingFingerprint("...")]`, which keeps a test's history when you
+  rename it
+
+MSTest skips a test with `[Ignore]` before its `[TestInitialize]` method runs, so the SDK does not
+record it.
+
 ## Configuration
 
-The adapter uses the standard Xping configuration. Add a `"Xping"` section to your `appsettings.json` file:
+Without an API key, the SDK runs in local-only mode: it writes every run to `.xping/` in your
+repository and makes no network calls. Read the history with the `xping` CLI
+(`dotnet tool install -g Xping.Cli --prerelease`, then `xping report`).
 
-```json
-{
-  "Xping": {
-    "ApiKey": "your-api-key-here",
-    "ApiEndpoint": "https://upload.xping.io/v1",
-    "Environment": "Development",
-    "EnableOfflineQueue": true,
-    "MaxRetries": 3
-  }
-}
+To upload to Xping Cloud, create a key under **Settings → API keys**, with only the Upload scope,
+and set it as an environment variable:
+
+```bash
+export XPING_APIKEY="your-api-key"
 ```
 
-**Required Fields:**
-- `ApiKey` - Your Xping API authentication key (mandatory)
+Do not put the key in `appsettings.json`: that file is committed and copied into the build output.
+Other settings can go in the `"Xping"` section of `appsettings.json`, or in `XPING_*` environment
+variables, which win over the file. See the
+[Configuration reference](https://docs.xping.io/configuration/configuration-reference.html).
 
-**Optional Fields:**
-- `ProjectId` - Pins every test assembly in the run to one project. Omit it and Xping names the project after each test assembly, creating one project per test project.
-- `ApiEndpoint` - API server URL (default: `https://upload.xping.io/v1`)
-- `Environment` - The deployed environment the tests target (default: `Default`)
-- `EnableOfflineQueue` - Queue failed uploads for retry (default: `true`)
-- `MaxRetries` - Maximum retry attempts (default: `3`)
-
-Or use environment variables:
-- `XPING_APIKEY` (required)
-- `XPING_PROJECTID` (optional: pins every test assembly to one project instead of one project each)
-- `XPING_API_ENDPOINT`
-- `XPING_ENVIRONMENT`
-- `XPING_DEFAULTBRANCH` (optional: the default branch Xping Cloud uses for CI runs; replaces the one GitHub Actions and GitLab CI report)
-- `XPING_LOGLEVEL` (optional: `Debug` shows the SDK's diagnostics; default `Information`)
-
-## Metadata Extraction
-
-The adapter automatically extracts rich metadata from your MSTest tests:
+To build the configuration in code, pass it to `Initialize` in the `[AssemblyInitialize]` method:
 
 ```csharp
-[TestClass]
-public class ApiTests : XpingTestBase
-{
-    [TestMethod]
-    [TestCategory("Integration")]
-    [TestCategory("API")]
-    [TestProperty("Team", "BackendTeam")]
-    [TestProperty("Importance", "High")]
-    public void ApiAuthenticationTest()
-    {
-        // Test implementation
-    }
-}
+using Xping.Sdk.Core.Configuration;
+
+[AssemblyInitialize]
+public static void AssemblyInit(TestContext context) =>
+    XpingContext.Initialize(new XpingConfiguration { BatchSize = 200 });
 ```
 
-Extracted metadata:
-- **TestCategory**: Captured as categories
-- **TestProperty**: Captured as custom attributes and tags
-- **Data Rows**: Arguments captured for data-driven tests
-- **Test Context**: Results directory and other context information
-- **Framework**: mstest (automatically added)
+`XPING_*` environment variables still win over the values you pass. With a configuration object,
+the SDK reads no `appsettings.json` file. A later `XpingContext.Initialize()` in the same process
+reuses this configuration, so a long-lived process, such as an IDE's test server, keeps it across
+runs. `ShutdownAsync()` forgets it.
 
-## Data-Driven Test Support
+## Error handling
 
-Data-driven tests are fully supported:
-
-```csharp
-[TestClass]
-public class StringTests : XpingTestBase
-{
-    [TestMethod]
-    [DataRow("hello", 5)]
-    [DataRow("world", 5)]
-    [DataRow("", 0)]
-    [TestCategory("Unit")]
-    public void String_Length_ReturnsExpected(string input, int expectedLength)
-    {
-        Assert.AreEqual(expectedLength, input.Length);
-    }
-}
-```
-
-Each data row is tracked as a separate test execution with its arguments stored in metadata.
-
-## Outcome Mapping
-
-MSTest test outcomes are mapped to Xping outcomes:
-
-| MSTest Outcome | Xping Outcome |
-|---------------|---------------|
-| Passed | Passed |
-| Failed | Failed |
-| Inconclusive | Inconclusive |
-| Stopped by `[Timeout]` | Timeout |
-| Aborted | Failed |
-| Unknown | NotExecuted |
-| NotRunnable | NotExecuted |
-
-A test stopped by `[Timeout]` is recorded as `Timeout`, together with the budget it declared. A test
-stopped by a run-wide `TestTimeout` is recorded as `Timeout` without a budget. With cooperative
-cancellation (`CooperativeCancellation = true`, or turned on for the whole run), a timed-out test is
-recorded as `Failed` if it observes its token, or `Passed` if it ignores the token (MSTest passes it
-too). See
-[Known Limitations](https://docs.xping.io/known-limitations.html#timeouts).
-
-## Skipped Tests
-
-Tests with the `[Ignore]` attribute are tracked as skipped:
-
-```csharp
-[TestClass]
-public class SlowTests : XpingTestBase
-{
-    [TestMethod]
-    [Ignore("Takes too long to run regularly")]
-    public void SlowIntegrationTest()
-    {
-        // Test implementation
-    }
-}
-```
-
-## Advanced Usage
-
-### Programmatic Configuration
-
-You can initialize with custom configuration:
-
-```csharp
-[TestClass]
-public static class CustomTestSetup
-{
-    [AssemblyInitialize]
-    public static void AssemblyInit(TestContext context)
-    {
-        var config = new XpingConfiguration
-        {
-            ApiKey = "custom-key",
-            ProjectId = "custom-project-id",
-            ApiEndpoint = "https://custom.api.com",
-            Environment = "Production"
-        };
-        
-        XpingContext.Initialize(config);
-    }
-
-    [AssemblyCleanup]
-    public static async Task AssemblyCleanup()
-    {
-        await XpingContext.FinalizeAndShutdownAsync();
-    }
-}
-```
-
-A later parameterless `XpingContext.Initialize()` in the same process reuses this configuration,
-so a long-lived process, such as an IDE's test server, keeps it across runs. `ShutdownAsync()`
-forgets it. `Initialize(null)` throws `ArgumentNullException`.
-
-### TestContext Access
-
-The base class provides access to MSTest's `TestContext`:
-
-```csharp
-[TestClass]
-public class ContextTests : XpingTestBase
-{
-    [TestMethod]
-    public void TestUsingContext()
-    {
-        TestContext.WriteLine("This message appears in test output");
-        Assert.IsNotNull(TestContext);
-        Assert.IsNotNull(TestContext.TestName);
-    }
-}
-```
-
-### Manual Test Recording
-
-While not typically needed (automatic tracking handles this), you can manually record tests:
-
-```csharp
-var execution = new TestExecution
-{
-    ExecutionId = Guid.NewGuid(),
-    TestId = "custom-test-id",
-    TestName = "ManualTest",
-    Outcome = TestOutcome.Passed,
-    StartTimeUtc = DateTime.UtcNow.AddSeconds(-5),
-    EndTimeUtc = DateTime.UtcNow,
-    Duration = TimeSpan.FromSeconds(5)
-};
-
-XpingContext.RecordTest(execution);
-```
-
-## How It Works
-
-The MSTest adapter uses inheritance and attributes for test tracking:
-
-1. **XpingTestBase** - Base class with `[TestInitialize]` and `[TestCleanup]` methods that record each test
-2. **Your assembly setup class** - `[AssemblyInitialize]` and `[AssemblyCleanup]` that start the SDK and finalize the session
-3. **XpingContext** - Global context managing SDK lifecycle and test recording
-4. **TestContext** - MSTest's context providing test metadata and outcome
-
-Test timing uses high-resolution `Stopwatch.GetTimestamp()` for accurate duration measurement.
-
-## Thread Safety
-
-The adapter is fully thread-safe for parallel test execution:
-
-- **XpingContext**: Thread-safe singleton initialization with locking
-- **TestContext**: Per-test instance provided by MSTest framework
-- **Timing**: Uses per-test properties for thread-safe timing
-
-This design ensures safe execution when MSTest runs tests in parallel.
-
-## Error Handling
-
-The adapter includes comprehensive error handling:
-
-- Exceptions during test tracking are silently caught
-- Test results remain unaffected even if tracking fails
-- Failed uploads are retried automatically with exponential backoff
-- No impact on test execution or outcomes
+An SDK failure is logged, and the tests run as usual. In `StrictMode`, a failed upload makes
+`FinalizeAndShutdownAsync` throw. MSTest then fails the run and reports the error on the last test
+result.
 
 ## Troubleshooting
 
-### Tests not being tracked
-
-1. Verify your test class inherits from `XpingTestBase`
-2. Check `appsettings.json` has a `"Xping"` section with configuration, or set environment variables
-3. Verify API key and project ID are valid
-4. Check console output for Xping initialization messages
-
-### TestContext is null
-
-If `TestContext` is null in your test:
-1. Ensure you're using MSTest (not another framework)
-2. Verify the property is named exactly `TestContext`
-3. Check that it has a public setter
-
-### Configuration not found
-
-If no configuration is found, the adapter will:
-1. Look for `appsettings.json` with a `"Xping"` section in the current directory
-2. Check environment variables (with `XPING_` prefix)
-3. Fall back to default offline-only mode
-
 ### Session finalized by the process-exit safety net
 
-If the log shows `Process exiting with session ... still active`, no `[AssemblyCleanup]` finalized the
-session and the SDK did it from an `AppDomain.ProcessExit` handler instead. MSTest only runs assembly
-hooks declared in the test assembly itself, so make sure your test project declares one that calls
-`XpingContext.FinalizeAndShutdownAsync()` (see [Add an assembly setup class](#1-add-an-assembly-setup-class)), and
-that nothing in it throws before that call. (MSTest 3.7.x also skipped the hook under method-level
-parallelization; this package requires 3.8 or later, where that is fixed.)
+If the log shows `Process exiting with session ... still active`, no `[AssemblyCleanup]` method
+ended the session, and the SDK ended it when the test process exited. Make sure your test project
+declares the `XpingSetup` class from the [quick start](#quick-start), and that nothing in its
+`[AssemblyCleanup]` method throws before the `FinalizeAndShutdownAsync` call.
 
-The safety net writes local history to `.xping/` before it uploads, so `xping report` still sees the
-run. On vstest the cloud upload usually does not complete: vstest terminates the test host 100 ms
-after the run finishes, which is less than one network round trip. To give the upload time, set the
-timeout in the environment that runs `dotnet test` (it is read by the parent process, so the SDK
-cannot set it for you). On Microsoft.Testing.Platform the upload completes without it.
+The SDK writes the local store before it uploads, so `xping report` still sees the run. On vstest,
+the upload to Xping Cloud usually does not finish: vstest stops the test process 100 ms after the
+run, which is less than one network round trip. To give the upload time, set this timeout in the
+environment that runs `dotnet test`. The parent process reads it, so the SDK cannot set it for
+you. On Microsoft.Testing.Platform, the upload finishes without it.
 
 ```bash
 VSTEST_TESTHOST_SHUTDOWN_TIMEOUT=5000 dotnet test
 ```
 
-### Network Issues
+## Known limitations
 
-**Verify API Connectivity**
+See [Known limitations](https://docs.xping.io/troubleshooting/known-limitations.html#mstest).
 
-Check if the Xping API endpoint is accessible from your environment:
+## Sample project
 
-```bash
-# Test connectivity to the API endpoint
-curl -I https://upload.xping.io/v1
-
-# Or using PowerShell
-Test-NetConnection upload.xping.io -Port 443
-```
-
-Any HTTP response means the endpoint is reachable. It accepts only uploads, so `curl -I` gets
-`405 Method Not Allowed`.
-
-If the endpoint is unreachable, check:
-- Network connectivity and firewall rules
-- Corporate proxy settings
-- DNS resolution for `upload.xping.io`
-
-## Sample Project
-
-See the complete sample project at `samples/SampleApp.MSTest` for working examples of:
-- Test class inheriting from XpingTestBase
-- TestMethod and DataRow usage
-- TestCategory and TestProperty attributes
-- Skipped test tracking with [Ignore]
-- Exception assertions with Assert.ThrowsExactly
-
-## Comparison with Other Frameworks
-
-| Feature | MSTest | NUnit | xUnit |
-|---------|--------|-------|-------|
-| Setup | Base class + assembly setup class | Attribute | AssemblyInfo |
-| Tracking | Automatic (base class) | Opt-in (attribute) | Automatic (all tests) |
-| Configuration | Inherit per class | Per fixture/test | One-time |
-| Data Tests | DataRow | TestCase | Theory |
-| Overhead | Minimal | Minimal | Minimal |
+`samples/SampleApp.MSTest`.
 
 ## License
 

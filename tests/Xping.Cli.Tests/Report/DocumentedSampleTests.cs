@@ -64,12 +64,14 @@ public sealed class DocumentedSampleTests
         "nuspec/README.Cli.md",
         "docs/index.md",
         "docs/cli/command-reference.md",
+        "docs/cli/reading-the-report.md",
+        "docs/cli/cloud-data.md",
         "docs/getting-started/quickstart-xunit.md",
         "docs/getting-started/quickstart-mstest.md",
         "docs/getting-started/quickstart-nunit.md",
         "docs/getting-started/local-first.md",
-        "docs/known-limitations.md",
-        "docs/guides/working-with-tests/common-flaky-patterns.md"
+        "docs/troubleshooting/known-limitations.md",
+        "docs/flaky-tests/patterns-and-fixes.md"
     ];
 
     [Theory]

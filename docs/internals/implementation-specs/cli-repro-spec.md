@@ -1,6 +1,6 @@
 # CLI Report — Repro Command (`repro` on each finding)
 
-**Status:** Draft, binding once merged
+**Status:** Shipped (#303, #304).
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/**`
 **Schema:** `1.23` → `1.24`
 **Depends on:** `cli-report-format-spec.md` D10 (example/rule authority, width and charset discipline).

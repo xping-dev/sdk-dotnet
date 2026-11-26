@@ -1,4 +1,6 @@
-- name: Configuration Reference
+- name: Configuration reference
   href: configuration-reference.md
-- name: Local Store
+- name: Local store
   href: local-store.md
+- name: Data Xping collects
+  href: collected-data.md

@@ -1,28 +1,36 @@
 # Xping.Sdk.XUnit.V3
 
-**For xUnit v3 (the `xunit.v3` package).** Using xUnit v2 (`xunit` 2.x)? Use
-[`Xping.Sdk.XUnit`](../Xping.Sdk.XUnit/README.md) instead; a build that pairs this package with
+**For xUnit v3 (the `xunit.v3` package, 4.0.2 or later).** Using xUnit v2 (`xunit` 2.x)? Use
+[`Xping.Sdk.XUnit`](../Xping.Sdk.XUnit/README.md) instead. A build that pairs this package with
 xUnit v2 stops with `XPING002`.
 
-xUnit v3 test framework adapter for the Xping SDK. Records every test execution, on
-Microsoft.Testing.Platform and on vstest, to the local store and, with an API key, to Xping Cloud.
+xUnit v3 adapter for the Xping SDK. It records each test execution, on Microsoft.Testing.Platform
+and on vstest, to the local store and, with an API key, uploads it to Xping Cloud. The test project
+must target .NET Framework 4.7.2 or later, or .NET 8 or later.
 
 ## Installation
 
 ```bash
-dotnet add package Xping.Sdk.XUnit.V3
+dotnet add package Xping.Sdk.XUnit.V3 --prerelease
 ```
 
-## Quick Start
+All Xping packages are prereleases, so the command needs `--prerelease`.
 
-Add to `AssemblyInfo.cs` (or any file in the test project):
+## Quick start
+
+Add one line to `AssemblyInfo.cs`, or to any file in the test project:
 
 ```csharp
 [assembly: Xunit.TestFramework(typeof(Xping.Sdk.XUnit.V3.XpingTestFramework))]
 ```
 
-That's it: every test in the assembly is recorded, and the session ends when the assembly finishes.
-Write tests as usual — `[Fact]`, `[Theory]`, traits, fixtures, `Assert.Skip`.
+Every test in the assembly is then recorded, and the session ends when the assembly finishes. Write
+tests as usual: `[Fact]`, `[Theory]`, traits, fixtures and `Assert.Skip` all work.
+
+`dotnet test` does not show the SDK's log lines for an xUnit v3 project. To see them, run the test
+project itself with `dotnet run`.
+
+The full guide is [Quick start: xUnit](https://docs.xping.io/getting-started/quickstart-xunit.html).
 
 ## Running
 
@@ -36,7 +44,7 @@ An xUnit v3 test project is an executable. Xping records it however it runs:
 
 Each session records which runner it ran on (`Xping.Runner`) and `Xping.TestFramework = xUnit.v3`.
 
-## What Is Recorded
+## What is recorded
 
 - Outcome: passed, failed, skipped (including `Assert.Skip` at run time), and timeout for a test that
   overran its `[Fact(Timeout = …)]`, with the declared budget
@@ -54,34 +62,49 @@ Explicit tests the run leaves out are not recorded.
 
 ## Configuration
 
-Configuration is the same as for every Xping adapter: `XPING_*` environment variables,
-`appsettings.json`, or `XpingContext.Initialize(config)` from a module initializer. See the
-[Configuration Reference](https://docs.xping.io/configuration/configuration-reference.html).
+Without an API key, the SDK runs in local-only mode: it writes every run to `.xping/` in your
+repository and makes no network calls. Read the history with the `xping` CLI
+(`dotnet tool install -g Xping.Cli --prerelease`, then `xping report`).
+
+To upload to Xping Cloud, create a key under **Settings → API keys**, with only the Upload scope,
+and set it as an environment variable:
+
+```bash
+export XPING_APIKEY="your-api-key"
+```
+
+Do not put the key in `appsettings.json`: that file is committed and copied into the build output.
+Other settings can go in the `"Xping"` section of `appsettings.json`, or in `XPING_*` environment
+variables, which win over the file. See the
+[Configuration reference](https://docs.xping.io/configuration/configuration-reference.html).
+
+To build the configuration in code, call `Initialize` from a module initializer (.NET 5 or later):
 
 ```csharp
 using System.Runtime.CompilerServices;
 using Xping.Sdk.Core.Configuration;
 using Xping.Sdk.XUnit.V3;
 
-internal static class ModuleInitializer
+internal static class XpingModuleInitializer
 {
     [ModuleInitializer]
-    public static void Initialize() =>
-        XpingContext.Initialize(new XpingConfiguration { ApiKey = Environment.GetEnvironmentVariable("XPING_APIKEY") });
+    internal static void Initialize() =>
+        XpingContext.Initialize(new XpingConfiguration { BatchSize = 200 });
 }
 ```
 
-A later parameterless `XpingContext.Initialize()` in the same process reuses this configuration,
-so a long-lived process, such as an IDE's test server, keeps it across runs. `ShutdownAsync()`
-forgets it. `Initialize(null)` throws `ArgumentNullException`.
+`XPING_*` environment variables still win over the values you pass. With a configuration object,
+the SDK reads no `appsettings.json` file. A later `XpingContext.Initialize()` in the same process
+reuses this configuration, so a long-lived process, such as an IDE's test server, keeps it across
+runs. `ShutdownAsync()` forgets it.
 
-## Error Handling
+## Error handling
 
 An SDK failure is logged and the tests run untracked. In `StrictMode` a configuration error ends the
 process before any test runs, and an upload error fails the run while keeping every result: as an
 error message on vstest, and through the exit code on Microsoft.Testing.Platform.
 
-## Known Limitations
+## Known limitations
 
 - xRetry.v3 reports only the attempt a retried test ended on: the attempts before it are not
   recorded, and the duration covers all of them.
@@ -91,9 +114,9 @@ error message on vstest, and through the exit code on Microsoft.Testing.Platform
 - Two theory rows whose arguments display the same way share one identity.
 - The runner is not recorded under xUnit's own console runner.
 
-See [Known Limitations](https://docs.xping.io/known-limitations.html#xunit-v3).
+See [Known Limitations](https://docs.xping.io/troubleshooting/known-limitations.html#xunit-v3).
 
-## Sample Project
+## Sample project
 
 `samples/SampleApp.XUnitV3` runs on vstest by default and on Microsoft.Testing.Platform with
 `-p:XpingTestRunner=MTP`.

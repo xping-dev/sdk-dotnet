@@ -1,326 +1,280 @@
 ---
 uid: troubleshooting-common-issues
-title: Common Issues
+title: Common issues
 ---
 
-# Common Issues
+# Common issues
 
-This guide covers the most frequently encountered issues when using the Xping SDK and their solutions.
+This page lists the problems developers run into most often with the SDK and the CLI, and how to
+fix them. Most fixes start with
+the SDK's own output. To see it, and to read each line, see [Debugging](debugging.md).
 
 ---
 
-## Connection & Network Issues
+## Tests don't appear in Xping Cloud
 
-### Tests Not Appearing in Xping Cloud
+Read the SDK's start line first. See [The start line](debugging.md#the-start-line).
 
-**Symptoms:**
-- Tests run successfully but don't appear in Xping Cloud
-- No error messages in test output
-- SDK appears to be working
+### The SDK runs in local-only mode
 
-**Common Causes & Solutions:**
+```
+[Xping 13:14:41 INF] Initialized in local-only mode. SessionId: "…", Environment: Default. No API key configured - results stay on this machine.
+```
 
-#### 1. Missing or Invalid Credentials
-
-Check that `ApiKey` is configured (`ProjectId` is optional):
+The SDK found no API key, so it keeps the results on this machine and uploads nothing. This is not an
+error: `xping report` reads these runs. To upload, set the key in the environment that runs the
+tests:
 
 ```bash
-# Verify environment variables are set
-echo $XPING_APIKEY
+export XPING_APIKEY="<your key>"
 ```
 
-Or check your `appsettings.json`:
+When the line says `Mode is set to LocalOnly` instead, the
+[`Mode`](../configuration/configuration-reference.md#mode) setting keeps the SDK local. Remove it, or
+set it to `Cloud`.
 
-```json
-{
-  "Xping": {
-    "ApiKey": "xpg_live_your_key_here",
-  }
-}
+In Xping Cloud, an Owner or an Admin creates the key in **Settings → API keys**. Create it with only
+the Upload scope. See [API keys](../cloud/connect.md#api-keys).
+
+### The SDK is off
+
+```
+[Xping 13:14:41 WRN] SDK is disabled via configuration (Enabled=false). Tests will run without observability tracking.
 ```
 
-**Solution:** Set both values. See [Configuration Reference](../configuration/configuration-reference.md) for details.
+[`Enabled`](../configuration/configuration-reference.md#enabled) is `false`, or `Mode` is `Disabled`
+(the line then says `Mode=Disabled`). Remove the setting, for example `XPING_ENABLED`.
+
+### A setting is invalid
+
+```
+[Xping 10:43:01 ERR] Configuration validation failed: ApiKey is required in Cloud mode. SDK disabled - tests will run without observability tracking.
+```
+
+The SDK records nothing. The line names each setting that breaks a rule. See
+[Validation rules](../configuration/configuration-reference.md#validation-rules).
+
+### The run never ends
+
+The SDK sends the last results when the run ends. On NUnit and MSTest, your own code ends it:
+
+- **NUnit:** the `[OneTimeTearDown]` method of a `[SetUpFixture]` must call
+  `XpingContext.FinalizeAndShutdownAsync()`. See the
+  [NUnit quickstart](../getting-started/quickstart-nunit.md).
+- **MSTest:** an `[AssemblyCleanup]` method in the test assembly must call
+  `XpingContext.FinalizeAndShutdownAsync()`. See the
+  [MSTest quickstart](../getting-started/quickstart-mstest.md). Without it, the SDK ends the run
+  as the process exits, and on vstest the upload is usually lost. See
+  [Known limitations](known-limitations.md#mstest-a-run-finalized-by-the-process-exit-safety-net-loses-its-upload-on-vstest).
+
+xUnit v2 and v3 end the run themselves, through the `[assembly: TestFramework(...)]` attribute.
+See the [xUnit quickstart](../getting-started/quickstart-xunit.md).
+
+### The upload failed
+
+The SDK logs an upload error, and the tests pass or fail as usual. Look for `ERR` lines. See
+[Upload errors](#upload-errors) and [Network errors](#network-errors).
 
 ---
 
-#### 2. SDK Disabled
+## Upload errors
 
-The SDK may be disabled via configuration:
+When Xping Cloud rejects an upload, the SDK logs one line in this form:
+
+```
+<category> (HTTP <status>) for <endpoint> [<code>]: <reason> Action: <action>
+```
+
+For example:
+
+```
+[Xping 13:16:24 ERR] Authentication failed (HTTP 401) for https://upload.xping.io/v1 [Error.ApiKey.InvalidApiKey]: The provided API key is not recognized. Action: Verify the ApiKey value matches a key issued for this workspace at https://upload.xping.io/v1
+```
+
+- The `<code>` in brackets is Xping Cloud's error code. It says what went wrong more exactly than the
+  status code.
+- The `<reason>` is Xping Cloud's explanation, here `The provided API key is not recognized.` For a
+  plan limit, it says which limit the run reached.
+- The `Action:` is what the SDK suggests for that code.
+
+When the same error repeats in the run, the SDK prints a short line, such as
+`Same HTTP 401 error (2nd occurrence, batch size: 0)`.
+
+The SDK retries a 5xx response and a 429. It does not retry any other 4xx response.
+
+### The API key
+
+| Code | Action the SDK prints |
+|---|---|
+| `Error.ApiKey.MissingApiKey` | Set the ApiKey in your Xping configuration; it is sent as the X-API-Key header |
+| `Error.ApiKey.InvalidApiKey` | Verify the ApiKey value matches a key issued for this workspace at `<endpoint>` |
+| `Error.ApiKey.ExpiredApiKey` | The key has passed its expiry date - issue a new API key and update your configuration |
+| `Error.ApiKey.RevokedApiKey` | This key was revoked - issue a new API key and update your configuration |
+
+These come with HTTP 401 (`Authentication failed`). Check that `XPING_APIKEY` holds the whole key,
+with no space or line break. To issue a new key, see [API keys](../cloud/connect.md#api-keys).
+
+### What the key may do
+
+| Code | Action the SDK prints |
+|---|---|
+| `Error.ApiKey.InsufficientScope` | Grant the API key the UPLOAD scope, or use a key that already has it |
+| `Error.ApiKey.IpNotAllowed` | The key restricts client IP addresses - add this runner's public IP to the key's allow list |
+| `Authorization.InsufficientAccess` | This endpoint requires an API key principal with upload access |
+
+These come with HTTP 403 (`Authorization failed`). A key works only from its **allowed addresses**,
+when the key has any. A CI agent's public address can change between runs.
+
+### Plan and usage limits
+
+| Code | Action the SDK prints |
+|---|---|
+| `Error.Subscription.ProjectLimitReached` | This run names a project the workspace does not have yet and the project limit is reached - upgrade the plan, or set ProjectId to report into an existing project. A solution-wide run reports one project per test assembly, so it can request several at once |
+| `Error.Subscription.TestRunLimitReached`, `Error.Subscription.UsageLimitExceeded` | Upgrade the plan to continue ingesting test results this billing period |
+| `Error.Billing.PaymentFailed`, `Error.Billing.CardDeclined`, `Error.Billing.InsufficientFunds` | Update the workspace payment method to restore uploads |
+| `Error.ApiKey.UsageLimitReached` | This key reached its configured usage cap - raise the cap or use a different key |
+| `Error.ApiKey.RateLimitExceeded` | Back off and retry later, or reduce upload frequency by batching more executions per upload |
+
+`ProjectLimitReached` often comes from a solution-wide `dotnet test`. Each test assembly reports into
+its own project, so one run can ask for several new projects. To send them all to one project, set
+[`ProjectId`](../configuration/configuration-reference.md#projectid). See
+[My tests created several projects](#my-tests-created-several-projects).
+
+For a rate limit, a larger [`BatchSize`](../configuration/configuration-reference.md#batchsize) makes
+fewer uploads. For what each plan includes, see
+[Plans and retention](../cloud/plans-and-retention.md).
+
+### The project
+
+| Code | Action the SDK prints |
+|---|---|
+| `Error.Project.ProjectDisabled` | The target project is disabled and rejects uploads - re-enable it in Xping Cloud |
+
+### The request
+
+| Code | Action the SDK prints |
+|---|---|
+| `Error.Uploads.MissingProjectKey` | The upload named no project: no ProjectId is configured and no test assembly could be resolved for this session. Set ProjectId to pin one, or check that your tests report an assembly name |
+| `Error.Uploads.BatchSizeExceeded` | Reduce the number of executions per upload - the server accepts at most 1000 per batch |
+| `Error.Uploads.UnrecognizedPayload`, `Error.Uploads.UnrecognizedState` | The server could not read this payload - update Xping.Sdk to a version compatible with the API |
+| `Error.Uploads.MissingSessionId` | The upload was sent without a session id - this indicates an SDK defect, please report it |
+
+### A response with no error code
+
+A proxy or a load balancer can answer instead of Xping Cloud. The response then has no Xping error
+code, and the SDK suggests an action from the status code:
+
+| Status | Category | Action the SDK prints |
+|---|---|---|
+| 400, 422 | Upload rejected | Check the upload configuration (ApiEndpoint) and the SDK version |
+| 401 | Authentication failed | Verify the ApiKey is set and valid for `<endpoint>` |
+| 402 | Subscription limit reached | Review the workspace subscription - a plan limit or billing issue is blocking uploads |
+| 403 | Authorization failed | Verify the API key has the UPLOAD scope and that this client's IP is permitted |
+| 404 | API endpoint not found | Verify the ApiEndpoint configuration matches your deployment |
+| 409 | Upload conflicts with the current project state | The target project rejected the upload in its current state - check it in Xping Cloud |
+| 413 | Payload too large | Reduce the number of executions per upload |
+| 429 | Rate limit exceeded | Reduce test execution frequency, or retry after the interval the server indicates |
+| 5xx | Server error | Retry later; if this persists, contact support with the receipt of a failing run |
+
+The `<reason>` is then the response body, or `No additional error details provided` when it is
+empty. A 404 often means that [`ApiEndpoint`](../configuration/configuration-reference.md#apiendpoint)
+is wrong. Its default is `https://upload.xping.io/v1`.
+
+---
+
+## Network errors
+
+When the SDK cannot reach the endpoint, or the request takes too long, it logs one of these:
+
+| Message | Meaning |
+|---|---|
+| `Network error occurred → HttpRequestException: <reason>` | The connection failed, for example `Connection refused` or a DNS error. |
+| `Request timeout after 30s` | One attempt took longer than [`UploadTimeout`](../configuration/configuration-reference.md#uploadtimeout). |
+| `Upload timed out after 60s` | The whole upload, with its retries, took longer than twice `UploadTimeout`. |
+| `Circuit breaker is open: Too many consecutive failures` | Uploads are paused. See [Uploads pause for 30 seconds](#uploads-pause-for-30-seconds). |
+
+The SDK retries a network error and a timeout, up to
+[`MaxRetries`](../configuration/configuration-reference.md#maxretries) times.
+
+Check that the machine reaches `https://upload.xping.io/v1` over HTTPS on port 443. See
+[Check the network](debugging.md#check-the-network).
+
+### Behind a proxy
+
+The SDK has no proxy setting of its own. It uses the standard .NET proxy settings: the
+`HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` environment variables, and the system proxy settings on
+Windows and macOS. Set them in the environment that runs the tests:
 
 ```bash
-# Check if SDK is disabled
-echo $XPING_ENABLED
+export HTTPS_PROXY="http://proxy.example.com:8080"
 ```
 
-**Solution:** Ensure `Enabled` is `true` (default) or remove the setting entirely.
+For a proxy that needs a sign-in, put the user name and password in the URL:
+`http://user:password@proxy.example.com:8080`.
 
----
+### Slow uploads
 
-#### 3. Network Connectivity Issues
-
-The SDK requires outbound HTTPS access to `upload.xping.io`.
-
-**Test connectivity:**
+When uploads time out on a slow connection, raise `UploadTimeout`:
 
 ```bash
-# Test HTTPS connection
-curl -v https://upload.xping.io
-
-# Or with PowerShell (Windows)
-Test-NetConnection -ComputerName upload.xping.io -Port 443
+export XPING_UPLOADTIMEOUT="60"
 ```
 
-**Common blockers:**
-- Corporate firewall blocking outbound HTTPS
-- Proxy server requiring authentication
-- Network security policies blocking SDK traffic
-- DNS resolution issues
+Leave [`UploadStackTraces`](../configuration/configuration-reference.md#uploadstacktraces) off, which
+is the default, to keep stack trace text out of the uploads.
 
-**Solution:** Work with your network team to allowlist `upload.xping.io` on port 443 (HTTPS).
+### Uploads pause for 30 seconds
+
+```
+[Xping 13:20:11 ERR] Circuit breaker is open: Too many consecutive failures → BrokenCircuitException: …
+[Xping 13:20:11 WRN] Status: Upload attempts will resume after circuit breaker resets (30 seconds)
+```
+
+The SDK stops uploading for 30 seconds when, in 30 seconds:
+
+- there were at least 10 upload attempts, retries included, and
+- at least half of them failed with a 5xx response, a network error or a timeout.
+
+A 4xx response, such as 401, 403 or 429, does not count. While uploads are paused, each upload fails
+at once with the message above. After 30 seconds, the SDK tries again.
+
+The pause means that Xping Cloud or the network failed many times in a short time. Look for the
+errors logged before it.
 
 ---
 
-#### 4. Missing Test Teardown (NUnit & MSTest)
+## An upload failure fails the run
 
-> **Note:** This issue is specific to **NUnit** and **MSTest**. xUnit automatically handles teardown through its custom test framework—no manual teardown required.
+**Symptom:** the test run fails at its end with an upload error, although the tests passed. On NUnit
+with vstest, `dotnet test` reports the run as aborted:
 
-Test results are uploaded in batches automatically when:
-- The batch size is reached (default: 100 tests collected), OR
-- The flush interval timer fires (default: every 30 seconds), OR
-- **The test session completes** and teardown flushes remaining tests
-
-**For small test suites:**
-
-If you run 10 tests with proper teardown, all 10 tests will upload immediately when the test suite completes, regardless of batch size or flush interval.
-
-**Common mistake (NUnit/MSTest only):** Missing or incorrect teardown:
-
-❌ **Missing teardown (NUnit):**
-```csharp
-// No [OneTimeTearDown] - tests may remain in buffer
-[SetUpFixture]
-public class XpingSetup
-{
-    [OneTimeSetUp]
-    public void Setup() => XpingContext.Initialize();
-    
-    // Missing teardown!
-}
+```
+The active test run was aborted. Reason: Test host process crashed : …
+[Xping] Xping network error in strict mode: HTTP request failed: Connection refused (127.0.0.1:9)
 ```
 
-❌ **Missing teardown (MSTest):**
-```csharp
-// No [AssemblyCleanup] - tests may remain in buffer
-[TestClass]
-public static class XpingSetup
-{
-    [AssemblyInitialize]
-    public static void AssemblyInit(TestContext context) 
-        => XpingContext.Initialize();
-    
-    // Missing cleanup!
-}
-```
-
-✅ **Correct teardown (NUnit):**
-```csharp
-[SetUpFixture]
-public class XpingSetup
-{
-    [OneTimeSetUp]
-    public void Setup() => XpingContext.Initialize();
-    
-    [OneTimeTearDown]
-    public async Task Teardown()
-    {
-        await XpingContext.FinalizeAndShutdownAsync();
-    }
-}
-```
-
-✅ **Correct teardown (MSTest):**
-```csharp
-[TestClass]
-public static class XpingSetup
-{
-    [AssemblyInitialize]
-    public static void AssemblyInit(TestContext context)
-        => XpingContext.Initialize();
-    
-    [AssemblyCleanup]
-    public static async Task AssemblyCleanup()
-    {
-        await XpingContext.FinalizeAndShutdownAsync();
-    }
-}
-```
-
-✅ **xUnit - No manual teardown needed:**
-```csharp
-// xUnit's XpingTestFramework handles initialization and disposal automatically
-[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")] // xUnit v2
-[assembly: TestFramework(typeof(Xping.Sdk.XUnit.V3.XpingTestFramework))]           // xUnit v3
-
-// That's it! No manual teardown required for xUnit.
-```
-
-**Solution:** 
-- **NUnit/MSTest:** Ensure proper test teardown is implemented as shown above or in the [Getting Started guides](../getting-started/quickstart-nunit.md)
-- **xUnit:** Verify the `[assembly: TestFramework(...)]` attribute is configured in `AssemblyInfo.cs` (see [xUnit Getting Started](../getting-started/quickstart-xunit.md))
-
----
-
-#### 5. Silent Upload Failures
-
-If uploads fail (network issues, invalid credentials), the SDK logs errors but doesn't throw exceptions — your tests continue running normally.
-
-**Solution:** Enable logging to see what's happening. See [Debugging Guide](debugging.md#enabling-sdk-logging).
-
----
-
-### Connection Timeout Errors
-
-**Symptoms:**
-- Slow test execution
-- Timeout messages in logs
-- Intermittent upload failures
-
-**Common Causes:**
-
-1. **Slow Network Connection**
-   - Default upload timeout is 30 seconds
-   - Large batches may take longer on slow connections
-
-   **Solution:** Increase `UploadTimeout`:
-   ```json
-   {
-     "Xping": {
-       "UploadTimeout": "00:01:00"  // 60 seconds
-     }
-   }
-   ```
-
-2. **Large Batch Sizes**
-   - Batches with stack traces can be large
-   - Compression helps but may not be enough
-
-   **Solution:** Reduce `BatchSize`, and leave `UploadStackTraces` off (the default) so stack trace text stays out of the upload:
-   ```json
-   {
-     "Xping": {
-       "BatchSize": 50,
-       "UploadStackTraces": false
-     }
-   }
-   ```
-
-3. **Proxy Interference**
-   - Corporate proxies may interfere with HTTPS connections
-   - Proxy authentication may be required
-
-   **Solution:** Currently, the SDK doesn't have built-in proxy support. However, you can configure a local proxy that forwards to `upload.xping.io` and set `ApiEndpoint` to your proxy URL:
-   ```json
-   {
-     "Xping": {
-       "ApiEndpoint": "http://localhost:8888"  // Your local proxy
-     }
-   }
-   ```
-
-  > This functionality has not been tested in production environments. 
-  > It is provided as a troubleshooting option for evaluation purposes only.
-
----
-
-### Circuit Breaker Open
-
-**Symptoms:**
-- Error message: "Circuit breaker is open: Too many consecutive failures"
-- Uploads stopped temporarily
-- Message indicates automatic reset after 30 seconds
-
-**What This Means:**
-
-The SDK's resilience system has detected repeated upload failures (50% failure rate over 10+ attempts) and has temporarily stopped attempting uploads to prevent cascading failures.
-
-**Common Causes:**
-- Xping API temporarily unavailable
-- Network issues causing consistent failures
-- Invalid credentials causing repeated 401/403 errors
+By default, an upload failure never fails your tests. The SDK retries the upload, logs the error,
+and the [local store](../configuration/local-store.md) still gets the run. With [`StrictMode`](../configuration/configuration-reference.md#strictmode)
+on (`XPING_STRICTMODE=true`), the same failure fails the run, so a CI pipeline notices that it could
+not record its tests. Every test that ran stays in the TRX file and the other reports.
 
 **Solution:**
 
-1. **Wait for automatic reset:** The circuit breaker reopens after 30 seconds
-2. **Check network connectivity:** Verify connection to `upload.xping.io`
-3. **Review logs:** Enable debug logging to see underlying failure reasons
-4. **Verify credentials:** Ensure the API key is valid
-
-**Prevention:** Address the root cause (network, credentials, API issues) before the circuit breaker triggers.
-
----
-
-## Authentication & Authorization
-
-### HTTP 401: Authentication Failed
-
-**Error Message:**
-```
-Authentication failed (401): Invalid API Key
-Action: Verify credentials at https://app.xping.io
-```
-
-**Causes:**
-1. API key is incorrect or expired
-2. API key doesn't exist in the Xping platform
-3. Typo in API key (extra spaces, wrong characters)
-
-**Solution:**
-
-1. Verify your API key at [Xping Cloud](https://app.xping.io)
-2. Navigate to **Account** → **Settings** → **API & Integration**
-3. Copy the correct API key
-4. Update your configuration:
-
-```bash
-export XPING_APIKEY="xpg_live_correct_key_here"
-```
-
-**Common mistakes:**
-- Using test/development key in production
-- API key rotation without updating configuration
-- Hardcoded keys in source control (security risk!)
+- Fix the cause of the upload failure. The SDK logs it. See [Upload errors](#upload-errors) and
+  [Network errors](#network-errors).
+- For a build with no network, set `XPING_MODE=LocalOnly`. The SDK then keeps the run on the machine
+  and makes no uploads. Do not just leave the API key unset: with `StrictMode` on, a missing key fails
+  the run before any test runs. `XPING_ENABLED=false` also turns off the local history.
 
 ---
 
-### HTTP 403: Authorization Failed
-
-**Error Message:**
-```
-Authorization failed (403): Insufficient permissions
-Action: Check project access at https://app.xping.io
-```
-
-**Causes:**
-1. API key is valid but doesn't have permission to create or access projects
-2. API key has been revoked or disabled
-3. Account-level permissions issue
-
-**Solution:**
-
-1. Verify your API key status in [Xping Cloud](https://app.xping.io)
-2. Navigate to **Account** → **Settings** → **API & Integration**
-3. Check that the API key has appropriate permissions
-4. If needed, create a new API key with full permissions
-
-> **Note:** You don't need to create a project manually in Xping Cloud. With no `ProjectId` set, each test assembly gets its own project, named after the assembly and created on the first run.
-
-
-### My tests created several projects
+## My tests created several projects
 
 That is the default. Each test assembly reports into its own project, so a solution-wide
-`dotnet test` covering `Billing.Tests`, `Api.Tests` and `Web.Tests` produces three projects.
+`dotnet test` that covers `Billing.Tests`, `Api.Tests` and `Web.Tests` produces three projects. Xping
+Cloud creates each one on its first upload.
 
-To report them all as one project instead, pin it:
+To report them all as one project, pin it:
 
 ```bash
 export XPING_PROJECTID="my-app"
@@ -328,47 +282,134 @@ export XPING_PROJECTID="my-app"
 
 ---
 
-### HTTP 429: Rate Limit Exceeded
+## The configuration is not loading
 
-**Error Message:**
+**Symptoms:** the SDK uses its defaults, or ignores an environment variable or `appsettings.json`.
+The start line shows what the SDK used. See [Check the configuration](debugging.md#check-the-configuration).
+
+### Environment variable names
+
+The SDK's environment variables are `XPING_` with one underscore, then the setting name, such as
+`XPING_APIKEY` or `XPING_BATCHSIZE`. They win over every other source, including a configuration
+object passed in code.
+
+`Xping__ApiKey`, with two underscores, is the .NET configuration form. The SDK reads it only when it
+starts with `XpingContext.Initialize()`, without a configuration object. Use `XPING_APIKEY`.
+
+### `appsettings.json` is not read
+
+- The SDK reads `appsettings.json` only when it starts with `XpingContext.Initialize()`, without a
+  configuration object. With an object, it reads only `StrictMode` from the file.
+- The SDK reads the file from the current directory. Under `dotnet test`, that is the test project's
+  output folder, so copy the file there:
+
+  ```xml
+  <ItemGroup>
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  ```
+
+- The SDK also reads `appsettings.{environment}.json`. The environment comes from
+  `ASPNETCORE_ENVIRONMENT` or `DOTNET_ENVIRONMENT`, and is `Production` when neither is set.
+- A file that does not parse stops the SDK from starting. The SDK then prints
+  `[Xping] SDK initialization failed: …`, and the tests run unrecorded.
+
+The keys in `appsettings.json` are not case-sensitive: `apikey` and `ApiKey` both work.
+
+### Durations
+
+`FlushInterval`, `RetryDelay` and `UploadTimeout` take whole seconds (`30`) or a time with colons
+(`00:00:30`). The SDK ignores any other value, keeps the default, and logs a warning:
+
 ```
-Rate limit exceeded (429): Too many requests
-Action: Reduce test execution frequency or contact support
+FlushInterval '1.5' is not a duration and was ignored. Use whole seconds (30) or a time with colons (00:00:30).
 ```
 
-**Causes:**
-1. Executing tests too frequently
-2. Multiple test runners uploading simultaneously
-3. Small batch sizes causing too many API calls
-4. Running large test suites continuously
+The warning names the setting as you wrote it, such as `XPING_FLUSHINTERVAL` or
+`Xping:FlushInterval`.
 
-**Solution:**
-
-1. **Increase batch size** to reduce API call frequency:
-   ```json
-   {
-     "Xping": {
-       "BatchSize": 500  // Larger batches = fewer API calls
-     }
-   }
-   ```
-
-2. **Increase flush interval** to batch more tests:
-   ```json
-   {
-     "Xping": {
-       "FlushInterval": "00:02:00"  // 2 minutes
-     }
-   }
-   ```
-
-3. **Coordinate with team:** Ensure multiple team members aren't running tests against the same project simultaneously
-
-5. **Contact support** if you need higher rate limits for legitimate use cases
+For every setting and its rules, see the
+[Configuration reference](../configuration/configuration-reference.md).
 
 ---
 
-## CLI Sign-in (`xping login`)
+## CI is not detected
+
+**Symptoms:** a pipeline run is recorded as local. `IsCIEnvironment` is `false`, and the run has no
+build number or branch from the CI.
+
+The SDK detects the CI from the platform's own environment variables. It needs no setting. It
+detects:
+
+| Platform | Variable it reads |
+|---|---|
+| GitHub Actions | `GITHUB_ACTIONS=true` |
+| Azure Pipelines | `TF_BUILD` |
+| Jenkins | `JENKINS_URL` |
+| GitLab CI/CD | `GITLAB_CI=true` |
+| CircleCI | `CIRCLECI=true` |
+| Travis CI | `TRAVIS=true` |
+| TeamCity | `TEAMCITY_VERSION` |
+| Bitbucket Pipelines | `BITBUCKET_PIPELINE_UUID` |
+| AppVeyor | `APPVEYOR=True` |
+| Any other CI | `CI=true` or `CI=True` |
+
+Detection fails only when the test process does not get these variables. This happens most often
+when the tests run in a container. Pass the CI's variables into the container. On another CI, set
+`CI=true` in the pipeline.
+
+The environment name `Default` on a CI run is not a symptom. The
+[environment name](../configuration/configuration-reference.md#environment) names the deployment
+that the tests run against, not the machine. Do not set `XPING_ENVIRONMENT=CI`: it splits each
+test's history away from the local runs of the same suite.
+
+For each platform's setup, see [Set up CI](../getting-started/ci-cd-setup.md).
+
+---
+
+## The API key in CI
+
+Store the key as a secret in your CI platform, and pass it to the test step as `XPING_APIKEY`. Do
+not put it in `appsettings.json` or in source control.
+
+```yaml
+# GitHub Actions
+- name: Run tests
+  env:
+    XPING_APIKEY: ${{ secrets.XPING_APIKEY }}
+  run: dotnet test
+```
+
+For every platform, see [Set up CI](../getting-started/ci-cd-setup.md).
+
+---
+
+## Flaky tests are not flagged in Xping Cloud
+
+Xping Cloud needs at least 10 runs of a test from the last 14 days, and often more, before it can
+decide whether the test is flaky. A test needs the same identity in every run, so a renamed test
+starts a new history. See
+[When Cloud can decide](../flaky-tests/finding-flaky-tests.md#when-cloud-can-decide).
+
+To find flaky tests from the runs on your machine, run `xping report`. See
+[Finding flaky tests](../flaky-tests/finding-flaky-tests.md#on-your-machine).
+
+---
+
+## The run is slow, or uses a lot of memory
+
+To find out whether the SDK slows the run, run once with `XPING_ENABLED=false` and compare. A pause
+after the last test is usually the uploads at the end of the run. Each upload stops after twice
+`UploadTimeout`, but a failing endpoint can hold up the end of the run for several of these waits.
+
+The SDK keeps every test [execution](../configuration/collected-data.md#each-execution) of the run in memory until the run ends, so memory grows with
+the size of the run. `BatchSize` does not limit it.
+
+See [Performance](../performance/performance.md).
+
+---
+
+## CLI sign-in (`xping login`)
 
 Start with `xping auth status`. It makes no network call and says which credential the CLI would
 use. Add `--verbose` to any command for the details. See the
@@ -376,24 +417,25 @@ use. Add `--verbose` to any command for the details. See the
 
 ### "Cloud data unavailable: your sign-in is no longer valid"
 
-The session was revoked (on Settings → Security → CLI sessions, or when a workspace key was
-withdrawn) or it expired. The CLI has already removed it. Run `xping login` again.
+The session was revoked, on Settings → Security → CLI sessions or when a workspace key was
+withdrawn, or it expired. The CLI has already removed it. Run `xping login` again.
 
 ### `xping login` says it needs an interactive terminal
 
-`login` runs only in your own shell. It refuses when stdin or stderr is not a terminal — every
-pipeline agent and coding agent — and when `CI` is `true`, `1` or `yes`. CI uses an API key that can read Cloud data
-(`XPING_APIKEY`); an agent should ask you to run `xping login` yourself.
+`login` runs only in your own shell. It refuses when stdin or stderr is not a terminal, which is the
+case for every pipeline agent and coding agent, and when `CI` is `true`, `1` or `yes`. CI uses an API
+key that can read Cloud data (`XPING_APIKEY`). An agent should ask you to run `xping login` yourself.
 
 ### The browser never returns to the CLI
 
-The sign-in page sends the browser back to `127.0.0.1` on the machine running the CLI. Over SSH,
-in a container, or in WSL with localhost forwarding turned off, that address is not the CLI's. Press
-Ctrl+C and run `xping login --device`, which works with a browser on any device.
+The sign-in page sends the browser back to `127.0.0.1` on the machine that runs the CLI. Over SSH, in
+a container, or in WSL with localhost forwarding off, that address is not the CLI's. Press Ctrl+C and
+run `xping login --device`, which works with a browser on any device.
 
 ### "Refusing to read ~/.xping/credentials.json because other users can read it"
 
-The sign-in file is only used when no OS credential store is available. Restore its permissions:
+The CLI uses the sign-in file only when no OS credential store is available. Restore its
+permissions:
 
 ```bash
 chmod 700 ~/.xping
@@ -403,49 +445,51 @@ chmod 600 ~/.xping/credentials.json
 ### "This API key cannot read Cloud data"
 
 The key is upload-only, or the workspace's plan does not include API access. Sign in with
-`xping login` on your machine, or give CI a key with read scope. The report itself is unaffected.
+`xping login` on your machine, or give CI a key with the Read scope. The report itself is not
+affected.
 
 ### "Could not write to Windows Credential Manager (error 8…)"
 
-Windows refused to store any credential for your account; `cmdkey /generic:test /user:x /pass:y`
-fails with the same message. `xping login` keeps the sign-in in `~/.xping/credentials.json`
-instead, so the CLI works. The cause is usually a damaged Windows user profile; other apps that save
-passwords on this account are affected too.
+Windows refused to store any credential for your account: `cmdkey /generic:test /user:x /pass:y`
+fails with the same message. `xping login` keeps the sign-in in `~/.xping/credentials.json` instead,
+so the CLI works. The cause is usually a damaged Windows user profile. Other apps that save passwords
+on this account are affected too.
 
 ### macOS asks for keychain access after every upgrade
 
-The `xping` tool is not signed by Apple, so macOS asks once per installed version. Choose
+The `xping` tool is not signed by Apple, so macOS asks once for each installed version. Choose
 **Always Allow**.
 
 ---
 
-## Installation Issues
+## Installation issues
 
 ### Wrong xUnit adapter (XPING001, XPING002)
 
-**Symptoms:** The build of your test project stops with one of:
+**Symptoms:** the build of your test project stops with one of:
 
 ```
 error XPING001: Xping.Sdk.XUnit supports xUnit v2, but this project references xUnit v3 (xunit.v3). Replace it with Xping.Sdk.XUnit.V3.
 error XPING002: Xping.Sdk.XUnit.V3 supports xUnit v3, but this project references xUnit v2 (xunit). Replace it with Xping.Sdk.XUnit.
 ```
 
-**Cause:** Xping has one adapter per xUnit version, and the one installed does not match the xUnit
-package the project references.
+**Cause:** Xping has one adapter for each xUnit version, and the one installed does not match the
+xUnit package that the project references.
 
-**Solution:** Swap the package the error names, and use the matching attribute:
+**Solution:** swap the package that the error names, and use the matching attribute:
 
 ```bash
 # XPING001: the project is on xUnit v3
 dotnet remove package Xping.Sdk.XUnit
-dotnet add package Xping.Sdk.XUnit.V3
+dotnet add package Xping.Sdk.XUnit.V3 --prerelease
 
 # XPING002: the project is on xUnit v2
 dotnet remove package Xping.Sdk.XUnit.V3
-dotnet add package Xping.Sdk.XUnit
+dotnet add package Xping.Sdk.XUnit --prerelease
 ```
 
-See [Which Package?](../getting-started/quickstart-xunit.md#which-package) for the attribute each one needs.
+See [Step 2: Turn on the Xping test framework](../getting-started/quickstart-xunit.md#step-2-turn-on-the-xping-test-framework)
+for the attribute each one needs.
 
 **`CS0433: The type 'FactAttribute' exists in both 'xunit.core' and 'xunit.v3.core'`** is the same
 mistake in a build that skips the check above, for example one that does not import NuGet's
@@ -453,477 +497,22 @@ mistake in a build that skips the check above, for example one that does not imp
 
 ---
 
-## Configuration Issues
+## Get help
 
-### Configuration Not Loading
+If a problem remains:
 
-**Symptoms:**
-- SDK uses default values instead of your configuration
-- Environment variables ignored
-- `appsettings.json` not being read
-
-**Common Causes:**
-
-#### 1. Wrong Environment Variable Names
-
-Environment variables must use double underscores for nested properties:
-
-❌ **Incorrect:**
-```bash
-export XPING.APIKEY="key"           # Wrong: uses dot
-export XPING_APIKEY="key"          # Wrong: snake_case
-```
-
-✅ **Correct:**
-```bash
-export XPING__APIKEY="key"          # Correct: double underscore
-export XPING__PROJECTID="project"   # Correct: double underscore
-```
-
-#### 2. JSON File Not Found
-
-The SDK looks for `appsettings.json` in the working directory or alongside the test assembly.
-
-**Solution:** 
-- Ensure `appsettings.json` is in the correct location
-- Set `Copy to Output Directory` to `Copy if newer` in Visual Studio
-- Or use absolute paths for configuration files
-
-#### 3. Invalid JSON Syntax
-
-**Solution:** Validate your JSON:
-```bash
-# Validate JSON syntax (requires jq)
-cat appsettings.json | jq .
-
-# Or use online JSON validators
-```
-
-#### 4. Case Sensitivity
-
-Configuration property names are **case-sensitive** in JSON:
-
-❌ **Incorrect:**
-```json
-{
-  "Xping": {
-    "apikey": "key",      // Wrong: lowercase
-    "PROJECTID": "id"     // Wrong: uppercase
-  }
-}
-```
-
-✅ **Correct:**
-```json
-{
-  "Xping": {
-    "ApiKey": "key",      // Correct: PascalCase
-    "ProjectId": "id"     // Correct: PascalCase
-  }
-}
-```
+1. Collect the details that support needs. See
+   [Collect information for support](debugging.md#collect-information-for-support).
+2. Email support@xping.io, or open an issue at
+   [github.com/xping-dev/sdk-dotnet](https://github.com/xping-dev/sdk-dotnet/issues). Remove the API
+   key from anything you send.
 
 ---
 
-### Configuration Validation Errors
-
-**Symptoms:**
-- SDK initialization fails
-- Error messages about invalid configuration values
-
-**Common Issues:**
-
-1. **Invalid Value Ranges:**
-   - `BatchSize`: Must be between 1 and 1000
-   - `MaxRetries`: Must be between 0 and 10
-   - `FlushInterval`: Must be greater than zero
-
-2. **Invalid TimeSpan Format:**
-   ```json
-   {
-     "Xping": {
-       "FlushInterval": "30",         // ❌ Wrong: not TimeSpan format
-       "FlushInterval": "00:00:30"    // ✅ Correct: HH:MM:SS format
-     }
-   }
-   ```
-
-3. **Invalid URLs:**
-   - `ApiEndpoint` must be a valid HTTP or HTTPS URL
-   - Don't include trailing slashes
-
-**Solution:** Review [Configuration Reference](../configuration/configuration-reference.md) for valid values and formats.
-
----
-
-## Performance Issues
-
-### Test Suite Running Slowly
-
-**Symptoms:**
-- Tests take longer to complete than expected
-- Performance degradation after adding Xping SDK
-
-**Expected Overhead:**
-
-The Xping SDK is designed to add minimal overhead:
-- **<5ms per test** on average
-- **<1KB memory per test execution**
-- **<5% CPU overhead**
-
-See [Performance Testing Overview](../performance/overview.md) for detailed benchmarks.
-
-**If you're seeing higher overhead:**
-
-#### 1. Synchronous Flushing
-
-Avoid calling `FlushAsync()` after every test—this blocks test execution:
-
-❌ **Bad:**
-```csharp
-[Test]
-public async Task MyTest()
-{
-    // Test code
-    await XpingContext.FlushAsync();  // Don't do this!
-}
-```
-
-✅ **Good:**
-```csharp
-[OneTimeTearDown]  // Upload once, after all tests
-public async Task Cleanup()
-{
-    await XpingContext.FinalizeAndShutdownAsync();
-}
-```
-
-#### 2. Network Issues
-
-Slow network connections can impact performance if batches fill up frequently.
-
-**Solution:**
-- Increase `BatchSize` to batch more tests
-- Increase `FlushInterval` to reduce upload frequency
-
-#### 3. Compression Overhead
-
-Compression reduces payload size but adds CPU overhead.
-
-**Solution:** Disable compression if network bandwidth is not an issue:
-```json
-{
-  "Xping": {
-    "EnableCompression": false
-  }
-}
-```
-
----
-
-### Session Summary Duration Differs from Test Framework's Reported Duration
-
-**Symptoms:**
-- The SDK's session finalized log shows a much smaller duration than the test framework's own summary, e.g.:
-  ```
-  [Xping 00:26:55 INF] Total tests recorded: 12 · "9 passed, 2 failed, 1 skipped" · exec: 118ms · wall: 1204ms
-  Test summary: total: 12, failed: 2, succeeded: 9, skipped: 1, duration: 1.1s
-  ```
-
-**Why This Happens:**
-
-The Xping session log reports two distinct duration metrics, both correct but measuring different things:
-
-- **`exec`** (`QuickStatistics.TotalDurationMs`) is the **sum of each individual test's own execution time** (each test's `Duration`), accumulated across every recorded test.
-- **`wall`** (`QuickStatistics.WallClockDurationMs`) is the **elapsed wall-clock time for the whole Xping session**, from SDK initialization to finalization—closer to the test framework's own `duration`, but still may not perfectly match it since it doesn't include time spent before `Initialize()` (e.g. assembly loading, test discovery) or after `FinalizeAsync()` returns.
-
-The test framework's own reported `duration` is the wall-clock time for the entire run, which also includes assembly loading, test discovery, fixture setup/teardown, parallelization scheduling, and the runner's own reporting overhead—none of which is attributed to any single test's `exec` time.
-
-For small or fast test suites, framework/runtime overhead can easily dominate the wall-clock time, making `exec` and `wall`/the framework's `duration` diverge significantly. This is expected behavior, not a bug.
-
-**Solution:** No action needed. Use `exec` to gauge actual test-body execution cost, and `wall` (or your test framework's own summary output) to gauge the true end-to-end run time including overhead.
-
----
-
-### High Memory Usage
-
-**Symptoms:**
-- Increased memory consumption during test execution
-- Out of memory errors in large test suites
-
-**Expected Memory Usage:**
-
-- **<1KB per test execution** for metadata
-- **<50MB for 10,000 tests** buffered in memory
-
-**If memory usage is higher:**
-
-#### 1. Large Batch Sizes
-
-Larger batches keep more data in memory before uploading:
-
-**Solution:** Reduce `BatchSize`:
-```json
-{
-  "Xping": {
-    "BatchSize": 50  // Smaller batches = less memory
-  }
-}
-```
-
-#### 2. Stack Traces
-
-Every failed test's stack trace is kept in memory until the run ends, and written to the local store. No setting turns this off: `UploadStackTraces` only decides whether the text is sent to Xping Cloud. A run with many failures and deep stacks uses memory in proportion.
-
-#### 3. Upload Failures
-
-If uploads fail repeatedly, tests accumulate in memory:
-
-**Solution:**
-- Fix upload issues (network, credentials)
-- Monitor logs for upload errors
-
----
-
-## CI/CD Specific Issues
-
-### CI Not Detected
-
-**Symptoms:**
-- `IsCIEnvironment` is false on a pipeline run
-- CI-specific metadata (build number, commit SHA) not captured
-
-> **Not a symptom:** the environment name reading `Default` on a CI run. That is correct.
-> `Environment` names the deployed environment your tests targeted, not the machine they ran on, so
-> a pipeline run and a local run of the same suite deliberately share one name. CI-ness is recorded
-> by the `IsCIEnvironment` flag and the `ExecutionContext` custom property instead. See
-> [Environment](../configuration/configuration-reference.md#environment).
-
-**Solution:**
-
-Detection is automatic and always on - there is no flag to enable. It keys off the platform's own
-environment variables, so it fails only when none of them are present in the test process.
-
-**Supported CI/CD platforms:**
-- GitHub Actions
-- Azure DevOps
-- GitLab CI/CD
-- Jenkins
-- CircleCI
-- Travis CI
-- TeamCity
-- Generic CI (via `CI=true` environment variable)
-
-**For unsupported platforms:** set `CI=true` in the pipeline. That is the generic signal, and it
-gets you `IsCIEnvironment` plus the developer-machine and git-metadata behaviour that depends on it.
-
-```bash
-export CI=true
-```
-
-Do **not** reach for `XPING_ENVIRONMENT="CI"` here. It would name the deployment "CI", splitting
-every affected test's scored history away from the local runs of the same suite.
-
----
-
-### Secrets & API Keys in CI/CD
-
-**Symptoms:**
-- API key exposed in logs
-- Build fails due to missing credentials
-- Security scanning flags hardcoded keys
-
-**Solution:**
-
-**Never hardcode API keys in source code or configuration files.**
-
-Use CI/CD secret management:
-
-**GitHub Actions:**
-```yaml
-- name: Run Tests
-  env:
-    XPING__APIKEY: ${{ secrets.XPING_APIKEY }}
-    XPING__PROJECTID: ${{ secrets.XPING_PROJECTID }}
-  run: dotnet test
-```
-
-**Azure DevOps:**
-```yaml
-- task: DotNetCoreCLI@2
-  inputs:
-    command: 'test'
-  env:
-    XPING__APIKEY: $(XpingApiKey)      # From pipeline variables
-    XPING__PROJECTID: $(XpingProjectId)
-```
-
-**GitLab CI:**
-```yaml
-test:
-  script:
-    - dotnet test
-  variables:
-    XPING__APIKEY: $XPING_APIKEY      # From GitLab CI/CD variables
-    XPING__PROJECTID: $XPING_PROJECTID
-```
-
-See [CI/CD Setup Guide](../getting-started/ci-cd-setup.md) for platform-specific instructions.
-
----
-
-### Parallel Test Execution Issues
-
-**Symptoms:**
-- Tests fail when running in parallel
-- Inconsistent results between parallel and sequential runs
-- Thread safety warnings
-
-**Solution:**
-
-The Xping SDK is designed to be thread-safe and supports parallel test execution. However, proper initialization and cleanup are essential.
-
-> **Note:** Setup and teardown patterns vary by test framework. See examples below for your framework.
-
-**Key requirements (all frameworks):**
-- Initialize once per test session (not per test)
-- Ensure proper cleanup/teardown
-- Avoid calling `Initialize()` in individual test methods
-
-**NUnit:**
-```csharp
-[SetUpFixture]
-public class XpingSetup
-{
-    [OneTimeSetUp]
-    public void Setup()
-    {
-        XpingContext.Initialize();
-    }
-
-    [OneTimeTearDown]
-    public async Task Cleanup()
-    {
-        await XpingContext.FinalizeAndShutdownAsync();
-    }
-}
-```
-
-**MSTest:**
-```csharp
-[TestClass]
-public static class XpingSetup
-{
-    [AssemblyInitialize]
-    public static void AssemblyInit(TestContext context)
-    {
-        XpingContext.Initialize();
-    }
-
-    [AssemblyCleanup]
-    public static async Task AssemblyCleanup()
-    {
-        await XpingContext.FinalizeAndShutdownAsync();
-    }
-}
-```
-
-**xUnit:**
-```csharp
-// Add to AssemblyInfo.cs - initialization and cleanup are automatic
-[assembly: TestFramework("Xping.Sdk.XUnit.XpingTestFramework", "Xping.Sdk.XUnit")] // xUnit v2
-[assembly: TestFramework(typeof(Xping.Sdk.XUnit.V3.XpingTestFramework))]           // xUnit v3
-```
-
-For detailed setup instructions, see the [Getting Started guides](../getting-started/quickstart-nunit.md) for your test framework.
-
----
-
-## Data & Metrics Issues
-
-### Missing Test Results
-
-**Symptoms:**
-- Some tests appear in Xping Cloud, others don't
-- Inconsistent test result uploads
-
-**Common Causes:**
-
-#### 1. Test Name Issues
-
-Very long test names may be truncated or rejected.
-
-**Solution:** Keep test names reasonable (<500 characters).
-
----
-
-#### 2. Upload Failures
-
-Individual upload failures may result in lost test data.
-
-**Solution:** Enable logging to identify upload issues. See [Debugging Guide](debugging.md).
-
----
-
-### Flaky Test Detection Not Working
-
-**Symptoms:**
-- Tests marked as flaky in your suite aren't detected by Xping
-- Confidence scores don't reflect test instability
-
-**Important:** Flaky test detection requires **statistical data over time**.
-
-**Requirements:**
-- **Minimum 10 test executions** for statistical analysis
-- **Consistent test names** across runs
-- **Time to process** uploaded data (asynchronous processing)
-
-**What to expect:**
-1. **First run:** Tests upload, no flakiness data yet
-2. **Runs 2-9:** Data accumulates, analysis begins
-3. **Run 10+:** Flakiness detection becomes reliable
-
-**If detection still isn't working after 10+ runs:**
-
-1. Verify tests are actually flaky (not environment issues)
-2. Check that test names are consistent across runs
-3. Ensure sufficient pass/fail variation for detection
-4. Review Xping Cloud filters—flaky tests may be filtered out
-
----
-
-## Troubleshooting Checklist
-
-Before seeking support, verify:
-
-- ✅ API Key is configured correctly
-- ✅ Network connectivity to `upload.xping.io` is working
-- ✅ SDK is enabled (`Enabled = true`)
-- ✅ Configuration is valid (proper JSON syntax, value ranges)
-- ✅ Logs are enabled to see detailed diagnostics
-- ✅ Latest SDK version is installed
-- ✅ Test framework integration is set up correctly
-
----
-
-## Getting Help
-
-If you're still experiencing issues after trying these solutions:
-
-1. **Enable debug logging** to capture detailed diagnostics (see [Debugging Guide](debugging.md))
-2. **Check the documentation:**
-   - [Configuration Reference](../configuration/configuration-reference.md)
-   - [Getting Started Guides](../getting-started/quickstart-nunit.md)
-   - [CI/CD Setup Guide](../getting-started/ci-cd-setup.md)
-3. **Contact support:**
-   - Email: support@xping.io
-   - Include: SDK version, .NET version, test framework, logs, and configuration (redact API keys!)
-
----
-
-## Related Documentation
-
-- [Debugging Guide](debugging.md) - Enable logging and diagnose SDK issues
-- [Configuration Reference](../configuration/configuration-reference.md) - Complete configuration guide
-- [Performance Overview](../guides/optimization/performance-overview.md) - Optimize SDK performance
-- [CI/CD Setup Guide](../getting-started/ci-cd-setup.md) - Platform-specific CI/CD instructions
+## See also
+
+- [Debugging](debugging.md)
+- [Known limitations](known-limitations.md)
+- [Configuration reference](../configuration/configuration-reference.md)
+- [Set up CI](../getting-started/ci-cd-setup.md)
+- [Performance](../performance/performance.md)

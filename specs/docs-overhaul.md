@@ -157,7 +157,13 @@ Inbound links that move with the files. Fix them in the same PR as the move:
 | Root `README.md`, `nuspec/README.Cli.md`, adapter READMEs | Quickstart, local-first, configuration-reference and common-issues URLs. These keep their paths. Check them anyway. |
 | Internal links | 5 pages link `guides/optimization/performance-overview.md`. PR-comment and CLI pages link the Guides pages. |
 
-Xping Cloud (dashboard `src/`) links only to `https://docs.xping.io/`, so no Cloud code changes.
+Xping Cloud (dashboard `src/`) builds docs links as the docs base URL plus a path, so a grep for the full `docs.xping.io/…` URL misses them.
+Two Cloud links point to moved pages. They change in a dashboard PR that merges in step with the docs release, because docs.xping.io changes only on a release tag:
+
+| Link source (dashboard) | Old path | New path |
+|---|---|---|
+| `src/Core/Xping.Application/Core/Services/PullRequestReports/PrReportOptions.cs:20`, `src/UX/Xping.Portal/appsettings.json:33`, `src/Services/Xping.Analytics/appsettings.json:18` (`PrReportDocsPath`, the PR comment's "How to read this" link) | `guides/pull-requests/reading-the-xping-comment.html` | `cloud/reading-the-pr-comment.html` |
+| `src/UX/Xping.Portal/Components/Pages/Sessions/Tabs/Components/SessionVerdictStrip.razor:22` | `guides/getting-started/session-reliability-score.html` | `cloud/session-reliability-score.html` |
 
 ---
 
@@ -1162,7 +1168,7 @@ Key current facts used throughout:
 | 23 | Projects section: table columns, `–`/`pending`, dropped-category list, last 3 earlier commits | ✅ | :685-760; `PreviousCommitsShown = 3` (`PullRequestReportViewModelBuilder.cs:54`) |
 | 24 | Failure page sections (Verdict, This run, Timeline, Compared with last passing run on main, Related) and "PR has moved on" notice | ✅ | `Pages/PullRequests/Failure.razor:61-68,290` |
 | 25 | Turn off: workspace pause in Settings → Integrations; per-project toggle | ✅ | `Settings/Integrations/Index.razor:58` "Pause PR comments"; `Identity/Projects/Components/ProjectPrCommentsPanel.razor` "Pull-request comments" Turn on/off |
-| 26 | Footer "How to read this" links to this page | ✅ | `PrReportDocsPath = guides/pull-requests/reading-the-xping-comment.html` (`PrReportOptions.cs:20`) — URL must not change |
+| 26 | Footer "How to read this" links to this page | ✅ | `PrReportDocsPath = guides/pull-requests/reading-the-xping-comment.html` (`PrReportOptions.cs:20`). The page moves to `cloud/reading-the-pr-comment.md` in P1; the dashboard setting moves with it (§2) |
 | 27 | Links to session-reliability-score, understanding-confidence-scores, identifying/fixing flaky tests | ✅ | Targets exist (but two of them are stale — see above) |
 
 **Structural:**
@@ -1712,14 +1718,14 @@ The code changes in §7.1 (K1–K9) are not part of `feat/docs-overhaul`. Each o
   - Do not add NEW pages yet. Each NEW page arrives with its content phase.
   - Move `versioning.md` to `docs/internals/` (S6).
   - Delete `guides/getting-started/navigating-xping-cloud.md` and its two `Dashboard_*.png` images (C2). Remove the links to it from `index.md`, the three quickstarts, `understanding-confidence-scores.md`, `interpreting-test-results.md`, `identifying-flaky-tests.md` and `monitoring-test-health.md`.
-  - Add `Xping.Sdk.XUnit.V3` to `docfx.json` metadata, and fix the 2 metadata warnings.
+  - Add `Xping.Sdk.XUnit.V3` to `docfx.json` metadata. The 2 `docfx metadata` warnings stay (Q1).
   - Update every inbound link in the §2 table: `ReportVocabulary.cs`, `DocumentedSampleTests.cs`, the READMEs and internal links.
   - Delete the stale remote branches (S8).
   - Do not change `release.yml` (S13).
-- **Verify against:** `docs/docfx.json`, `DocumentedSampleTests.cs:61-73`, and a grep for `docs.xping.io` across both repos.
+- **Verify against:** `docs/docfx.json`, `DocumentedSampleTests.cs:61-73`, a grep for `docs.xping.io` across both repos, and a grep for every moved path (Cloud builds links from a base URL plus a path).
 - **Accept when:**
   - the nav matches §2, apart from the NEW pages;
-  - the build has 0 warnings;
+  - `docfx build` has 0 warnings (`docfx metadata` keeps its 2 accepted warnings, Q1);
   - `DocumentedSampleTests` passes;
   - the CLI's printed population-marker URL resolves;
   - the API reference lists `Xping.Sdk.XUnit.V3`.
@@ -1959,7 +1965,7 @@ The code changes in §7.1 (K1–K9) are not part of `feat/docs-overhaul`. Each o
   - Make one link-check pass that covers absolute `docs.xping.io` links.
   - Remove any history wording ("now", "used to", "previously", "new in").
   - Remove "Dashboard" from text and image names.
-  - Make `docfx build` fail on warnings in a PR check workflow. The check only builds the docs; the deploy stays in `release.yml`, unchanged (S13).
+  - Make `docfx build` fail on warnings in a PR check workflow. The check runs `docfx metadata` first without `--warningsAsErrors`, because its 2 warnings are accepted (Q1). The check only builds the docs; the deploy stays in `release.yml`, unchanged (S13).
 - **Verify against:** the §8 glossary and the invariants list.
 - **Accept when:**
   - `docfx build` has 0 warnings with `--warningsAsErrors`;
@@ -2050,6 +2056,20 @@ Tracked in: K1–K8 and K10 → xping-dev/sdk-dotnet#369; K9 → xping-dev/dashb
 
 No open questions remain from Phase 0. If a later phase finds a new decision it cannot settle from the code, it adds the question here before it writes the page.
 
+**Open questions from later phases**
+
+| # | Phase | Question | Status |
+|---|---|---|---|
+| Q1 | P1 | `docfx metadata` prints `Found project reference without a matching metadata reference` once per referenced project (Shared, Core). Every adapter project triggers it, with or without the `TargetFramework` property, with `Configuration=Release`, and with `ProduceReferenceAssembly=false`. Cross-project types still resolve (`Xping.Sdk.MSTest.XpingContext` inherits `Xping.Sdk.Core.XpingContextOrchestrator` in the output), so the warnings are cosmetic. `docfx build` has 0 warnings. Feeding docfx the built DLLs would remove them, but `release.yml` has no build step and S13 forbids changing it. Accept the 2 metadata warnings, or allow a build step in `release.yml`? | **Accepted (2026-11-19).** The 2 metadata warnings stay. `release.yml` is unchanged. P12's warnings-as-errors check applies to `docfx build`, not `docfx metadata`. |
+| Q2 | P2 | P2 replaces Home's "no PII" with a link to `configuration/collected-data.md`, but that page is NEW in P4. A link to it now breaks the build. Until P4: list the identity fields in one short paragraph on Home (machine name and CI actor login always; local git author and CI actor email only when switched on; error messages uploaded word for word; stack text only with `UploadStackTraces`) and link the configuration reference for the switches; P4 replaces the paragraph with the collected-data link. Or create collected-data in P2 as a stub? | **Decided (2026-11-19): short list on Home now, the collected-data link in P4.** |
+| Q4 | P3 | The xUnit quickstart's "configure in code" uses `[ModuleInitializer]` to call `XpingContext.Initialize(config)` before the Xping framework starts. On xUnit **v3** this works (measured: the init line shows `Environment: FromCode`). On xUnit **v2** it does not: xUnit v2 builds `XpingTestFramework` and starts the session (`src/Xping.Sdk.XUnit/XpingTestFramework.cs:63-70` → `XpingContextSingleton.Start`, which calls `Initialize(null)`) before any code in the test assembly runs, so the module initializer runs after the init line and its configuration is ignored (measured: `Environment: Default`, then the initializer's stamp). Fix the v2 adapter (for example, run the test assembly's module constructor in `CreateExecutor` before `StartExecutorServices`), or document that xUnit v2 takes configuration only from environment variables and `appsettings.json`? | **Decided (2026-11-20): fix the adapter** (#382). The quickstart keeps the v2 snippet. P3 merges after #382. |
+| Q3 | P2 | The root `README.md` repeats most of the Home page, with the same defects: the `[assembly: XpingTrack]`-only NUnit snippet, the bare MSTest snippet, "no personally identifiable information", network metrics, "add `.xping/` to your `.gitignore`", "upload-only" key, "GitHub PR comments", and the stale roadmap. `nuspec/README.md` has the NUnit snippet. No phase lists these files. P2 fixed only their install lines (S5). Fix them in P2 as a follow-up commit, or add them to P3 with the adapter READMEs? | **Decided (2026-11-19): fixed in P2 as a follow-up commit.** |
+| Q5 | P5 | The configuration reference must quote the SDK's error lines word for word. Measured on NUnit/vstest, three of them are defective: (1) `[Xping HH:mm:ss ERR] Configuration validation failed: ApiKey is required in Cloud mode.. SDK disabled - tests will run without observability tracking. ` has a double period and a trailing space, because the template in `XpingContextOrchestrator.cs:304-306` appends `. ` after messages that already end in `.`; (2) an out-of-range `BatchSize` or `MaxRetries` is reported twice, once by the `[Range]` data annotation (`XpingConfiguration.cs:75,152`, `DataAnnotation validation failed for 'XpingConfiguration' members: 'BatchSize' with the error: 'BatchSize must be between 1 and 1000'.`) and once by `Validate()` (`BatchSize cannot exceed 1000.`); (3) the first SDK line on stdout and on stderr starts with a UTF-8 BOM (U+FEFF), because `RawConsoleSink.cs:35,39` uses `Encoding.UTF8`. Fix them in code first (one PR into `main`, like #382), so the page quotes clean strings? Or document them as they are? | **Decided (2026-11-22): fix them in code first** (one PR into `main`). P5 quotes the fixed strings and merges after it. |
+| Q6 | P8 | How are the read API samples captured? | **Decided (2026-11-23): live calls.** Claude runs the AppHost from a clean copy of dashboard `origin/main` on the existing dev volumes. The user signs in once with `xping login`. Every endpoint is called, and the output is anonymized. |
+| Q7 | P8 | `SubscriptionPlan` lists Score Breakdown (Basic+), Trend Analysis and Environment Comparison (Pro+), but no code checks these features (no `SubscriptionFeature.<name>` reference outside `Xping.Domain/Entities/Subscription`), so every plan sees them. Only `ApiAccess` (`ApiScope.RequiredFeature`, `ApiKeyValidator.cs:115-117`), `PrComments` and `AiTestAnalysis` are enforced. What does plans-and-retention say? | **Decided (2026-11-23): document the enforced gates only.** Link xping.io/pricing for the full feature list. xping-dev/dashboard#528 tracks the missing gates. |
+| Q8 | P8 | Does read-api publish the rate-limit numbers (`RateLimitPolicyResolver.cs:28-55`)? | **Decided (2026-11-23): no.** Describe the four windows, the `X-RateLimit-*` and `Retry-After` headers and the 429 body, and say the limits depend on the plan. |
+| Q9 | P12 | The glossary leaves "test run" vs "session" open. Pages use "run" about 1,200 times and "session" about 260 times. Which word do the docs use? | **Decided (2026-11-26): "run".** Prose says "run" everywhere. "Session" stays only inside names and identifiers: `SessionId`, `TestSession`, the read API's `sessions` endpoints and fields, the local store's `session-*.json.gz` files, and the Session reliability score. collected-data defines a run and says the SDK and the read API call it a session. |
+
 ---
 
 ## 8. Writing rules for every later phase
@@ -2087,7 +2107,7 @@ No open questions remain from Phase 0. If a later phase finds a new decision it 
 
 | Term | Meaning | Defined on |
 |---|---|---|
-| test run / session | One `dotnet test` invocation recorded by the SDK. Pick one word in P12 and use it everywhere. The code uses "session" and the CLI says "runs". | collected-data |
+| run | One `dotnet test` invocation recorded by the SDK, for one test assembly or more. The SDK's API and the read API call it a session (Q9). | collected-data |
 | execution | One test's result within a session. | collected-data |
 | local store | The folder where the SDK writes sessions and the CLI reads them. | local-store |
 | finding | Something `xping report` observed in local history, with a kind. | reading-the-report |

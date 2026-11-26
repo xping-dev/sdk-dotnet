@@ -1,686 +1,299 @@
 ---
 uid: troubleshooting-debugging
-title: Debugging Guide
+title: Debugging
 ---
 
-# Debugging Guide
+# Debugging
 
-This guide explains how to diagnose and troubleshoot issues with the Xping SDK using logging, diagnostics, and inspection techniques.
+This page shows how to see what the SDK does during a test run: where its output appears, what each
+line means, and how to get more detail. For fixes to specific errors, see
+[Common issues](common-issues.md).
 
 ---
 
-## Enabling SDK Logging
+## See the SDK's output
 
-The Xping SDK includes built-in diagnostic logging to help troubleshoot integration issues. By default, logging outputs to the console.
+The SDK writes its messages to the test process's standard output and standard error. Messages at
+`Warning` and above go to standard error, and the rest to standard output.
 
-### Console Logging (Default)
+Where you see them depends on the runner:
 
-The SDK writes its messages to the console at `Information` and above. To see more, raise the
-level with the `XPING_LOGLEVEL` environment variable:
-
-```bash
-XPING_LOGLEVEL=Debug dotnet test
-```
-
-Or set [`LogLevel`](../configuration/configuration-reference.md#loglevel) in the `"Xping"` section of
-`appsettings.json`, or in code:
-
-```csharp
-using Microsoft.Extensions.Logging;
-using Xping.Sdk.Core.Configuration;
-
-var config = new XpingConfiguration
-{
-    LogLevel = LogLevel.Debug
-};
-
-XpingContext.Initialize(config);
-```
-
-The environment variable wins over both.
-
-### Log Levels
-
-`LogLevel` takes the `Microsoft.Extensions.Logging.LogLevel` values. Each one includes every level
-above it:
-
-| Level | What you see | Use case |
-|-------|--------------|----------|
-| `Trace` | Everything | Rarely needed |
-| `Debug` | Detailed diagnostics, including failures the SDK absorbs (a local store it could not write, PR detection it skipped) | Troubleshooting the SDK |
-| `Information` | Start-up, the run summary, warnings and errors (default) | Day to day, and CI |
-| `Warning` | Warnings and errors | Quieter CI logs |
-| `Error` | Errors only | Quietest useful setting |
-| `Critical` | Nothing today: the SDK writes no message at this level | Rarely needed |
-| `None` | Nothing | Silencing the SDK |
-
-### Filtering Xping Logs
-
-When troubleshooting, you may want to isolate only Xping SDK logs from the test output. All Xping log messages are prefixed with `[Xping]` for easy filtering.
-
-#### Linux/macOS
-
-Use `grep` to filter Xping-specific output:
+| Runner | Where the SDK's lines appear |
+|---|---|
+| vstest (`dotnet test`), NUnit, MSTest and xUnit v2 | Only at `normal` verbosity or higher: `dotnet test --logger "console;verbosity=normal"`. The default verbosity hides them. |
+| vstest, xUnit v3 | Not in the `dotnet test` output. Run the test project with `dotnet run`, or run its executable directly, such as `./bin/Release/net10.0/MyApp.Tests`. |
+| Microsoft.Testing.Platform | In the test executable's output, at the default verbosity. |
 
 ```bash
-# Filter only Xping logs
-dotnet test --logger "console;verbosity=detailed" 2>&1 | grep "^\s*\[Xping\]"
-
-# Show only Xping WARNING and ERROR messages
-dotnet test --logger "console;verbosity=detailed" 2>&1 | grep "^\s*\[Xping\] \(WARNING\|ERROR\)"
-
-# Show Xping logs with surrounding context (2 lines before/after)
-dotnet test --logger "console;verbosity=detailed" 2>&1 | grep -B2 -A2 "^\s*\[Xping\]"
-
-# Suppress build output for cleaner view
-dotnet test --logger "console;verbosity=detailed" --nologo 2>&1 | grep "^\s*\[Xping\]"
+dotnet test --logger "console;verbosity=normal"
 ```
 
-#### Windows PowerShell
+A line from the SDK's log starts with `[Xping`, the time and the level:
 
-Use `Select-String` to filter Xping-specific output:
+```
+[Xping 13:16:21 INF] Initialized. SessionId: "12048a9a-1213-4aa9-8558-a3b850b2a631", Environment: Local
+```
+
+The levels print as `DBG`, `INF`, `WRN`, `ERR` and `FTL` (`Critical`). A few messages start with
+`[Xping]` and no time. The SDK writes them directly, without its log:
+
+- `[Xping] SDK initialization failed: …`, when the SDK cannot start;
+- `[Xping] Strict mode configuration error: …` and `[Xping] Xping network error in strict mode: …`,
+  when [`StrictMode`](../configuration/configuration-reference.md#strictmode) fails the run;
+- `[Xping] 1 test flaked on retry this run - …`, the retry hint.
+
+### Filter the output
+
+Every SDK line contains `[Xping`:
+
+```bash
+dotnet test --logger "console;verbosity=normal" 2>&1 | grep '\[Xping'
+
+# Warnings and errors only
+dotnet test --logger "console;verbosity=normal" 2>&1 | grep -E '\[Xping [0-9:]+ (WRN|ERR)\]'
+```
+
+In PowerShell:
 
 ```powershell
-# Filter only Xping logs
-dotnet test --logger "console;verbosity=detailed" 2>&1 | Select-String "^\s*\[Xping\]"
+dotnet test --logger "console;verbosity=normal" 2>&1 | Select-String '\[Xping'
 
-# Show only Xping WARNING and ERROR messages
-dotnet test --logger "console;verbosity=detailed" 2>&1 | Select-String "^\s*\[Xping\] (WARNING|ERROR)"
-
-# Show Xping logs with surrounding context (2 lines before/after)
-dotnet test --logger "console;verbosity=detailed" 2>&1 | Select-String "^\s*\[Xping\]" -Context 2,2
-
-# Save filtered output to file
-dotnet test --logger "console;verbosity=detailed" 2>&1 | Select-String "^\s*\[Xping\]" | Out-File xping-logs.txt
-```
-
-#### Windows Command Prompt
-
-Use `findstr` to filter Xping-specific output:
-
-```cmd
-REM Filter only Xping logs
-dotnet test --logger "console;verbosity=detailed" 2>&1 | findstr /R "^ *\[Xping\]"
-
-REM Save to file
-dotnet test --logger "console;verbosity=detailed" 2>&1 | findstr /R "^ *\[Xping\]" > xping-logs.txt
-```
-
-**Note:** For **MSTest** projects, you must use `--logger "console;verbosity=detailed"` to see SDK logs, as MSTest captures console output by default. For **NUnit** and **xUnit** projects, standard verbosity is sufficient as their logs appear in normal test output.
-
----
-
-## Understanding Log Messages
-
-### Informational Messages
-
-These indicate normal SDK operation:
-
-```
-[Info] Xping SDK initialized (v1.0.4)
-[Info] Configuration loaded: BatchSize=100, FlushInterval=30s
-[Info] Uploaded 45 test executions (ReceiptId: abc123)
-[Info] Environment detected: CI (GitHub Actions)
-```
-
-**What it means:** SDK is working correctly, uploads are successful.
-
----
-
-### Warning Messages
-
-These indicate potential issues that don't prevent operation:
-
-```
-[Warning] Upload retry attempt 2/3 after network timeout
-[Warning] Stack trace capture failed for test 'MyTest': Stack trace unavailable
-[Warning] Status: Upload attempts will resume after circuit breaker resets (30 seconds)
-```
-
-**What to do:**
-- **Retries:** Monitor if retries succeed. Persistent retries may indicate network issues.
-- **Stack trace failures:** Non-critical; test data still uploads without stack traces.
-- **Circuit breaker warnings:** Indicates repeated failures; check underlying error logs.
-
----
-
-### Error Messages
-
-These indicate failures that prevent SDK functionality:
-
-#### Authentication Errors
-
-```
-[Error] Upload failed: Authentication failed (401): Invalid API Key or Project ID
-  Action: Verify credentials at https://app.xping.io
-```
-
-**Solution:** Verify your API key and Project ID are correct.
-
----
-
-#### Configuration Errors
-
-```
-[Error] Upload skipped: API Key is required but not configured
-[Info] Action: Configure credentials in appsettings.json or environment variables
-[Info]   - Set the XPING__APIKEY environment variable
-[Info]   - Or add 'Xping' section to appsettings.json
-```
-
-**Solution:** Configure required credentials.
-
----
-
-#### Network Errors
-
-```
-[Error] Network error: Unable to connect to upload.xping.io
-[Error] HTTP request failed: The remote name could not be resolved: 'upload.xping.io'
-```
-
-**Solution:** Check network connectivity, firewall rules, DNS resolution.
-
----
-
-#### Server Errors
-
-```
-[Error] Upload failed: Server error (503): API temporarily unavailable
-  Status: Uploads will be retried automatically
-```
-
-**Solution:** Wait for automatic retry. If persistent, check Xping status page or contact support.
-
----
-
-#### Circuit Breaker Errors
-
-```
-[Error] Circuit breaker is open: Too many consecutive failures
-[Warning] Status: Upload attempts will resume after circuit breaker resets (30 seconds)
-```
-
-**What it means:** The SDK has detected repeated failures (50% failure rate over 10+ attempts) and temporarily stopped upload attempts.
-
-**Solution:** 
-1. Fix the underlying issue (network, credentials, API availability)
-2. Wait 30 seconds for automatic reset
-3. Enable debug logging to see what's causing failures
-
----
-
-### Debug Messages
-
-These provide detailed diagnostic information:
-
-```
-[Debug] Collecting test execution: TestName='MyTest', Outcome=Passed, Duration=125ms
-[Debug] Batch size reached (100 tests), uploading to API
-[Debug] HTTP POST to https://upload.xping.io?sessionId=abc123-def456
-[Debug] Compression enabled: Original=45KB, Compressed=12KB (73% reduction)
-[Debug] Upload completed: StatusCode=200, ReceiptId=xyz789
-```
-
-**Use case:** Troubleshooting SDK behavior, verifying configuration, tracking upload timing.
-
----
-
-## Verifying Configuration at Runtime
-
-To verify what configuration values the SDK is using:
-
-### Using Debug Logging
-
-Set `XPING_LOGLEVEL=Debug` and check the initialization messages:
-
-```
-[Info] Xping SDK initialized (v1.0.4)
-[Debug] Configuration loaded:
-  - ApiEndpoint: https://upload.xping.io
-  - ProjectId: my-project
-  - BatchSize: 100
-  - FlushInterval: 00:00:30
-  - Enabled: True
-  - Environment: CI
-```
-
-### Programmatic Inspection
-
-Access the current configuration via `XpingContext`:
-
-```csharp
-// After initialization
-var config = XpingContext.Configuration;
-
-Console.WriteLine($"API Endpoint: {config.ApiEndpoint}");
-Console.WriteLine($"Project ID: {config.ProjectId}");
-Console.WriteLine($"Batch Size: {config.BatchSize}");
-Console.WriteLine($"SDK Enabled: {config.Enabled}");
+# Warnings and errors only
+dotnet test --logger "console;verbosity=normal" 2>&1 | Select-String '\[Xping [0-9:]+ (WRN|ERR)\]'
 ```
 
 ---
 
-## Testing API Connectivity Independently
+## Read the SDK's output
 
-### Command Line Testing
+A run in `Cloud` mode that uploads without errors prints these lines:
 
-Test HTTPS connectivity to Xping API:
+```
+[Xping 13:16:21 INF] Initialized. SessionId: "12048a9a-1213-4aa9-8558-a3b850b2a631", Environment: Local
+[Xping 13:16:22 INF] Published 15 tests in 23ms (21.4 KB) · receipt 3f9a1c2e
+[Xping 13:16:22 INF] Finalization receipt 3f9a1c2e (1ms, 1.7 KB)
+[Xping 13:16:22 INF] Total tests recorded: 15 · 10 passed, 4 failed, 1 timed out · exec: 581ms · wall: 651ms (+70ms overhead)
+```
 
-**Linux/macOS:**
+### The start line
+
+The first line says how the SDK started. Check it first when the SDK does not do what you expect.
+
+| Line | Meaning |
+|---|---|
+| `Initialized. SessionId: …, Environment: …` | `Cloud` mode. Each test assembly reports into its own project. |
+| `Initialized. SessionId: …, Project: <id> (pinned), Environment: …` | `Cloud` mode, with every result going to the [`ProjectId`](../configuration/configuration-reference.md#projectid) you set. |
+| `Initialized in local-only mode. … No API key configured - results stay on this machine.` | `LocalOnly` mode, because the SDK found no API key. |
+| `Initialized in local-only mode. … Mode is set to LocalOnly - results stay on this machine.` | `LocalOnly` mode, because you set it. |
+| `SDK is disabled via configuration (Enabled=false). …` or `(Mode=Disabled)` | The SDK records nothing. |
+| `Configuration validation failed: … SDK disabled - …` | A setting is invalid, and the SDK records nothing. See [Validation rules](../configuration/configuration-reference.md#validation-rules). |
+
+`Environment` is the [environment name](../configuration/configuration-reference.md#environment):
+the deployment that the tests run against. It is `Default` when you set none. The examples on this
+page come from a shell with `XPING_ENVIRONMENT=Local`.
+
+### Upload lines
+
+In `Cloud` mode, the SDK prints a line for each upload it makes:
+
+- `Published 15 tests in 23ms (21.4 KB) · receipt 3f9a1c2e`: a batch of test results. The size is the
+  size of the JSON before compression.
+- `Finalization receipt 3f9a1c2e (1ms, 1.7 KB)`: the final upload, which closes the run.
+
+The receipt is the first 8 characters of the receipt ID that Xping Cloud returns. Keep it when you
+contact support about a run.
+
+`LocalOnly` mode makes no uploads, so it prints no upload lines.
+
+### The summary line
+
+At the end of the run, the SDK prints a summary of what it recorded:
+
+```
+[Xping 13:15:19 INF] Total tests recorded: 25 (24 tests, 1 retry) · 17 passed, 5 failed, 2 timed out · exec: 2.6s · wall: 2.7s (+161ms overhead)
+```
+
+- `25 (24 tests, 1 retry)`: 25 [executions](../configuration/collected-data.md#each-execution) of 24 tests. The part in brackets appears only when a test
+  was retried. The outcomes then count each test by its last attempt.
+- `exec`: the total of each test's own duration.
+- `wall`: the time from the SDK's start to the end of the run.
+- `(+161ms overhead)`: `wall` minus `exec`. It includes the framework's setup and teardown and the
+  time between tests, not only the SDK's work. When tests run in parallel, `exec` can be larger than
+  `wall`, and the overhead is left out.
+
+`exec` is often much smaller than the duration the test framework reports. The framework's duration
+also includes loading the assemblies and discovering the tests.
+
+When the final upload fails, the SDK prints `Session finalized.` instead of the summary.
+
+### The retry hint
+
+When a test passes on a retry in a local run, the SDK prints a hint after the summary:
+
+```
+[Xping] 1 test flaked on retry this run - run `xping report` for local history
+```
+
+It does not print the hint in CI. To hide it everywhere, set `XPING_NO_BANNER` to any value.
+
+### Repeated errors
+
+The SDK prints an upload error in full the first time. When the same error repeats in the same
+run, it prints a short line instead:
+
+```
+[Xping 13:16:24 ERR] Same HTTP 401 error (2nd occurrence, batch size: 0)
+```
+
+`batch size` is the number of test results in that upload. The final upload carries none, so it shows
+`0`. A successful upload resets the count.
+
+---
+
+## Get more detail
+
+Set [`LogLevel`](../configuration/configuration-reference.md#loglevel) to `Debug`:
+
 ```bash
-# Test basic connectivity
-curl -v https://upload.xping.io
-
-# Test with authentication (replace with your credentials)
-curl -X POST https://upload.xping.io \
-  -H "X-API-Key: your-api-key" \
-  -H "X-Project-Id: your-project-id" \
-  -H "Content-Type: application/json" \
-  -d '{"executions":[]}'
+XPING_LOGLEVEL=Debug dotnet test --logger "console;verbosity=normal"
 ```
 
-**Windows PowerShell:**
+`Debug` adds the steps that the SDK skips or absorbs so that it never breaks the test run. For
+example:
+
+```
+[Xping 13:21:01 DBG] GitHub PR detection skipped: GITHUB_EVENT_NAME='null' (expected 'pull_request' or 'pull_request_target').
+[Xping 13:21:01 DBG] Finalizing session
+```
+
+Other Debug messages include `Local session store write skipped: …` and `Local session not stored:
+…`, when the SDK could not write the [local store](../configuration/local-store.md).
+
+`LogLevel` takes `Trace`, `Debug`, `Information` (the default), `Warning`, `Error`, `Critical` and
+`None`. Each level includes the levels above it. `None` silences the SDK's log. It does not hide the
+lines that start with `[Xping]` and no time.
+
+---
+
+## Warnings and errors
+
+These are the warnings and errors that the SDK logs, apart from the upload errors. For the upload
+errors, see [Upload errors](common-issues.md#upload-errors).
+
+| Message starts with | Meaning |
+|---|---|
+| `FlushInterval '…' is not a duration and was ignored.` | The value is neither whole seconds (`30`) nor a time with colons (`00:00:30`). The setting keeps its default. The message names the setting as you wrote it, such as `XPING_FLUSHINTERVAL` or `Xping:FlushInterval`. The same applies to `RetryDelay` and `UploadTimeout`. |
+| `Duplicate test fingerprint detected: …` | Two different tests have the same `[XpingFingerprint]` value. Their results can overwrite each other in Xping Cloud. Give one of them another value. |
+| `N executions carry no test assembly and cannot be attributed to a project.` | The SDK could not tell which test assembly these results came from. With no `ProjectId`, Xping Cloud cannot place them. |
+| `No test assembly could be resolved for this session, …` | No result named a test assembly. Set `ProjectId` for Cloud. Report it as an SDK bug. |
+| `GITHUB_EVENT_NAME is not set, …` | On GitHub Actions, the test process did not get `GITHUB_EVENT_NAME`, often because the tests run in a container. Pass the `GITHUB_*` variables into the container. |
+| `GitHub PR detection skipped: …` | The SDK could not read the pull request from GitHub's variables or event file. The message names what is missing. |
+| `Sending the configured default branch '…' …` | You set [`DefaultBranch`](../configuration/configuration-reference.md#defaultbranch), and it differs from the branch the CI reports. |
+| `[Xping] Process exiting with session … still active: …` | MSTest only. No `[AssemblyCleanup]` finalized the session. See [Known limitations](known-limitations.md#mstest-a-run-finalized-by-the-process-exit-safety-net-loses-its-upload-on-vstest). |
+| `Failed to initialize Xping SDK: … SDK disabled - …` | The SDK could not start, and records nothing. The message gives the reason. |
+| `Error finalizing Xping session` | The end of the run failed. The exception follows the message. |
+
+---
+
+## Check the configuration
+
+1. **Read the start line.** It shows the mode, the project pin and the environment name. See
+   [The start line](#the-start-line).
+2. **List the `XPING_*` variables that the shell sets**, without their values:
+
+   ```bash
+   env | grep '^XPING_' | cut -d= -f1
+   ```
+
+   ```powershell
+   Get-ChildItem Env:XPING_* | Select-Object Name
+   ```
+
+   The names use one underscore, such as `XPING_APIKEY`. They win over `appsettings.json` and over a
+   configuration object passed in code.
+3. **Find the local store** with `xping where`. It shows the folder and the runs in it. See
+   [Local store](../configuration/local-store.md).
+4. **Rule out the upload.** Run once with `XPING_MODE=LocalOnly`. If the problem stays, it is not the
+   upload.
+
+For the configuration sources and their order, see
+[Configuration methods](../configuration/configuration-reference.md#configuration-methods).
+
+---
+
+## Check the network
+
+The SDK uploads to `https://upload.xping.io/v1` over HTTPS (port 443), unless you set
+[`ApiEndpoint`](../configuration/configuration-reference.md#apiendpoint).
+
+Check that the machine reaches it:
+
+```bash
+curl -sS -o /dev/null -w '%{http_code}\n' https://upload.xping.io/v1
+```
+
 ```powershell
-# Test connectivity
 Test-NetConnection -ComputerName upload.xping.io -Port 443
-
-# Test with authentication
-$headers = @{
-    "X-API-Key" = "your-api-key"
-    "X-Project-Id" = "your-project-id"
-    "Content-Type" = "application/json"
-}
-Invoke-RestMethod -Uri "https://upload.xping.io" -Method Post -Headers $headers -Body '{"executions":[]}'
 ```
 
-**Expected responses:**
-- **200 OK:** Connection successful, credentials valid
-- **401 Unauthorized:** Invalid API key or Project ID
-- **403 Forbidden:** Valid credentials but insufficient permissions
-- **Connection refused/timeout:** Network connectivity issue
+Any HTTP status code from `curl` means the machine reaches the endpoint. A connection error or a
+timeout means a firewall, a proxy or DNS blocks it.
+
+The SDK uses the standard .NET proxy settings. It honours the `HTTPS_PROXY`, `HTTP_PROXY` and
+`NO_PROXY` environment variables, and the system proxy settings on Windows and macOS.
+
+### Inspect the requests
+
+To see the requests, route them through a debugging proxy such as Fiddler or mitmproxy: set
+`HTTPS_PROXY` to the proxy's address, and trust the proxy's root certificate on the machine. Each
+upload is a `POST` to `<ApiEndpoint>?sessionId=<id>`, with these headers:
+
+| Header | Value |
+|---|---|
+| `X-API-Key` | The API key |
+| `X-Project-Id` | The `ProjectId`, only when you set one |
+| `User-Agent` | `Xping-SDK-DotNet/<version>` |
+| `Content-Encoding` | `gzip`, when the body is larger than 1 KB and [`EnableCompression`](../configuration/configuration-reference.md#enablecompression) is on |
+
+Remove the API key before you share a capture.
 
 ---
 
-## Inspecting Network Traffic
+## Collect information for support
 
-For advanced troubleshooting, inspect HTTP requests and responses:
+When you report a problem, include:
 
-### Using Fiddler (Windows/macOS)
+1. **The SDK version:**
 
-1. Install [Fiddler](https://www.telerik.com/fiddler)
-2. Configure Fiddler to decrypt HTTPS traffic (Tools → Options → HTTPS)
-3. Run your tests
-4. Filter for `upload.xping.io` in Fiddler
-5. Inspect request headers, body, and response
+   ```bash
+   dotnet list package | grep Xping
+   ```
 
-**What to check:**
-- Request headers include `X-API-Key`, and `X-Project-Id` only when a project is pinned
-- Request body contains test execution data
-- Response status code and body
+2. **The .NET SDK, the runtime and the OS:** `dotnet --info`.
+3. **The test framework, its version and the runner** (vstest or Microsoft.Testing.Platform):
 
----
+   ```bash
+   dotnet list package | grep -E -i 'nunit|xunit|mstest'
+   ```
 
-### Using Wireshark (Advanced)
+4. **The SDK's output, with Debug detail:**
 
-For network-level inspection:
+   ```bash
+   XPING_LOGLEVEL=Debug dotnet test --logger "console;verbosity=normal" > test-output.log 2>&1
+   ```
 
-1. Install [Wireshark](https://www.wireshark.org/)
-2. Start capture on your network interface
-3. Apply filter: `http.host contains "upload.xping.io"`
-4. Run your tests
-5. Analyze packets
+5. **The `SessionId` and the receipts** from the output, for a run that reached Xping Cloud.
+6. **Your configuration, without the API key.**
+7. **A small project that reproduces the problem**, if you can make one.
 
-**Note:** HTTPS traffic is encrypted; Wireshark shows TCP/TLS handshake but not decrypted payload.
-
----
-
-### Using .NET HTTP Logging
-
-Enable .NET HTTP client logging in your test project:
-
-```json
-// appsettings.json
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "System.Net.Http.HttpClient": "Trace"  // Enable HTTP logging
-    }
-  }
-}
-```
-
-Or via environment variable:
-
-```bash
-export DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_HTTP2SUPPORT=false
-export DOTNET_SYSTEM_NET_HTTP_LOGGING_LEVEL=Trace
-```
-
-This logs all HTTP requests and responses, including Xping SDK uploads.
+Email support@xping.io, or open an issue at
+[github.com/xping-dev/sdk-dotnet](https://github.com/xping-dev/sdk-dotnet/issues).
 
 ---
 
-## Common Error Codes
-
-### HTTP Status Codes
-
-| Code | Message | Meaning | Solution |
-|------|---------|---------|----------|
-| **200** | OK | Upload successful | None needed |
-| **400** | Bad Request | Invalid request payload | Check SDK version, report bug if persistent |
-| **401** | Unauthorized | Invalid API key or Project ID | Verify credentials at https://app.xping.io |
-| **403** | Forbidden | Valid credentials, insufficient permissions | Check project access in Xping Cloud |
-| **429** | Too Many Requests | Rate limit exceeded | Reduce frequency, increase batch size |
-| **500** | Internal Server Error | Xping API error | Retry automatically handled; contact support if persistent |
-| **503** | Service Unavailable | API temporarily down | Retry automatically handled; check status page |
-
----
-
-### SDK-Specific Errors
-
-| Error Message | Meaning | Solution |
-|---------------|---------|----------|
-| `ApiKey is required in Cloud mode.` | Missing credentials | Configure `ApiKey` |
-| `Circuit breaker is open` | Too many consecutive failures | Fix underlying issue, wait for reset |
-| `Network error: Unable to connect` | Network connectivity issue | Check firewall, DNS, proxy |
-| `HTTP request failed: Timeout` | Request took too long | Increase `UploadTimeout` or reduce `BatchSize` |
-| `Configuration validation failed` | Invalid configuration value | Check value ranges in configuration |
-
----
-
-## Collecting Diagnostic Information for Support
-
-If you need to contact support, collect the following information:
-
-### 1. SDK Version
-
-```bash
-# Check installed package version
-dotnet list package | grep Xping
-```
-
-Or check in your `.csproj`:
-```xml
-<PackageReference Include="Xping.Sdk.NUnit" Version="1.0.4" />
-```
-
----
-
-### 2. Environment Information
-
-```bash
-# .NET version
-dotnet --version
-
-# OS information
-uname -a  # Linux/macOS
-systeminfo  # Windows
-```
-
----
-
-### 3. Configuration (Redact Secrets!)
-
-Share your configuration **without exposing your API key**:
-
-```json
-{
-  "Xping": {
-    "ApiEndpoint": "https://upload.xping.io",
-    "ApiKey": "xpg_***_REDACTED_***",  // ⚠️ Redact this!
-    "ProjectId": "my-project",
-    "BatchSize": 100,
-    "FlushInterval": "00:00:30"
-  }
-}
-```
-
----
-
-### 4. SDK Logs
-
-Set `XPING_LOGLEVEL=Debug` and capture logs:
-
-Redirect console output to a file:
-```bash
-XPING_LOGLEVEL=Debug dotnet test > test-output.log 2>&1
-```
-
----
-
-### 5. Test Framework and Version
-
-```bash
-# Check test framework package version
-dotnet list package | grep -E "(NUnit|xunit|MSTest)"
-```
-
----
-
-### 6. Minimal Reproducible Example
-
-Create a minimal test project that reproduces the issue:
-
-```csharp
-using NUnit.Framework;
-using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.NUnit;
-
-[SetUpFixture]
-public class XpingSetup
-{
-    [OneTimeSetUp]
-    public void GlobalSetup()
-    {
-        var config = new XpingConfiguration
-        {
-            ApiKey = "xpg_test_key",
-            ProjectId = "test-project",
-            LogLevel = Microsoft.Extensions.Logging.LogLevel.Debug
-        };
-        XpingContext.Initialize(config);
-    }
-
-    [OneTimeTearDown]
-    public async Task GlobalTeardown()
-    {
-        await XpingContext.FinalizeAndShutdownAsync();
-    }
-}
-
-public class SampleTests
-{
-    [Test]
-    public void Test1()
-    {
-        Assert.Pass();
-    }
-
-    [Test]
-    public void Test2()
-    {
-        Assert.Fail("Intentional failure");
-    }
-}
-```
-
----
-
-## Troubleshooting Workflow
-
-Follow this systematic approach when debugging issues:
-
-### Step 1: Enable Debug Logging
-
-```bash
-export XPING_LOGLEVEL=Debug
-```
-
-Or set [`LogLevel`](../configuration/configuration-reference.md#loglevel) to `Debug` in configuration.
-
-### Step 2: Run Tests and Capture Output
-
-```bash
-dotnet test --logger "console;verbosity=detailed" > test-output.log 2>&1
-```
-
-### Step 3: Review Logs
-
-Look for:
-- **Errors** (red flags indicating failures)
-- **Warnings** (yellow flags indicating potential issues)
-- **Upload messages** (verify uploads are happening)
-- **Configuration values** (verify settings are correct)
-
-### Step 4: Test Connectivity
-
-```bash
-curl -v https://upload.xping.io
-```
-
-### Step 5: Verify Configuration
-
-Check:
-- API Key and Project ID are set
-- Values are not empty or placeholder text
-- No typos or extra spaces
-- Environment variables are set correctly (double underscores!)
-
-### Step 6: Check Common Issues
-
-Review [Common Issues](common-issues.md) for known problems and solutions.
-
-### Step 7: Contact Support
-
-If still unresolved, contact support with collected diagnostic information.
-
----
-
-## Advanced Diagnostics
-
-### Memory Profiling
-
-If you suspect memory leaks or high memory usage:
-
-**Using dotMemory (JetBrains):**
-1. Install [dotMemory](https://www.jetbrains.com/dotmemory/)
-2. Profile your test run
-3. Look for retained `TestExecution` objects
-4. Check if `XpingContext` is properly disposed
-
-**Using Visual Studio Diagnostic Tools:**
-1. Debug → Performance Profiler
-2. Select "Memory Usage"
-3. Run tests
-4. Take memory snapshots before/after
-5. Compare snapshots to identify growth
-
----
-
-### Performance Profiling
-
-To measure SDK overhead:
-
-**Using BenchmarkDotNet:**
-
-See [Performance Testing](../performance/overview.md) for detailed benchmarking instructions.
-
-**Using dotnet-trace:**
-
-```bash
-# Collect trace
-dotnet-trace collect --process-id <test-process-id> --providers Microsoft-Windows-DotNETRuntime
-
-# Analyze with PerfView (Windows) or speedscope.app
-```
-
----
-
-### Concurrency Debugging
-
-If you suspect thread safety issues:
-
-1. **Enable debug logging** (`XPING_LOGLEVEL=Debug`)
-2. **Look for race conditions** or lock contention in logs
-
----
-
-## Best Practices for Debugging
-
-### 1. Use Appropriate Log Levels
-
-- **Default:** `Information` shows start-up, the run summary, warnings and errors
-- **Troubleshooting:** `Debug` shows the failures the SDK absorbs
-- **Quieter CI logs:** `Warning` or `Error`
-
-### 2. Log to Files in CI/CD
-
-Redirect logs to files for persistence:
-
-```bash
-dotnet test > test-output.log 2>&1
-```
-
-Or configure your CI/CD to capture test output.
-
-### 3. Test Locally First
-
-Before debugging in CI/CD:
-1. Reproduce the issue locally
-2. Enable debug logging
-3. Verify configuration
-4. Test connectivity
-
-### 4. Isolate the Problem
-
-Create a minimal test project that reproduces the issue:
-- Remove unnecessary dependencies
-- Use simple test cases
-- Simplify configuration
-
-### 5. Check SDK Version
-
-Ensure you're using the latest SDK version:
-
-```bash
-dotnet list package --outdated
-```
-
-Update if needed:
-
-```bash
-dotnet add package Xping.Sdk.NUnit --version 1.0.4
-```
-
----
-
-## Related Documentation
-
-- [Common Issues](common-issues.md) - Solutions to frequently encountered problems
-- [Configuration Reference](../configuration/configuration-reference.md) - Complete configuration guide
-- [Performance Testing](../performance/overview.md) - Performance benchmarking and optimization
-- [CI/CD Setup Guide](../getting-started/ci-cd-setup.md) - CI/CD integration instructions
-
----
-
-## Getting Help
-
-If you need additional support:
-
-1. **Check documentation:** Review guides and reference materials
-2. **Search issues:** Look for similar problems in GitHub issues
-3. **Contact support:**
-   - Email: support@xping.io
-   - Include: SDK version, .NET version, logs, configuration (redact API keys!)
-4. **Report bugs:** Open an issue at https://github.com/xping-dev/sdk-dotnet/issues
-
-When reporting issues, always include:
-- SDK version
-- .NET version
-- Test framework and version
-- Operating system
-- Configuration (redacted)
-- Debug logs showing the problem
-- Minimal reproducible example
+## See also
+
+- [Common issues](common-issues.md)
+- [Configuration reference](../configuration/configuration-reference.md)
+- [Performance](../performance/performance.md)
+- [Known limitations](known-limitations.md)

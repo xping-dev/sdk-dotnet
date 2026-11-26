@@ -68,7 +68,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     /// <c>[RetryFact]</c> rather than <c>[Fact]</c>: this test shares a documented race with the NUnit
     /// <c>[SetUpFixture]</c> in this assembly, which can null the static context between
     /// <c>Initialize()</c> and the call under test. The race is real and deliberately left in place —
-    /// see docs/known-limitations.md. Retrying keeps it from failing the build while Xping still
+    /// see docs/internals/nunit-tests-shared-context-race.md. Retrying keeps it from failing the build while Xping still
     /// records the hidden attempt, which is what surfaces it as a RetryMasked finding instead of as a
     /// red run nobody can act on.
     /// </remarks>
@@ -84,7 +84,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     /// <c>[RetryFact]</c> rather than <c>[Fact]</c>: this test shares a documented race with the NUnit
     /// <c>[SetUpFixture]</c> in this assembly, which can null the static context between
     /// <c>Initialize()</c> and the call under test. The race is real and deliberately left in place —
-    /// see docs/known-limitations.md. Retrying keeps it from failing the build while Xping still
+    /// see docs/internals/nunit-tests-shared-context-race.md. Retrying keeps it from failing the build while Xping still
     /// records the hidden attempt, which is what surfaces it as a RetryMasked finding instead of as a
     /// red run nobody can act on.
     /// </remarks>
@@ -103,7 +103,7 @@ public sealed class XpingContextTests : IAsyncLifetime
     /// <c>[RetryFact]</c> rather than <c>[Fact]</c>: this test shares a documented race with the NUnit
     /// <c>[SetUpFixture]</c> in this assembly, which can null the static context between
     /// <c>Initialize()</c> and the call under test. The race is real and deliberately left in place —
-    /// see docs/known-limitations.md. Retrying keeps it from failing the build while Xping still
+    /// see docs/internals/nunit-tests-shared-context-race.md. Retrying keeps it from failing the build while Xping still
     /// records the hidden attempt, which is what surfaces it as a RetryMasked finding instead of as a
     /// red run nobody can act on.
     /// </remarks>

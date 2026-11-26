@@ -1,14 +1,18 @@
-- name: Getting Started
+- name: Home
+  href: index.md
+- name: Get started
   href: getting-started/
-- name: Configuration
+- name: Configure
   href: configuration/
 - name: CLI
   href: cli/
-- name: Guides
-  href: guides/
+- name: Xping Cloud
+  href: cloud/
+- name: Flaky tests
+  href: flaky-tests/
 - name: Performance
   href: performance/
 - name: Troubleshooting
   href: troubleshooting/
-- name: API Reference
+- name: API reference
   href: api/

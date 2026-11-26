@@ -56,7 +56,7 @@ public class SampleTests
     /// Uses <c>[CancelAfter]</c> rather than the older <c>[Timeout]</c> deliberately. A blocking
     /// <c>[Timeout]</c> abandons the test thread without ever invoking <c>ITestAction.AfterTest</c>,
     /// which is the hook Xping tracks from — so such a test is not recorded at all. This is a real
-    /// NUnit constraint, not an Xping one; see docs/known-limitations.md.
+    /// NUnit constraint, not an Xping one; see docs/troubleshooting/known-limitations.md.
     /// </para>
     /// </remarks>
     [Test]
@@ -210,7 +210,7 @@ public class MethodLevelTracking
 /// way, and the message carries no marker — so the stack trace is the only evidence, and
 /// <c>[SetUp]</c> is matched by reflecting the fixture's own lifecycle methods. A broken
 /// <c>[OneTimeSetUp]</c> would be a better demonstration still, but NUnit skips a fixture's children
-/// when it throws, so no execution reaches Xping at all; see docs/known-limitations.md.
+/// when it throws, so no execution reaches Xping at all; see docs/troubleshooting/known-limitations.md.
 /// </para>
 /// </remarks>
 [TestFixture]

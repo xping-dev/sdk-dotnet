@@ -1,98 +1,91 @@
 # Xping SDK Benchmarks
 
-This project contains performance benchmarks for the Xping SDK using BenchmarkDotNet.
+BenchmarkDotNet benchmarks for the SDK's own code paths. They are for contributors who change the
+SDK and want to check the cost of a change. For what the SDK does during a test run, see
+[Performance](https://docs.xping.io/performance/performance.html).
 
-## Purpose
+No CI workflow runs these benchmarks, and no baseline is committed. The numbers depend on the
+machine.
 
-The benchmarks measure critical performance characteristics of the SDK including:
-- Test execution tracking overhead
-- Memory allocation and footprint
-- Collection throughput and concurrency
-- Upload and batching performance
-- Framework adapter overhead
+## Run the benchmarks
 
-## Running Benchmarks
-
-### Run All Benchmarks
+Run them from this folder. BenchmarkDotNet writes its results to `BenchmarkDotNet.Artifacts/` in the
+current folder.
 
 ```bash
 cd tests/Xping.Sdk.Benchmarks
-dotnet run -c Release
+
+# One class
+dotnet run -c Release -- --filter '*CollectorBenchmarks*'
+
+# One method
+dotnet run -c Release -- --filter '*CollectorBenchmarks.RecordSingleTest*'
+
+# Everything (takes a long time)
+dotnet run -c Release -- --filter '*'
 ```
 
-### Run Specific Benchmark
+Without `--filter`, BenchmarkDotNet asks which benchmarks to run.
 
-```bash
-# Run specific benchmark class
-dotnet run -c Release --filter *CollectorBenchmarks*
+Useful options, after `--`:
 
-# Run specific method
-dotnet run -c Release --filter *CollectorBenchmarks.RecordSingleTest*
-```
-
-### Run with Memory Profiler
-
-```bash
-dotnet run -c Release --profiler EP
-```
+- `--iterationCount 5` runs fewer iterations, for a quick check.
+- `--profiler EP` adds an EventPipe trace of each benchmark.
 
 ### Isolation
 
 Benchmarks never upload and never touch your local history. `Program.Main` clears every `XPING_*`
-variable before BenchmarkDotNet starts, and the adapter benchmarks run in `LocalOnly` mode against
-a temporary store that is deleted afterwards.
+variable before BenchmarkDotNet starts, and BenchmarkDotNet's child processes inherit that
+environment. The adapter benchmarks run in `LocalOnly` mode against a temporary store that is deleted
+afterwards.
 
-## Benchmark Results
+## Read the results
 
-Results are exported to `BenchmarkDotNet.Artifacts/` in multiple formats:
-- **HTML** - Interactive results with charts
-- **Markdown** - GitHub-friendly reports
-- **JSON** - Machine-readable data for analysis
+Each run writes HTML, GitHub Markdown and JSON reports to `BenchmarkDotNet.Artifacts/results/`.
+`Program.cs` adds the memory and threading diagnosers, so the reports have these columns:
 
-### Interpreting Results
+- **Mean** and **StdDev**: the time per operation, and how much it varied.
+- **Gen0**, **Gen1**, **Gen2**: garbage collections per 1,000 operations.
+- **Allocated**: managed memory allocated per operation.
+- **Lock Contentions** and **Completed Work Items**: from the threading diagnoser.
 
-Key metrics to monitor:
-- **Mean** - Average execution time
-- **StdDev** - Standard deviation (stability indicator)
-- **Gen0/Gen1/Gen2** - Garbage collection counts
-- **Allocated** - Total memory allocated
+`Allocated` is what one operation allocates, not what the SDK keeps. The SDK keeps every execution of
+a run until the session ends, so its retained memory grows with the run.
 
-## Performance Targets
+## Compare two versions
 
-Targets the SDK aims to meet:
+Run the affected benchmarks on `main` and on your branch, on the same machine, and compare the two
+reports. Move the first results out of the repository, so they are not committed:
 
-| Metric | Target | Status |
-|--------|--------|--------|
-| Test tracking overhead | <5ms per test | ⏱️ TBD |
-| Memory per test | <100 bytes | 💾 TBD |
-| Collection throughput | >10,000 tests/sec | 🚀 TBD |
-| Batch upload (100 tests) | <500ms | 📤 TBD |
-| Memory footprint (10k tests) | <50MB | 💾 TBD |
+```bash
+git switch main
+dotnet run -c Release -- --filter '*Collector*'
+mv BenchmarkDotNet.Artifacts "${TMPDIR:-/tmp}/xping-benchmarks-main"
 
-## Benchmark Categories
+git switch my-branch
+dotnet run -c Release -- --filter '*Collector*'
+```
 
-### Core Benchmarks
-- `CollectorBenchmarks` - TestExecutionCollector performance
-- `BatchProcessingBenchmarks` - recording and draining at different batch sizes
-- `ConcurrencyBenchmarks` - recording and draining from many threads
-- `MemoryPressureBenchmarks` - large suites and large test payloads
-- `UploadBenchmarks` - API client and upload performance
-- `ConfigurationBenchmarks` - Configuration loading and validation
-- `EnvironmentDetectionBenchmarks` - CI and environment detection
+Treat a mean more than 10% slower, or new Gen1 or Gen2 collections, as worth a closer look. Close
+other applications while the benchmarks run, and run a noisy benchmark twice.
 
-### Integration Benchmarks
-- `IntegrationBenchmarks` - End-to-end test lifecycle
-- `AdapterIntegrationBenchmarks` - adapter-shaped recording patterns
-- `StressTestBenchmarks` - High volume and sustained load
+## The benchmarks
 
-### Adapter Benchmarks
-- `RealNUnitAdapterBenchmarks` - NUnit `XpingContext` overhead
-- `RealXUnitAdapterBenchmarks` - xUnit `XpingContext` overhead
-- `RealMSTestAdapterBenchmarks` - MSTest `XpingContext` overhead
-
-### Local Store Benchmarks
-- `LocalStoreBenchmarks` - session write and read
-- `LocalStoreScanBenchmarks` - the reads `xping report` makes without `--assembly`, before and after #283
+| Class | What it measures |
+|---|---|
+| `CollectorBenchmarks` | Recording into `TestExecutionCollector` |
+| `BatchProcessingBenchmarks` | Recording and draining at different batch sizes |
+| `ConcurrencyBenchmarks` | Recording and draining from many threads |
+| `MemoryPressureBenchmarks` | Large runs and large test payloads |
+| `UploadBenchmarks` | Serializing sessions to JSON. No benchmark makes a network call. |
+| `ConfigurationBenchmarks` | Loading and validating configuration |
+| `EnvironmentDetectionBenchmarks` | Detecting the OS, the runtime and the CI |
+| `IntegrationBenchmarks` | Building and recording tests end to end, passing, failing and with stack traces |
+| `AdapterIntegrationBenchmarks` | Recording patterns shaped like each adapter's |
+| `StressTestBenchmarks` | High volume and sustained load |
+| `RealNUnitAdapterBenchmarks`, `RealXUnitAdapterBenchmarks`, `RealMSTestAdapterBenchmarks` | Each adapter's `XpingContext`: building a record and calling `RecordTest`. They do not run a test framework. |
+| `LocalStoreBenchmarks` | Writing and reading a session in the local store |
+| `LocalStoreScanBenchmarks` | The store reads that `xping report` makes without `--assembly` |
 
 `LocalStoreScanBenchmarks` on Apple Silicon, 50 runs of 2,000 tests per assembly (#283):
 
@@ -104,40 +97,19 @@ Targets the SDK aims to meet:
 | `--test` lookup, one pass, one run held at a time (after) | 2.3 s, ~4 MB retained | 5.7 s, ~4 MB retained, every run read |
 
 "Retained" is the managed heap held while the read's sessions are alive, logged by the benchmark's
-setup for the old lookup; the new one holds a single run, about 1/50 of one assembly's history.
-The lookup still deserializes every run once; what changes is how many are held at once.
+setup for the old lookup. The new lookup holds a single run, about 1/50 of one assembly's history.
+It still deserializes every run once. What changes is how many runs it holds at once.
 
-## Comparing Runs
+## Add a benchmark
 
-No CI workflow runs the benchmarks, and no baseline is committed: numbers depend on the machine.
-To check a change, run the affected benchmarks on `main` and on your branch, on the same machine,
-and compare the two reports in `BenchmarkDotNet.Artifacts/`.
-
-## Troubleshooting
-
-### Benchmarks Take Too Long
-- Reduce iteration count: `dotnet run -c Release -- --iterationCount 5`
-- Run single benchmark: Use `--filter` parameter
-
-### Out of Memory
-- Reduce batch sizes in stress tests
-- Run benchmarks individually
-
-### Inconsistent Results
-- Close other applications
-- Disable background processes
-- Run multiple times and compare
-
-## Contributing
-
-When adding new benchmarks:
-1. Follow existing naming conventions
-2. Add XML documentation
-3. Include realistic test scenarios
-4. Update this README with new categories
-5. Verify targets are met
+1. Put it in the class for its area, or add a class named `<Area>Benchmarks`.
+2. Add XML documentation that says what it measures.
+3. Use a realistic payload: real test names, error messages and stack traces for failing tests.
+4. Keep it local: `Mode = LocalOnly` and a temporary `LocalStorePath`, as the adapter benchmarks do.
+5. Add it to the table above.
+6. Run it on `main` and on your branch, and put both results in the PR.
 
 ## References
 
-- [BenchmarkDotNet Documentation](https://benchmarkdotnet.org/)
-- [Performance overview](../../docs/performance/overview.md)
+- [BenchmarkDotNet documentation](https://benchmarkdotnet.org/)
+- [Performance](https://docs.xping.io/performance/performance.html)

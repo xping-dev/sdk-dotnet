@@ -21,6 +21,6 @@ FLAGGED IN CLOUD
 
 rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
+https://docs.xping.io/cli/reading-the-report.html#the-population-marker
 
 Detail of row 1: xping report --id f_5da7c018 --assembly MyApp.Tests

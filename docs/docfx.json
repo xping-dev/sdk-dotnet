@@ -8,6 +8,7 @@
             "Xping.Sdk.Core/Xping.Sdk.Core.csproj",
             "Xping.Sdk.NUnit/Xping.Sdk.NUnit.csproj",
             "Xping.Sdk.XUnit/Xping.Sdk.XUnit.csproj",
+            "Xping.Sdk.XUnit.V3/Xping.Sdk.XUnit.V3.csproj",
             "Xping.Sdk.MSTest/Xping.Sdk.MSTest.csproj"
           ]
         }

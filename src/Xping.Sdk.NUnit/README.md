@@ -1,99 +1,63 @@
 # Xping.Sdk.NUnit
 
-NUnit test framework adapter for Xping SDK. Automatically tracks NUnit test executions and uploads results to the Xping platform.
-
-## Features
-
-- **Automatic Test Tracking**: Uses NUnit's `ITestAction` to automatically track test execution
-- **Global Setup/Teardown**: `SetUpFixture` ensures proper SDK initialization and cleanup
-- **Flexible Attribution**: Apply `[XpingTrack]` at method, class, or assembly level
-- **Rich Metadata Extraction**: Captures categories, descriptions, authors, and custom attributes
-- **Outcome Mapping**: Maps NUnit result states to Xping test outcomes
-- **Parameterized Test Support**: Tracks each test case with its arguments
+NUnit adapter for the Xping SDK, for NUnit 3.14 or later. It records each test execution to the
+local store and, with an API key, uploads it to Xping Cloud. The test project must target .NET
+Framework 4.6.2 or later, or .NET 8 or later.
 
 ## Installation
 
-Add the NuGet package reference to your NUnit test project:
-
-```xml
-<ItemGroup>
-  <PackageReference Include="Xping.Sdk.NUnit" Version="1.0.0" />
-</ItemGroup>
+```bash
+dotnet add package Xping.Sdk.NUnit --prerelease
 ```
 
-## Quick Start
+All Xping packages are prereleases, so the command needs `--prerelease`.
 
-### 1. Create Global Setup Fixture
+## Quick start
 
-Create a `SetUpFixture` in your test project to initialize and cleanup the Xping SDK:
+Add one file to the root of your test project:
 
 ```csharp
+using System.Threading.Tasks;
 using NUnit.Framework;
 using Xping.Sdk.NUnit;
+
+[assembly: XpingTrack]
 
 [SetUpFixture]
 public class XpingSetup
 {
     [OneTimeSetUp]
-    public void BeforeAllTests()
-    {
-        XpingContext.Initialize();
-    }
+    public void BeforeAllTests() => XpingContext.Initialize();
 
     [OneTimeTearDown]
-    public async Task AfterAllTests()
-    {
-        await XpingContext.FinalizeAndShutdownAsync();
-    }
+    public async Task AfterAllTests() => await XpingContext.FinalizeAndShutdownAsync();
 }
 ```
 
-### 2. Apply XpingTrack Attribute
+- `[assembly: XpingTrack]` tracks every test in the assembly. To track less, put `[XpingTrack]` on
+  a test class or a test method instead.
+- The setup fixture has no namespace, so it runs once for the whole assembly.
+- `FinalizeAndShutdownAsync` ends the session, writes it to the local store and uploads what is
+  left. Without the `[OneTimeTearDown]` method, the session never ends: the local store gets
+  nothing, and Xping Cloud gets only the batches the SDK uploaded during the run.
 
-Apply the `[XpingTrack]` attribute to track tests:
+When you run `dotnet test` in a terminal, the SDK prints a line when the session starts, and with
+an API key one line for each upload that Xping Cloud accepts:
 
-#### Class-Level Tracking (tracks all tests in the class)
-
-```csharp
-[TestFixture]
-[XpingTrack]
-public class MyTests
-{
-    [Test]
-    public void Test1() => Assert.Pass();
-
-    [Test]
-    public void Test2() => Assert.Pass();
-}
+```
+[Xping 17:28:04 INF] Initialized in local-only mode. SessionId: "6bec32b0-922b-4b9b-bcb9-fb4e1056180f", Environment: Default. No API key configured - results stay on this machine.
 ```
 
-#### Method-Level Tracking (tracks specific tests only)
+When the output goes to a file or a pipe, for example in a CI log, `dotnet test` shows these lines
+only with `--logger "console;verbosity=normal"`.
 
-```csharp
-[TestFixture]
-public class MyTests
-{
-    [Test]
-    [XpingTrack]
-    public void TrackedTest() => Assert.Pass();
-
-    [Test]
-    public void UntrackedTest() => Assert.Pass();
-}
-```
-
-#### Assembly-Level Tracking (tracks all tests)
-
-Add to `AssemblyInfo.cs` or any file:
-
-```csharp
-[assembly: XpingTrack]
-```
+The full guide is [Quick start: NUnit](https://docs.xping.io/getting-started/quickstart-nunit.html).
 
 ## Running on Microsoft.Testing.Platform
 
-The adapter hooks into NUnit, not the test runner, so it works on vstest and on
-Microsoft.Testing.Platform (MTP) alike. To use MTP, enable NUnit's runner in the test project:
+The adapter hooks into NUnit, not into the test runner, so it works on vstest and on
+Microsoft.Testing.Platform. To use Microsoft.Testing.Platform, turn on NUnit's runner
+(NUnit3TestAdapter 5.0 or later) in the test project:
 
 ```xml
 <PropertyGroup>
@@ -102,219 +66,84 @@ Microsoft.Testing.Platform (MTP) alike. To use MTP, enable NUnit's runner in the
 </PropertyGroup>
 ```
 
-Run the test executable directly, or `dotnet test` in the .NET 10 SDK's MTP mode
-(`global.json`: `{ "test": { "runner": "Microsoft.Testing.Platform" } }`). For TRX, reference
-`Microsoft.Testing.Extensions.TrxReport` and pass `--report-trx`.
+Run the test executable, or run `dotnet test` with `{ "test": { "runner": "Microsoft.Testing.Platform" } }`
+in `global.json` (.NET 10 SDK). For a TRX report, reference `Microsoft.Testing.Extensions.TrxReport`
+and pass `--report-trx`.
 
-Requires NUnit3TestAdapter 5.0 or later. In strict mode, a failed upload ends the run with exit code 1
-after MTP has written its reports; on vstest it terminates the test host instead.
+## What is recorded
+
+- The outcome, mapped from NUnit's result state:
+
+  | NUnit result state | Xping outcome |
+  |---|---|
+  | Success | Passed |
+  | Failure, Error, SetUpFailure, SetUpError, TearDownError, ChildFailure | Failed |
+  | Failure from a `[CancelAfter]` budget, or from `[Timeout]` on an async test; Cancelled | Timeout |
+  | Skipped, Ignored, Explicit | Skipped |
+  | Inconclusive | Inconclusive |
+  | Any other state | NotExecuted |
+
+  NUnit's `[Timeout]` on a synchronous test abandons the test thread, and the SDK records nothing
+  for that test. Use `[CancelAfter]` instead. See
+  [Known limitations](https://docs.xping.io/troubleshooting/known-limitations.html#nunits-blocking-timeout-is-not-tracked).
+
+- The duration, the start and end times, and the error message and stack trace of a failure. The
+  stack trace text is uploaded only with `UploadStackTraces`.
+- Each `[TestCase]` as a separate test, with its arguments
+- `[Category]` values as categories, `[Description]` as the description, and `[Author]` as an
+  `author:` tag
+- A fingerprint pinned with `[XpingFingerprint("...")]`, which keeps a test's history when you
+  rename it
+
+NUnit skips a test with `[Ignore]` before it runs, so the SDK does not record it.
 
 ## Configuration
 
-The adapter uses the standard Xping configuration. Add a `"Xping"` section to your `appsettings.json` file:
+Without an API key, the SDK runs in local-only mode: it writes every run to `.xping/` in your
+repository and makes no network calls. Read the history with the `xping` CLI
+(`dotnet tool install -g Xping.Cli --prerelease`, then `xping report`).
 
-```json
-{
-  "Xping": {
-    "ApiKey": "your-api-key-here",
-    "ApiEndpoint": "https://upload.xping.io/v1",
-    "Environment": "Development",
-    "EnableOfflineQueue": true,
-    "MaxRetries": 3
-  }
-}
-```
-
-**Required Fields:**
-- `ApiKey` - Your Xping API authentication key (mandatory)
-
-**Optional Fields:**
-- `ProjectId` - Pins every test assembly in the run to one project. Omit it and Xping names the project after each test assembly, creating one project per test project.
-- `ApiEndpoint` - API server URL (default: `https://upload.xping.io/v1`)
-- `Environment` - The deployed environment the tests target (default: `Default`)
-- `EnableOfflineQueue` - Queue failed uploads for retry (default: `true`)
-- `MaxRetries` - Maximum retry attempts (default: `3`)
-
-Or use environment variables:
-- `XPING_APIKEY` (required)
-- `XPING_PROJECTID` (optional: pins every test assembly to one project instead of one project each)
-- `XPING_API_ENDPOINT`
-- `XPING_ENVIRONMENT`
-- `XPING_DEFAULTBRANCH` (optional: the default branch Xping Cloud uses for CI runs; replaces the one GitHub Actions and GitLab CI report)
-- `XPING_LOGLEVEL` (optional: `Debug` shows the SDK's diagnostics; default `Information`)
-
-## Metadata Extraction
-
-The adapter automatically extracts rich metadata from your NUnit tests:
-
-```csharp
-[Test]
-[Category("Integration")]
-[Category("Slow")]
-[Description("Verifies API authentication flow")]
-[Author("John Doe")]
-public void ApiAuthenticationTest()
-{
-    // Test implementation
-}
-```
-
-Extracted metadata:
-- **Categories**: Integration, Slow
-- **Description**: Verifies API authentication flow
-- **Author**: John Doe (as tag)
-- **Framework**: nunit (automatically added)
-
-## Parameterized Tests
-
-Parameterized tests are fully supported with argument tracking:
-
-```csharp
-[Test]
-[TestCase(1, 2, 3)]
-[TestCase(5, 5, 10)]
-public void AddTest(int a, int b, int expected)
-{
-    Assert.That(a + b, Is.EqualTo(expected));
-}
-```
-
-Each test case is tracked separately with its arguments stored in metadata.
-
-## Outcome Mapping
-
-NUnit result states are mapped to Xping outcomes:
-
-| NUnit State | Xping Outcome |
-|------------|---------------|
-| Success | Passed |
-| Failure, Error, SetUpFailure, SetUpError, TearDownError, ChildFailure | Failed |
-| Skipped, Ignored, Explicit | Skipped |
-| Inconclusive | Inconclusive |
-| NotRunnable, Cancelled | NotExecuted |
-
-## Advanced Usage
-
-### Manual Test Recording
-
-You can manually record test executions if needed:
-
-```csharp
-var execution = new TestExecution
-{
-    TestId = "custom-test-id",
-    Name = "ManualTest",
-    Outcome = TestOutcome.Passed,
-    StartTime = DateTime.UtcNow.AddSeconds(-5),
-    EndTime = DateTime.UtcNow,
-    Duration = TimeSpan.FromSeconds(5)
-};
-
-XpingContext.RecordTest(execution);
-```
-
-### Custom Initialization
-
-Provide custom configuration at initialization:
-
-```csharp
-var config = new XpingConfiguration
-{
-    ApiKey = "custom-key",
-    ProjectId = "custom-project-id",
-    ApiEndpoint = "https://custom.api.com",
-    Environment = "Production"
-};
-
-XpingContext.Initialize(config);
-```
-
-A later parameterless `XpingContext.Initialize()` in the same process reuses this configuration,
-so a long-lived process, such as an IDE's test server, keeps it across runs. `ShutdownAsync()`
-forgets it. `Initialize(null)` throws `ArgumentNullException`.
-
-## Error Handling
-
-The `AfterTest` hook includes error handling to ensure test execution is never interrupted:
-
-- Exceptions during test tracking are silently caught and logged
-- Test results remain unaffected even if tracking fails
-- Failed uploads are retried automatically with exponential backoff
-
-## Thread Safety
-
-The adapter is fully thread-safe for parallel test execution:
-
-**XpingContext:**
-- Uses lock-free, thread-safe singleton initialization
-- First call to `Initialize()` installs the context; its host is built on first use
-- Subsequent calls keep the installed context until it is shut down
-- Safe for parallel test execution
-
-**XpingTrackAttribute:**
-- Stores timing data in test properties (per-test storage) instead of instance fields
-- Uses `Stopwatch.GetTimestamp()` for high-resolution, thread-safe timing
-- Attribute instances can be safely reused across multiple tests
-- No shared mutable state between test executions
-
-This design ensures safe execution when NUnit runs tests in parallel (`ParallelScope.All` or `ParallelScope.Fixtures`).
-
-## Troubleshooting
-
-### Tests not being tracked
-
-1. Ensure `XpingSetup` fixture exists and calls `Initialize()`
-2. Verify `[XpingTrack]` attribute is applied
-3. Check `appsettings.json` has a `"Xping"` section with configuration, or set environment variables
-4. Verify API key is valid
-
-### Configuration not found
-
-If no configuration is found, the adapter will:
-1. Look for `appsettings.json` with a `"Xping"` section in the current directory
-2. Check environment variables (with `XPING_` prefix)
-3. Fall back to default offline-only mode
-
-### Network Issues
-
-**Verify API Connectivity**
-
-Check if the Xping API endpoint is accessible from your environment:
+To upload to Xping Cloud, create a key under **Settings → API keys**, with only the Upload scope,
+and set it as an environment variable:
 
 ```bash
-# Test connectivity to the API endpoint
-curl -I https://upload.xping.io/v1
-
-# Or using PowerShell
-Test-NetConnection upload.xping.io -Port 443
+export XPING_APIKEY="your-api-key"
 ```
 
-Any HTTP response means the endpoint is reachable. It accepts only uploads, so `curl -I` gets
-`405 Method Not Allowed`.
+Do not put the key in `appsettings.json`: that file is committed and copied into the build output.
+Other settings can go in the `"Xping"` section of `appsettings.json`, or in `XPING_*` environment
+variables, which win over the file. See the
+[Configuration reference](https://docs.xping.io/configuration/configuration-reference.html).
 
-If the endpoint is unreachable, check:
-- Network connectivity and firewall rules
-- Corporate proxy settings
-- DNS resolution for `upload.xping.io`
+To build the configuration in code, pass it to `Initialize` in the setup fixture:
 
-## Sample Project
+```csharp
+using Xping.Sdk.Core.Configuration;
 
-See the complete sample project at `samples/SampleApp.NUnit` for working examples of:
-- Global setup fixture
-- Class-level and method-level tracking
-- Parameterized tests
-- Category and metadata usage
-- Skipped test tracking
+[OneTimeSetUp]
+public void BeforeAllTests() => XpingContext.Initialize(new XpingConfiguration { BatchSize = 200 });
+```
 
-## Comparison with Other Frameworks
+`XPING_*` environment variables still win over the values you pass. With a configuration object,
+the SDK reads no `appsettings.json` file. A later `XpingContext.Initialize()` in the same process
+reuses this configuration, so a long-lived process, such as an IDE's test server, keeps it across
+runs. `ShutdownAsync()` forgets it.
 
-| Feature | MSTest | NUnit | xUnit |
-|---------|--------|-------|-------|
-| Setup | Base class | Attribute | AssemblyInfo |
-| Tracking | Automatic (base class) | Opt-in (attribute) | Automatic (all tests) |
-| Configuration | Inherit once | Per fixture/test | One-time |
-| Data Tests | DataTestMethod | TestCase | Theory |
-| Overhead | Minimal | Minimal | Minimal |
+## Error handling
+
+An SDK failure is logged, and the tests run as usual. In `StrictMode`, a failed upload fails the
+run. NUnit reports an exception from `[OneTimeTearDown]` only as a warning and exits with code 0,
+so on vstest the SDK ends the test process about two seconds later, after every result has reached
+`dotnet test`. On Microsoft.Testing.Platform, it sets exit code 1 after the platform writes its
+reports.
+
+## Known limitations
+
+See [Known limitations](https://docs.xping.io/troubleshooting/known-limitations.html#nunit).
+
+## Sample project
+
+`samples/SampleApp.NUnit`.
 
 ## License
 

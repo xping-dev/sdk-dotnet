@@ -17,10 +17,10 @@
 > your test projects can stay on any supported .NET version.
 
 ```bash
-dotnet tool install -g Xping.Cli
+dotnet tool install -g Xping.Cli --prerelease
 ```
 
-This puts an `xping` command on your `PATH`. To pin the version alongside a repo instead, install it into a tool manifest (`dotnet new tool-manifest && dotnet tool install Xping.Cli`) and invoke it as `dotnet xping`.
+This puts an `xping` command on your `PATH`. To pin the version alongside a repo instead, install it into a tool manifest (`dotnet new tool-manifest && dotnet tool install Xping.Cli --prerelease`) and invoke it as `dotnet xping`.
 
 ## Use
 
@@ -53,14 +53,14 @@ NEEDS ATTENTION (2 high)                               most severe first
 
 rates: the marker on each finding says which runs its percentage was
 counted out of; compare two only where the markers match.
-https://docs.xping.io/cli/command-reference.html#the-population-marker
+https://docs.xping.io/cli/reading-the-report.html#the-population-marker
 
 Detail of row 1: xping report --id f_2b84a621 --assembly MyTestProject
 ````
 
 The two lines above the fence answer what was analysed and what state the suite is in; `tests` is `healthy` plus `flagged`. Each finding is numbered, names the test on a line of its own, states what was observed, and ends with a dim trailer carrying the evidence level, which runs the rate was counted over, the finding's id and where the test is declared. The block is fenced so it pastes into Slack or a pull request with its columns intact.
 
-`xping report --id <id>` opens one finding. For a finding a rerun can show (flaky, always failing, timing out, broken fixture, shared failure), its `repro` line says how many runs it takes to see the failure, and a `Repro:` line below the block gives the `dotnet test` (or, on Microsoft.Testing.Platform, `dotnet run`) command that reruns just that test from the repository root. See [Reproducing a finding](https://docs.xping.io/cli/command-reference.html#reproducing-a-finding). `--test`, and `--id` for a flaky, always failing, broken fixture or shared failure finding, list how the test failed: each failure mode's exception type, message and stack frames, how many failed attempts it covers, and when it first appeared. An always failing finding shows its most common mode.
+`xping report --id <id>` opens one finding. For a finding a rerun can show (flaky, always failing, timing out, broken fixture, shared failure), its `repro` line says how many runs it takes to see the failure, and a `Repro:` line below the block gives the `dotnet test` (or, on Microsoft.Testing.Platform, `dotnet run`) command that reruns just that test from the repository root. See [Reproducing a finding](https://docs.xping.io/cli/reading-the-report.html#reproducing-a-finding). `--test`, and `--id` for a flaky, always failing, broken fixture or shared failure finding, list how the test failed: each failure mode's exception type, message and stack frames, how many failed attempts it covers, and when it first appeared. An always failing finding shows its most common mode.
 
 Findings need a few runs of history. What the newest run did that the runs before it did not needs only two, and when it has failures a `LATEST RUN` section opens the block, above the findings:
 

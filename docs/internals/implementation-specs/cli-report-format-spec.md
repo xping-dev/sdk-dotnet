@@ -1,6 +1,6 @@
 # CLI Report Format Redesign
 
-**Status:** Draft, binding once merged
+**Status:** Shipped (#215).
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/Report/**`
 **Schema:** `1.18` → `1.19`
 **Depends on:** nothing

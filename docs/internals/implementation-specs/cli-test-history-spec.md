@@ -1,6 +1,6 @@
 # CLI Report — Test History (`xping report --test <name>`)
 
-**Status:** Draft, binding once merged
+**Status:** Shipped (#280).
 **Applies to:** `xping-dev/sdk-dotnet`, `src/Xping.Cli/**`
 **Schema:** `1.22` → `1.23`
 **Depends on:** `cli-report-format-spec.md` D1 (`ShortName`), D5 (heading machinery), D10 (example/rule
