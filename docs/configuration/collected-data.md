@@ -12,15 +12,17 @@ It is for developers and for anyone who reviews what a test run sends to Xping C
 
 ## Where the data goes
 
-- A **session** is one `dotnet test` run that the SDK records. A session holds one execution for
+- A **run** is one `dotnet test` invocation that the SDK records, for one test assembly or more.
+  The SDK's API (`TestSession`, `SessionId`) and the [read API](../cloud/read-api.md) call it a
+  session. A run holds one execution for
   each test that ran.
-- An **execution** is one test's result within a session. A retried test has one execution for
+- An **execution** is one test's result within a run. A retried test has one execution for
   each attempt that the framework reports.
 
 | [Mode](configuration-reference.md#mode) | Local store | Xping Cloud |
 |---|---|---|
-| `LocalOnly` (the `Auto` mode without an API key) | The full session | Nothing. The SDK makes no network calls. |
-| `Cloud` (the `Auto` mode with an API key) | The full session | The session, without the stack trace text unless you turn on [UploadStackTraces](configuration-reference.md#uploadstacktraces) |
+| `LocalOnly` (the `Auto` mode without an API key) | The full run | Nothing. The SDK makes no network calls. |
+| `Cloud` (the `Auto` mode with an API key) | The full run | The run, without the stack trace text unless you turn on [UploadStackTraces](configuration-reference.md#uploadstacktraces) |
 | `Disabled` | Nothing | Nothing |
 
 The SDK writes the local store before it uploads. The [local store](local-store.md) page says where
@@ -61,18 +63,18 @@ To record nothing at all, set [Enabled](configuration-reference.md#enabled) to `
 
 ---
 
-## Each session
+## Each run
 
 | Field | What it holds |
 |---|---|
-| `SessionId` | A new GUID for each session |
+| `SessionId` | A new GUID for each run |
 | `StartedAt`, `EndedAt` | UTC times of the first and last record |
-| `Assemblies` | The names of the test assemblies in the session |
+| `Assemblies` | The names of the test assemblies in the run |
 | `SdkVersion` | The version of the Xping SDK |
-| `SessionState` | Which upload this is: `Initial` (the first batch), `Partial` (a later batch) or `Finalized` (the last one, at the end of the session) |
+| `SessionState` | Which upload this is: `Initial` (the first batch), `Partial` (a later batch) or `Finalized` (the last one, at the end of the run) |
 | `EnvironmentInfo` | The machine and the CI build. See [The environment](#the-environment). |
 | `PullRequestContext` | The pull request, on a PR build. See [Pull request context](#pull-request-context). |
-| `QuickStatistics`, `StatisticsByAssembly` | Counts of executions by outcome, for the whole session and for each assembly |
+| `QuickStatistics`, `StatisticsByAssembly` | Counts of executions by outcome, for the whole run and for each assembly |
 
 ---
 
@@ -128,7 +130,7 @@ only one tag itself: `framework:<name>`.
 | `PreviousTestId`, `PreviousTestName`, `PreviousTestOutcome` | The test that ran just before this one on the same worker |
 | `WasParallelized`, `ConcurrentTestCount` | Whether other tests ran at the same time, and how many |
 | `ThreadId`, `WorkerId` | The thread and the worker that ran the test |
-| `SuiteElapsedTime` | The time from the start of the session to the start of the test |
+| `SuiteElapsedTime` | The time from the start of the run to the start of the test |
 | `CollectionName` | The xUnit test collection, the NUnit fixture or the MSTest test class |
 
 ### Retries
@@ -154,7 +156,7 @@ The SDK recognizes these attributes, by name:
 | MSTest | `TestRetry`, `Retry`, `DataTestMethodWithRetry` |
 
 To add your own attribute, call `RetryAttributeRegistry.RegisterCustomRetryAttribute` before the
-session starts. The framework name is `xunit`, `nunit` or `mstest`:
+run starts. The framework name is `xunit`, `nunit` or `mstest`:
 
 ```csharp
 using Xping.Sdk.Core.Services.Retry;
@@ -169,7 +171,7 @@ On xUnit v3, xRetry.v3 reports only the last attempt. See
 
 ## The environment
 
-`EnvironmentInfo` describes the machine, once for each session.
+`EnvironmentInfo` describes the machine, once for each run.
 
 | Field | What it holds |
 |---|---|
@@ -178,7 +180,7 @@ On xUnit v3, xRetry.v3 reports only the last attempt. See
 | `RuntimeVersion`, `Framework` | The .NET runtime |
 | `EnvironmentName` | The value of [Environment](configuration-reference.md#environment), or `Default` |
 | `IsCIEnvironment` | `true` when the SDK detects a CI platform |
-| `TimeZoneId`, `UtcOffset` | The machine's time zone and its UTC offset at the start of the session |
+| `TimeZoneId`, `UtcOffset` | The machine's time zone and its UTC offset at the start of the run |
 | `CustomProperties` | The properties below, and the CI properties in [CI metadata](#ci-metadata) |
 
 | Custom property | When it is set |
@@ -300,7 +302,7 @@ actor id and login, so the switch does not affect it.
 
 ### Pull request context
 
-On a PR build, the SDK records the pull request once for each session. Set
+On a PR build, the SDK records the pull request once for each run. Set
 [EnablePullRequestDetection](configuration-reference.md#enablepullrequestdetection) to `false` to
 turn it off.
 

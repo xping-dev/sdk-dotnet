@@ -29,9 +29,9 @@ The SDK does not sample. It records every test that runs.
 
 | When | `LocalOnly` mode | `Cloud` mode |
 |---|---|---|
-| The session starts | The SDK reads the configuration and detects the CI, the branch and the environment, once. | The same. |
+| The run starts | The SDK reads the configuration and detects the CI, the branch and the environment, once. | The same. |
 | During the run | Nothing. | The SDK uploads a batch when [`BatchSize`](../configuration/configuration-reference.md#batchsize) records are waiting, and when the [`FlushInterval`](../configuration/configuration-reference.md#flushinterval) timer fires. |
-| The session ends | The SDK writes the run to the [local store](../configuration/local-store.md), and removes old runs. | The SDK writes the run to the local store first. Then it uploads the records that are left, and a final upload that closes the session. |
+| The run ends | The SDK writes the run to the [local store](../configuration/local-store.md), and removes old runs. | The SDK writes the run to the local store first. Then it uploads the records that are left, and a final upload that closes the run. |
 
 `Auto`, the default mode, is `Cloud` with an API key or with `StrictMode` on, and `LocalOnly`
 otherwise. See
@@ -46,14 +46,14 @@ thread.
 
 Only one upload runs at a time. An upload that is due while another one runs waits for it.
 
-### The end of the session
+### The end of the run
 
-The session ends after the last test. The SDK writes the local store before any upload, so the run
+The run ends after the last test. The SDK writes the local store before any upload, so the run
 is on disk even when the upload fails or the process is stopped.
 
 Each upload, with its retries and the delays between them, stops after twice
 [`UploadTimeout`](../configuration/configuration-reference.md#uploadtimeout): 60 seconds by default.
-At the end of the session, the SDK first waits for an upload that is still running. Then it uploads
+At the end of the run, the SDK first waits for an upload that is still running. Then it uploads
 the records that are left, in batches. When one of these batches fails, it sends no more of them,
 and it still sends the final upload. With a failing endpoint, the end of the run can therefore wait
 for up to three uploads. A failing upload does not fail the run, unless
@@ -66,11 +66,11 @@ circuit breaker pauses uploads. See [`MaxRetries`](../configuration/configuratio
 
 ## Memory
 
-The SDK keeps every record of the run in memory for the whole session, in every mode except
+The SDK keeps every record of the run in memory until the run ends, in every mode except
 `Disabled`. It needs them all to write the run to the local store at the end. An upload during the
 run does not free them.
 
-Memory therefore grows with the size of the run: the number of test executions, retries included,
+Memory therefore grows with the size of the run: the number of test [executions](../configuration/collected-data.md#each-execution), retries included,
 and the length of their error messages and stack traces. A run with many failures and deep stacks
 uses more. `BatchSize` does not limit it.
 

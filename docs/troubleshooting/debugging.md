@@ -98,7 +98,7 @@ In `Cloud` mode, the SDK prints a line for each upload it makes:
 
 - `Published 15 tests in 23ms (21.4 KB) · receipt 3f9a1c2e`: a batch of test results. The size is the
   size of the JSON before compression.
-- `Finalization receipt 3f9a1c2e (1ms, 1.7 KB)`: the final upload, which closes the session.
+- `Finalization receipt 3f9a1c2e (1ms, 1.7 KB)`: the final upload, which closes the run.
 
 The receipt is the first 8 characters of the receipt ID that Xping Cloud returns. Keep it when you
 contact support about a run.
@@ -107,16 +107,16 @@ contact support about a run.
 
 ### The summary line
 
-At the end of the session, the SDK prints a summary of what it recorded:
+At the end of the run, the SDK prints a summary of what it recorded:
 
 ```
 [Xping 13:15:19 INF] Total tests recorded: 25 (24 tests, 1 retry) · 17 passed, 5 failed, 2 timed out · exec: 2.6s · wall: 2.7s (+161ms overhead)
 ```
 
-- `25 (24 tests, 1 retry)`: 25 executions of 24 tests. The part in brackets appears only when a test
+- `25 (24 tests, 1 retry)`: 25 [executions](../configuration/collected-data.md#each-execution) of 24 tests. The part in brackets appears only when a test
   was retried. The outcomes then count each test by its last attempt.
 - `exec`: the total of each test's own duration.
-- `wall`: the time from the SDK's start to the end of the session.
+- `wall`: the time from the SDK's start to the end of the run.
 - `(+161ms overhead)`: `wall` minus `exec`. It includes the framework's setup and teardown and the
   time between tests, not only the SDK's work. When tests run in parallel, `exec` can be larger than
   `wall`, and the overhead is left out.
@@ -139,7 +139,7 @@ It does not print the hint in CI. To hide it everywhere, set `XPING_NO_BANNER` t
 ### Repeated errors
 
 The SDK prints an upload error in full the first time. When the same error repeats in the same
-session, it prints a short line instead:
+run, it prints a short line instead:
 
 ```
 [Xping 13:16:24 ERR] Same HTTP 401 error (2nd occurrence, batch size: 0)
@@ -189,9 +189,9 @@ errors, see [Upload errors](common-issues.md#upload-errors).
 | `GITHUB_EVENT_NAME is not set, …` | On GitHub Actions, the test process did not get `GITHUB_EVENT_NAME`, often because the tests run in a container. Pass the `GITHUB_*` variables into the container. |
 | `GitHub PR detection skipped: …` | The SDK could not read the pull request from GitHub's variables or event file. The message names what is missing. |
 | `Sending the configured default branch '…' …` | You set [`DefaultBranch`](../configuration/configuration-reference.md#defaultbranch), and it differs from the branch the CI reports. |
-| `[Xping] Process exiting with session … still active: …` | MSTest only. No `[AssemblyCleanup]` finalized the session. See [Known limitations](known-limitations.md#mstest-a-session-finalized-by-the-process-exit-safety-net-loses-its-upload-on-vstest). |
+| `[Xping] Process exiting with session … still active: …` | MSTest only. No `[AssemblyCleanup]` finalized the session. See [Known limitations](known-limitations.md#mstest-a-run-finalized-by-the-process-exit-safety-net-loses-its-upload-on-vstest). |
 | `Failed to initialize Xping SDK: … SDK disabled - …` | The SDK could not start, and records nothing. The message gives the reason. |
-| `Error finalizing Xping session` | The end of the session failed. The exception follows the message. |
+| `Error finalizing Xping session` | The end of the run failed. The exception follows the message. |
 
 ---
 
@@ -282,7 +282,7 @@ When you report a problem, include:
    XPING_LOGLEVEL=Debug dotnet test --logger "console;verbosity=normal" > test-output.log 2>&1
    ```
 
-5. **The session ID and the receipts** from the output, for a run that reached Xping Cloud.
+5. **The `SessionId` and the receipts** from the output, for a run that reached Xping Cloud.
 6. **Your configuration, without the API key.**
 7. **A small project that reproduces the problem**, if you can make one.
 

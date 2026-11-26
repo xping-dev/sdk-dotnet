@@ -39,7 +39,7 @@ the code passes a configuration object. The SDK applies them to its own copy, so
 not change.
 
 Once a process has called `Initialize(configuration)`, a later `Initialize()` in the same process
-reuses that configuration. This matters in a process that runs several sessions, such as an IDE's
+reuses that configuration. This matters in a process that records several runs, such as an IDE's
 test server. `XpingContext.ShutdownAsync()` forgets it.
 
 You cannot combine a configuration object with `appsettings.json`. To use the file, call
@@ -76,8 +76,8 @@ You cannot combine a configuration object with `appsettings.json`. To use the fi
 | [`ApiKey`](#apikey) | string | *(none)* | `XPING_APIKEY` | The key that authorizes uploads. Without it, the SDK runs local-only. |
 | [`ProjectId`](#projectid) | string | *(none)* | `XPING_PROJECTID` | Sends every test assembly to one project |
 | [`Mode`](#mode) | `XpingMode` | `Auto` | `XPING_MODE` | `Auto`, `LocalOnly`, `Cloud` or `Disabled` |
-| [`BatchSize`](#batchsize) | int | `100` | `XPING_BATCHSIZE` | Cloud mode only. Executions in each upload during the session. |
-| [`FlushInterval`](#flushinterval) | TimeSpan | `00:00:30` | `XPING_FLUSHINTERVAL` | Cloud mode only. Time between uploads during the session. |
+| [`BatchSize`](#batchsize) | int | `100` | `XPING_BATCHSIZE` | Cloud mode only. Executions in each upload during the run. |
+| [`FlushInterval`](#flushinterval) | TimeSpan | `00:00:30` | `XPING_FLUSHINTERVAL` | Cloud mode only. Time between uploads during the run. |
 | [`UploadTimeout`](#uploadtimeout) | TimeSpan | `00:00:30` | `XPING_UPLOADTIMEOUT` | Time limit of one upload attempt |
 | [`MaxRetries`](#maxretries) | int | `3` | `XPING_MAXRETRIES` | Retries of a failed upload |
 | [`RetryDelay`](#retrydelay) | TimeSpan | `00:00:02` | `XPING_RETRYDELAY` | Base delay between retries |
@@ -113,7 +113,8 @@ You cannot combine a configuration object with `appsettings.json`. To use the fi
 **Default:** `Auto`
 **Environment variable:** `XPING_MODE` (not case-sensitive)
 
-The SDK resolves the mode once, when it starts. It decides whether the SDK uploads, writes the
+The **mode** says what the SDK does with the runs it records. The SDK resolves it once, when it
+starts. It decides whether the SDK uploads, writes the
 local store, or does nothing.
 
 | Value | What the SDK does |
@@ -199,7 +200,7 @@ its first upload:
 | `Billing.Tests` | `billing-tests` |
 | `Api.Tests` | `api-tests` |
 
-Set `ProjectId` to send every test assembly of the session to one project, for example in a
+Set `ProjectId` to send every test assembly of the run to one project, for example in a
 monorepo where several test assemblies test one product:
 
 ```bash
@@ -227,15 +228,15 @@ project instead.
 **Valid range:** `1` to `1000`
 **Environment variable:** `XPING_BATCHSIZE`
 
-**Cloud mode only.** In Cloud mode, the SDK uploads during the session as well as at its end:
+**Cloud mode only.** In Cloud mode, the SDK uploads during the run as well as at its end:
 
 1. When `BatchSize` executions are waiting
 2. When the [FlushInterval](#flushinterval) timer fires
-3. When the session ends: the rest, in the final upload
+3. When the run ends: the rest, in the final upload
 
 A smaller batch shows results in Xping Cloud sooner and makes more uploads. A larger batch makes
-fewer uploads. In every mode, the SDK keeps every execution in memory until the session ends,
-because it writes the whole session to the local store.
+fewer uploads. In every mode, the SDK keeps every execution in memory until the run ends,
+because it writes the whole run to the local store.
 
 ```bash
 export XPING_BATCHSIZE="200"
@@ -248,8 +249,8 @@ export XPING_BATCHSIZE="200"
 **Valid range:** greater than zero
 **Environment variable:** `XPING_FLUSHINTERVAL` (whole seconds or `hh:mm:ss`)
 
-**Cloud mode only.** The time between uploads during the session. The upload at the end of the
-session does not wait for it. In `LocalOnly` mode, the SDK starts no timer.
+**Cloud mode only.** The time between uploads during the run. The upload at the end of the
+run does not wait for it. In `LocalOnly` mode, the SDK starts no timer.
 
 ```bash
 export XPING_FLUSHINTERVAL="60"
@@ -374,7 +375,7 @@ sets.
 
 The branch Xping Cloud treats as the repository's default branch for this pipeline's runs. Xping
 Cloud counts a CI push to the default branch as a Canonical run, the strongest evidence behind a
-confidence score.
+[confidence score](../cloud/confidence-scores.md).
 
 The default branch of a run comes from the first of these that has a value:
 
@@ -553,7 +554,7 @@ pipeline fails when it cannot record its tests.
 | No API key, `Mode` is `Cloud` | The SDK logs the error and records nothing | The test run fails before any test runs |
 | An invalid setting, such as `BatchSize = 2000` | The SDK logs the error and records nothing. See [What the SDK prints](#what-the-sdk-prints). | The test run fails before any test runs |
 | The SDK fails to start, for example because `appsettings.json` does not parse | The SDK prints `[Xping] SDK initialization failed`, and the tests run unrecorded | The test run fails before any test runs |
-| An upload fails | The SDK logs the error. The local store still gets the session. | The test run fails at its end |
+| An upload fails | The SDK logs the error. The local store still gets the run. | The test run fails at its end |
 
 When the SDK cannot start in strict mode, the test process stops (`Environment.FailFast`) before
 any test runs. Strict mode must then come from `XPING_STRICTMODE`, `Xping__StrictMode` or code,
@@ -571,7 +572,7 @@ stays in the TRX file and the other reports, and `dotnet test` exits with a non-
 | NUnit on vstest | The test process stops about two seconds after the upload fails, once every result has reached `dotnet test`. `dotnet test` reports the run as aborted. |
 | NUnit on Microsoft.Testing.Platform | The test executable exits with code 1 after it writes its reports |
 
-On NUnit and MSTest, the upload error appears when the session ends, so the `[OneTimeTearDown]` or
+On NUnit and MSTest, the upload error appears when the run ends, so the `[OneTimeTearDown]` or
 `[AssemblyCleanup]` method must call `XpingContext.FinalizeAndShutdownAsync()`. On NUnit, that call
 is what fails the run: NUnit reports an exception from `[OneTimeTearDown]` only as a warning.
 

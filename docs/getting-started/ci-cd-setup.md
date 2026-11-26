@@ -234,7 +234,7 @@ then files no run from them under a commit. See
 ## Fail the build on findings
 
 `xping report --fail-on <severity>` exits with code `1` when a finding of that severity or higher
-appears in any test assembly. Add it as a step after the tests. It reads the local store that the
+appears in any test assembly. Add it as a step after the tests. It reads the [local store](../configuration/local-store.md) that the
 SDK wrote in the same job, so it works with or without an API key.
 
 ```yaml
@@ -293,7 +293,7 @@ data never changes the exit code. See [Credentials](../cli/cloud-data.md#what-yo
 ## The default branch and canonical branches
 
 Xping Cloud counts a CI push to the default branch as a Canonical run. Canonical runs are the
-strongest evidence behind a confidence score. A push to one of the project's canonical branches,
+strongest evidence behind a [confidence score](../cloud/confidence-scores.md). A push to one of the project's canonical branches,
 such as `release/*`, counts too. You set the canonical branch patterns in the project's settings in
 Xping Cloud. A pull request build never counts as Canonical, whatever its branch.
 
@@ -333,7 +333,7 @@ On GitHub Actions, `${{ env.ASPNETCORE_ENVIRONMENT }}` does not work for this. T
 holds only the variables that the workflow declares, not the ones the runner image or a container
 sets.
 
-**Use one project for one product.** With `XPING_PROJECTID`, every execution in the session goes to
+**Use one project for one product.** With `XPING_PROJECTID`, every execution in the run goes to
 that project, whatever its assembly. Do not split branches or environments into projects: the SDK
 records both, and separate projects split the history that the confidence score needs.
 
@@ -361,11 +361,11 @@ records both, and separate projects split the history that the confidence score 
 
 **Some results are missing:**
 
-- Check that the session ends. On NUnit, the `[OneTimeTearDown]` method must call
+- Check that the run ends. On NUnit, the `[OneTimeTearDown]` method must call
   `FinalizeAndShutdownAsync`. On MSTest, the `[AssemblyCleanup]` method must call it. See the
   quick starts.
-- On MSTest with vstest, a session that no `[AssemblyCleanup]` method ends often loses its upload.
-  See [Known limitations](../troubleshooting/known-limitations.md#mstest-a-session-finalized-by-the-process-exit-safety-net-loses-its-upload-on-vstest).
+- On MSTest with vstest, a run that no `[AssemblyCleanup]` method ends often loses its upload.
+  See [Known limitations](../troubleshooting/known-limitations.md#mstest-a-run-finalized-by-the-process-exit-safety-net-loses-its-upload-on-vstest).
 - To fail the build when an upload fails, set `XPING_STRICTMODE: "true"`.
 
 [Common issues](../troubleshooting/common-issues.md) covers more problems.

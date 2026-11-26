@@ -5,6 +5,9 @@ title: Finding flaky tests
 
 # Finding flaky tests
 
+This page shows how to find flaky tests, on your machine and in Xping Cloud. It is for developers
+who want to know which tests they cannot trust.
+
 A **flaky** test passes and fails on the same code. It costs time, because each failure makes you
 check whether the code is broken, and it hides real failures among the false ones.
 

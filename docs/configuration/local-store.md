@@ -8,7 +8,8 @@ title: Local store
 This page says where the Xping SDK keeps the test history on your machine, what it keeps, and how
 long. It is for developers who use the `xping` CLI, and for anyone who reviews what stays on disk.
 
-The SDK writes every session to the local store, in `LocalOnly` and in `Cloud` mode. The
+The **local store** is the folder where the SDK writes each run and where the CLI reads it. The SDK
+writes every run to the local store, in `LocalOnly` and in `Cloud` mode. The
 [CLI](../cli/command-reference.md) reads it, so `xping report` works with or without an account.
 In `Disabled` mode, the SDK writes nothing.
 
@@ -55,8 +56,8 @@ directory of `dotnet test` differs between the CLI, IDEs and CI agents.
 └── state.json
 ```
 
-- Each session is one gzipped JSON file in `sessions/`. The name holds the start time, the first 8
-  characters of the session id, and a short hash of each test assembly the session covers (up to
+- Each run is one gzipped JSON file in `sessions/`. The name holds the start time, the first 8
+  characters of the `SessionId`, and a short hash of each test assembly the run covers (up to
   8).
 - Test projects that run at the same time write separate files, so they never wait for a lock.
 - The SDK writes each file under a `.tmp` name first and renames it when it is complete. A killed
@@ -76,7 +77,7 @@ add `.xping/` to it, but an entry there does no harm.
 
 ## What is stored
 
-The store keeps the **full session**: every field on
+The store keeps the **full run**: every field on
 [Data Xping collects](collected-data.md), for every execution. That includes:
 
 - the error message and the full stack trace of each failure, whatever
@@ -92,23 +93,23 @@ These switches limit what the SDK records, and so what the store keeps:
 | [CollectLocalGitAuthor](configuration-reference.md#collectlocalgitauthor) off (the default) | The git author name of local runs |
 | [CollectCiActorEmail](configuration-reference.md#collectciactoremail) off (the default) | The email of the person behind a CI run |
 | [EnablePullRequestDetection](configuration-reference.md#enablepullrequestdetection) off | The pull request context, including its author |
-| [Enabled](configuration-reference.md#enabled) off, or `Mode` set to `Disabled` | Everything: the SDK writes no session |
+| [Enabled](configuration-reference.md#enabled) off, or `Mode` set to `Disabled` | Everything: the SDK writes no run |
 
-The store never leaves your machine, and the SDK never uploads a session from it again. It is not
+The store never leaves your machine, and the SDK never uploads a run from it again. It is not
 a backup of what Xping Cloud holds. To delete it, run [`xping clear`](../cli/command-reference.md#xping-clear).
 
-### How the session was recorded
+### How the run was recorded
 
-Each session also records how it was recorded, as properties of its environment. The CLI reads
+Each run also records how it was recorded, as properties of its environment. The CLI reads
 them. The SDK writes them to the local store only, never to the upload.
 
 | Property | Value | Missing when |
 |---|---|---|
 | `Xping.Mode` | `LocalOnly` or `Cloud` | Never |
-| `Xping.ProjectId` | The [ProjectId](configuration-reference.md#projectid) of the session | No project is set |
+| `Xping.ProjectId` | The [ProjectId](configuration-reference.md#projectid) of the run | No project is set |
 | `Xping.TestFramework` | `NUnit`, `MSTest`, `xUnit` (v2) or `xUnit.v3` | Never |
 | `Xping.Runner` | `VSTest` or `MTP` (Microsoft.Testing.Platform) | The tests ran in another host, such as the xUnit console runner, or an xUnit v3 test executable without Microsoft.Testing.Platform |
-| `Xping.ProjectPath` | The test project's path from the repository root, such as `tests/Shop.Tests/Shop.Tests.csproj` | The project was built outside a git repository or with `GenerateAssemblyInfo=false`, or the session covered test assemblies of more than one project |
+| `Xping.ProjectPath` | The test project's path from the repository root, such as `tests/Shop.Tests/Shop.Tests.csproj` | The project was built outside a git repository or with `GenerateAssemblyInfo=false`, or the run covered test assemblies of more than one project |
 
 The project path comes from an MSBuild file that the Xping packages add to your test project's
 build. It stamps the path into the test assembly as
@@ -119,37 +120,37 @@ relative to the submodule.
 
 ## Retention
 
-After each write, the SDK deletes old sessions until these limits hold. The limits are fixed: no
+After each write, the SDK deletes old runs until these limits hold. The limits are fixed: no
 setting changes them.
 
 | Limit | Value | Applies to |
 |---|---|---|
 | Maximum age | 30 days, by the file's last write time | The whole store |
-| Maximum sessions | 50 | Each test assembly |
+| Maximum runs | 50 | Each test assembly |
 | Maximum size | 100 MB | The whole store |
 
 The SDK applies them in this order:
 
-1. It deletes sessions older than 30 days.
-2. It keeps the newest 50 sessions of each test assembly, so a busy project never pushes another
-   project's sessions out. A session that covers several test assemblies counts for each of them.
+1. It deletes runs older than 30 days.
+2. It keeps the newest 50 runs of each test assembly, so a busy project never pushes another
+   project's runs out. A run that covers several test assemblies counts for each of them.
    The SDK keeps it while any of them still needs it.
-3. If the store is still over 100 MB, it deletes the oldest sessions, first those outside the newest
+3. If the store is still over 100 MB, it deletes the oldest runs, first those outside the newest
    20 of every test assembly. It deletes from those 20 only if the store is still too big.
 
-The session the SDK just wrote is never deleted.
+The run the SDK just wrote is never deleted.
 
-The size of a session grows with the number of tests, and with the length of the error messages
+The size of a run grows with the number of tests, and with the length of the error messages
 and stack traces of failed tests.
 
-`xping report` reads the newest 20 sessions from the last 14 days by default. The store keeps more,
+`xping report` reads the newest 20 runs from the last 14 days by default. The store keeps more,
 so that `--runs`, `--since` and `--test` can look further back.
 
 ---
 
 ## When the store is written
 
-The SDK writes the session once, when it ends, after the last test. During the run, it only keeps
+The SDK writes the run once, when it ends, after the last test. During the run, it only keeps
 each execution in memory. The CLI reads and analyses the history, so your test run does not pay for
 it.
 
@@ -157,14 +158,14 @@ it.
 
 ## Failures
 
-**The local store never fails your test run.** When the SDK cannot write the session, for example
+**The local store never fails your test run.** When the SDK cannot write the run, for example
 because the disk is full or because `XPING_LOCAL_STORE` names a folder it cannot write to, the run
 has no local history. A repository root that is not writable is not such a case: the SDK then uses
 the profile folder, so run `xping where` to find it. The SDK
 logs the reason at the `Debug` level. To see it, set
 [`XPING_LOGLEVEL=Debug`](configuration-reference.md#loglevel).
 
-When the CLI reads the store, it skips a session file that it cannot read or that does not parse,
+When the CLI reads the store, it skips a run file that it cannot read or that does not parse,
 and reads the rest.
 
 ---

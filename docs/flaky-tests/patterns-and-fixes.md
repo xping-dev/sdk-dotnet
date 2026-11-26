@@ -5,8 +5,9 @@ title: Flaky patterns and fixes
 
 # Flaky patterns and fixes
 
-This page lists the common causes of flaky tests. For each cause, it gives the symptom, what
-`xping report` shows on your machine, what Xping Cloud reports, and a fix.
+This page lists the common causes of flaky tests, for developers who need to fix one. For each
+cause, it gives the symptom, what `xping report` shows on your machine, what Xping Cloud reports,
+and a fix.
 
 To find the flaky tests first, see [Finding flaky tests](finding-flaky-tests.md).
 
@@ -56,7 +57,7 @@ test fails, not from the pattern. See [Finding flaky tests](finding-flaky-tests.
 
 ## Race conditions
 
-**Symptom.** The test fails now and then with no code change. It fails more when tests run in
+**Symptom.** The test sometimes fails with no code change. It fails more when tests run in
 parallel. It passes in the debugger.
 
 **On your machine.** `xping report` shows `flaky`. When the failures follow the number of tests
@@ -320,7 +321,7 @@ Assert.That(evt.CreatedAt, Is.EqualTo(DateTimeOffset.UtcNow).Within(TimeSpan.Fro
 
 ## Random data
 
-**Symptom.** The test fails now and then with an unexpected value, with no link to the time, the
+**Symptom.** The test sometimes fails with an unexpected value, with no link to the time, the
 environment or parallel runs.
 
 **On your machine.** `xping report` shows `flaky`. A test that fails in different ways shows more
@@ -381,8 +382,7 @@ public async Task Checkout_CompletesWithinTheServiceBudget()
 {
     var checkout = new CheckoutService();
 
-    // The retry still saves the build. This test used to pass on the first attempt.
-    // Now it needs the third.
+    // The retry still saves the build, but in recent runs this test needs the third attempt.
     var result = await checkout.CompleteAsync();
 
     Assert.True(result.Succeeded);
@@ -400,7 +400,7 @@ The report shows:
     evidence adequate | -env | f_5da7c018 | .../CheckoutTests.cs:27
 ```
 
-And when the retries no longer save the build:
+And when the retries stop saving the build:
 
 <!-- xping:sample docs-retry-exhausted rows -->
 ```
@@ -412,7 +412,7 @@ And when the retries no longer save the build:
 ```
 
 The second block is the reason to remove the retry attribute, not to raise its limit. The retries
-cost time and no longer keep the build green.
+cost time and do not keep the build green.
 
 **In Xping Cloud.** The confidence score reads each run by its last attempt, so a retried test can
 score well. Flaky detection reads the first attempt of each run. A test that recovered on a retry is

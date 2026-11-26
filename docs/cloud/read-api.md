@@ -5,8 +5,14 @@ title: Read API
 
 # Read API
 
+This page describes the read API's endpoints, authentication, paging and limits. It is for
+developers who build their own tools on Xping Cloud data.
+
 The read API returns your Xping Cloud data as JSON: projects, tests, sessions, confidence scores and
 flaky verdicts. Use it to build your own reports, or to bring Xping Cloud data into other tools.
+
+The read API calls a [run](../configuration/collected-data.md) a **session**, and this page uses its
+words.
 
 The API only reads. It cannot change data. The SDK uploads through a separate endpoint.
 
