@@ -147,7 +147,7 @@ Other settings can go in `appsettings.json`. `XPING_*` environment variables win
 ```
 
 For every option, see the
-[Configuration reference](https://docs.xping.io/configuration/configuration-reference.html).
+[Configuration reference](https://docs.xping.io/sdk/configuration/configuration-reference.html).
 
 ## Requirements
 
@@ -159,8 +159,8 @@ For every option, see the
 ## Documentation
 
 - **Documentation**: https://docs.xping.io
-- **Get started**: https://docs.xping.io/index.html#quick-start
-- **Run without an account**: https://docs.xping.io/getting-started/local-first.html
+- **Get started**: https://docs.xping.io/sdk/index.html#quick-start
+- **Run without an account**: https://docs.xping.io/sdk/getting-started/local-first.html
 - **GitHub repository**: https://github.com/xping-dev/sdk-dotnet
 
 ## Support

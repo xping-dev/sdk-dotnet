@@ -61,17 +61,7 @@ public sealed class DocumentedSampleTests
     public static TheoryData<string> Documents() =>
     [
         "README.md",
-        "nuspec/README.Cli.md",
-        "docs/index.md",
-        "docs/cli/command-reference.md",
-        "docs/cli/reading-the-report.md",
-        "docs/cli/cloud-data.md",
-        "docs/getting-started/quickstart-xunit.md",
-        "docs/getting-started/quickstart-mstest.md",
-        "docs/getting-started/quickstart-nunit.md",
-        "docs/getting-started/local-first.md",
-        "docs/troubleshooting/known-limitations.md",
-        "docs/flaky-tests/patterns-and-fixes.md"
+        "nuspec/README.Cli.md"
     ];
 
     [Theory]

@@ -117,7 +117,7 @@ public sealed class XpingTestBaseFailureSiteTests
     /// <c>[ClassInitialize]</c> above: MSTest runs <c>[TestCleanup]</c> methods derived-class first
     /// and stops at the first one that throws, so a user's own cleanup throwing prevents
     /// <c>XpingTestCleanup</c> from running at all and no execution is recorded. See
-    /// <c>docs/troubleshooting/known-limitations.md</c>.
+    /// <see href="https://docs.xping.io/sdk/troubleshooting/known-limitations.html">Known limitations</see>.
     /// </summary>
     [Fact]
     public void ResolveFailureSite_AFailureInTestCleanup_IsTestTeardown()

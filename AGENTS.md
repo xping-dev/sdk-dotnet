@@ -37,7 +37,7 @@ Before calling a change done: build is clean and the affected test projects pass
 | `src/Xping.Cli` | net10.0 | `xping report / where / clear` (System.CommandLine) |
 | `tests/*` | net10.0 | xUnit tests per project, plus integration tests and benchmarks |
 | `samples/*` | | One sample app per framework |
-| `docs/` | | DocFX site; `docs/internals/implementation-specs/` holds CLI specs |
+| `docs/internals/` | | Design notes; `implementation-specs/` holds the 1.0.0-rc CLI specs. The docs site is in [xping-dev/docs](https://github.com/xping-dev/docs) |
 
 ## Architecture rules
 
@@ -52,7 +52,7 @@ Before calling a change done: build is clean and the affected test projects pass
   `LocalOnly`. Local history is written before upload, in every collecting mode.
 - **Configuration**: `XPING_*` env vars win on every path, including `Initialize(config)`.
   Then `Xping__*` / `appsettings*.json` (or the passed object), then defaults. Every new option needs an env var, a default, validation in `XpingConfigurationValidator`, and
-  a row in `docs/configuration/configuration-reference.md`.
+  a row in `sdk/configuration/configuration-reference.md` in [xping-dev/docs](https://github.com/xping-dev/docs).
 - **DI**: services register in `XpingServiceCollectionExtensions`. Public surface is interfaces
   (`IXpingUploader`, `IEnvironmentDetector`, …); implementations live in `Internals/` folders
   and are `internal sealed`.
@@ -119,5 +119,5 @@ Enforced by `.editorconfig` and `Directory.Build.props` (`AnalysisMode=All`,
   the user sees change, and references the issue: `(#123)`.
 - CLI report work follows the specs in `docs/internals/implementation-specs/`. If the code
   needs to diverge, amend the spec first, in the same PR.
-- User-visible changes update `docs/` and the relevant adapter `README.md` in the same PR.
-- Never commit secrets, `bin/`, `obj/`, `coverage/`, or `docs/_site/`.
+- User-visible changes update the relevant adapter `README.md` in the same PR, and the `sdk/` pages in [xping-dev/docs](https://github.com/xping-dev/docs) in a linked PR.
+- Never commit secrets, `bin/`, `obj/`, `coverage/`.

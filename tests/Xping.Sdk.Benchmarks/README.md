@@ -2,7 +2,7 @@
 
 BenchmarkDotNet benchmarks for the SDK's own code paths. They are for contributors who change the
 SDK and want to check the cost of a change. For what the SDK does during a test run, see
-[Performance](https://docs.xping.io/performance/performance.html).
+[Performance](https://docs.xping.io/sdk/performance/performance.html).
 
 No CI workflow runs these benchmarks, and no baseline is committed. The numbers depend on the
 machine.
@@ -112,4 +112,4 @@ It still deserializes every run once. What changes is how many runs it holds at 
 ## References
 
 - [BenchmarkDotNet documentation](https://benchmarkdotnet.org/)
-- [Performance](https://docs.xping.io/performance/performance.html)
+- [Performance](https://docs.xping.io/sdk/performance/performance.html)

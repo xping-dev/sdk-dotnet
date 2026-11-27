@@ -88,7 +88,7 @@ public class CalculatorTests : XpingTestBase
     /// With <c>CooperativeCancellation = true</c>, MSTest cancels the test's token instead of
     /// abandoning the test. The test ends with an <see cref="OperationCanceledException"/>, and
     /// nothing in <c>[TestCleanup]</c> tells it apart from any other failure, so Xping records it as
-    /// <c>Outcome = Failed</c>. See docs/troubleshooting/known-limitations.md.
+    /// <c>Outcome = Failed</c>. See https://docs.xping.io/sdk/troubleshooting/known-limitations.html.
     /// </remarks>
     [TestMethod("Shows that a cooperative timeout which observes its token is tracked as failed")]
     [TestCategory("Unit")]
@@ -106,7 +106,7 @@ public class CalculatorTests : XpingTestBase
     /// </summary>
     /// <remarks>
     /// MSTest passes a cooperative test that runs to completion, even past its budget, and Xping
-    /// records it as <c>Outcome = Passed</c> to match. See docs/troubleshooting/known-limitations.md.
+    /// records it as <c>Outcome = Passed</c> to match. See https://docs.xping.io/sdk/troubleshooting/known-limitations.html.
     /// </remarks>
     [TestMethod("Shows that a cooperative timeout which ignores its token is tracked as passed")]
     [TestCategory("Unit")]
@@ -289,7 +289,7 @@ public static class Calculator
 /// <c>TestException</c> is the raw exception with no wrapper around it, so the stack trace is the
 /// only evidence. A broken <c>[ClassInitialize]</c> would demonstrate this better, but MSTest aborts
 /// the class before <c>[TestInitialize]</c> runs and Xping sees nothing at all; see
-/// docs/troubleshooting/known-limitations.md.
+/// https://docs.xping.io/sdk/troubleshooting/known-limitations.html.
 /// </para>
 /// </remarks>
 [TestClass]

@@ -51,7 +51,7 @@ an API key one line for each upload that Xping Cloud accepts:
 When the output goes to a file or a pipe, for example in a CI log, `dotnet test` shows these lines
 only with `--logger "console;verbosity=normal"`.
 
-The full guide is [Quick start: NUnit](https://docs.xping.io/getting-started/quickstart-nunit.html).
+The full guide is [Quick start: NUnit](https://docs.xping.io/sdk/getting-started/quickstart-nunit.html).
 
 ## Running on Microsoft.Testing.Platform
 
@@ -85,7 +85,7 @@ and pass `--report-trx`.
 
   NUnit's `[Timeout]` on a synchronous test abandons the test thread, and the SDK records nothing
   for that test. Use `[CancelAfter]` instead. See
-  [Known limitations](https://docs.xping.io/troubleshooting/known-limitations.html#nunits-blocking-timeout-is-not-tracked).
+  [Known limitations](https://docs.xping.io/sdk/troubleshooting/known-limitations.html#nunits-blocking-timeout-is-not-tracked).
 
 - The duration, the start and end times, and the error message and stack trace of a failure. The
   stack trace text is uploaded only with `UploadStackTraces`.
@@ -113,7 +113,7 @@ export XPING_APIKEY="your-api-key"
 Do not put the key in `appsettings.json`: that file is committed and copied into the build output.
 Other settings can go in the `"Xping"` section of `appsettings.json`, or in `XPING_*` environment
 variables, which win over the file. See the
-[Configuration reference](https://docs.xping.io/configuration/configuration-reference.html).
+[Configuration reference](https://docs.xping.io/sdk/configuration/configuration-reference.html).
 
 To build the configuration in code, pass it to `Initialize` in the setup fixture:
 
@@ -139,7 +139,7 @@ reports.
 
 ## Known limitations
 
-See [Known limitations](https://docs.xping.io/troubleshooting/known-limitations.html#nunit).
+See [Known limitations](https://docs.xping.io/sdk/troubleshooting/known-limitations.html#nunit).
 
 ## Sample project
 
