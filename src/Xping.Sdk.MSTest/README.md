@@ -61,7 +61,7 @@ an API key one line for each upload that Xping Cloud accepts:
 When the output goes to a file or a pipe, for example in a CI log, `dotnet test` shows these lines
 only with `--logger "console;verbosity=normal"`.
 
-The full guide is [Quick start: MSTest](https://docs.xping.io/getting-started/quickstart-mstest.html).
+The full guide is [Quick start: MSTest](https://docs.xping.io/sdk/getting-started/quickstart-mstest.html).
 
 ## Running on Microsoft.Testing.Platform
 
@@ -101,7 +101,7 @@ without `VSTEST_TESTHOST_SHUTDOWN_TIMEOUT`.
   cancellation (`CooperativeCancellation = true`, or turned on for the whole run), a timed-out test
   is recorded as `Failed` if it observes its token, or `Passed` if it ignores the token, as MSTest
   reports it. See
-  [Known limitations](https://docs.xping.io/troubleshooting/known-limitations.html#timeouts).
+  [Known limitations](https://docs.xping.io/sdk/troubleshooting/known-limitations.html#timeouts).
 - The duration, the start and end times, and the error message and stack trace of a failure. The
   stack trace text is uploaded only with `UploadStackTraces`.
 - Each `[DataRow]` as a separate test, with its arguments
@@ -128,7 +128,7 @@ export XPING_APIKEY="your-api-key"
 Do not put the key in `appsettings.json`: that file is committed and copied into the build output.
 Other settings can go in the `"Xping"` section of `appsettings.json`, or in `XPING_*` environment
 variables, which win over the file. See the
-[Configuration reference](https://docs.xping.io/configuration/configuration-reference.html).
+[Configuration reference](https://docs.xping.io/sdk/configuration/configuration-reference.html).
 
 To build the configuration in code, pass it to `Initialize` in the `[AssemblyInitialize]` method:
 
@@ -172,7 +172,7 @@ VSTEST_TESTHOST_SHUTDOWN_TIMEOUT=5000 dotnet test
 
 ## Known limitations
 
-See [Known limitations](https://docs.xping.io/troubleshooting/known-limitations.html#mstest).
+See [Known limitations](https://docs.xping.io/sdk/troubleshooting/known-limitations.html#mstest).
 
 ## Sample project
 

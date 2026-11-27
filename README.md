@@ -26,7 +26,7 @@
     <a href="#local-and-xping-cloud"><strong>Local and Xping Cloud</strong></a> •
     <a href="#how-it-works"><strong>How it works</strong></a> •
     <a href="https://docs.xping.io"><strong>Documentation</strong></a> •
-    <a href="https://docs.xping.io/troubleshooting/known-limitations.html"><strong>Known limitations</strong></a> •
+    <a href="https://docs.xping.io/sdk/troubleshooting/known-limitations.html"><strong>Known limitations</strong></a> •
     <a href="https://github.com/xping-dev/sdk-dotnet/issues"><strong>Report a bug</strong></a>
   </p>
 </div>
@@ -201,13 +201,13 @@ Detail of row 1: xping report --id f_2b84a621 --assembly SampleApp.MSTest
 
 No API key, no account and no network calls. The history stays in `.xping/` on your machine.
 
-[Run without an account →](https://docs.xping.io/getting-started/local-first.html)
+[Run without an account →](https://docs.xping.io/sdk/getting-started/local-first.html)
 
 ### Guides for each framework
 
-- [Quick start: NUnit](https://docs.xping.io/getting-started/quickstart-nunit.html): attributes, filtering and configuration
-- [Quick start: xUnit](https://docs.xping.io/getting-started/quickstart-xunit.html): the test framework setup for xUnit v2 and v3
-- [Quick start: MSTest](https://docs.xping.io/getting-started/quickstart-mstest.html): the base class and the assembly setup
+- [Quick start: NUnit](https://docs.xping.io/sdk/getting-started/quickstart-nunit.html): attributes, filtering and configuration
+- [Quick start: xUnit](https://docs.xping.io/sdk/getting-started/quickstart-xunit.html): the test framework setup for xUnit v2 and v3
+- [Quick start: MSTest](https://docs.xping.io/sdk/getting-started/quickstart-mstest.html): the base class and the assembly setup
 
 ---
 
@@ -232,7 +232,6 @@ xping auth status               # which Xping Cloud credential the CLI uses
 With several test projects, `xping report` prints one row per assembly, most severe first.
 `--assembly <name>` opens the full report of one assembly. When the store holds several
 assemblies, `--top`, `--all` and `--kind` need it.
-[Scoping →](https://docs.xping.io/cli/command-reference.html#scoping)
 
 `xping report --help` lists the other options, such as `--directory`, `--ascii` and `--no-color`.
 
@@ -281,7 +280,6 @@ because it has the history of many machines, branches and CI jobs.
 
 The confidence score is a number from 0 to 1. ESS is the effective sample size: the weighted
 number of runs behind the score.
-[Confidence scores →](https://docs.xping.io/cloud/confidence-scores.html)
 
 ---
 
@@ -308,7 +306,7 @@ Cloud also comments on pull requests in GitHub, GitLab and Azure DevOps.
 > **Xping Cloud access is by invitation.** [Request access](https://xping.io/contact?pilot=True).
 > The local report stays free and needs no account.
 
-To set up CI, see [Set up CI](https://docs.xping.io/getting-started/ci-cd-setup.html).
+To set up CI, see [Set up CI](https://docs.xping.io/sdk/getting-started/ci-cd-setup.html).
 
 ### Two credentials
 
@@ -320,8 +318,7 @@ xping report         # the same report, with the Xping Cloud confidence score on
 ```
 
 A key with only the Upload scope can write test runs and cannot read your data. So a key in your CI
-secrets, or on a contractor's laptop, adds runs to the history without giving read access. See
-[`xping login`](https://docs.xping.io/cli/command-reference.html#xping-login).
+secrets, or on a contractor's laptop, adds runs to the history without giving read access.
 
 ---
 
@@ -343,7 +340,6 @@ uploads to Xping Cloud.
 > **Xping Cloud data in the CLI.** After `xping login`, `xping report` asks Xping Cloud about the
 > tests it lists and labels the answers, so you cannot mistake them for local numbers. When Xping
 > Cloud cannot be reached, you get the local report and one line that says why.
-> [Cloud data →](https://docs.xping.io/cli/cloud-data.html)
 
 ---
 
@@ -367,7 +363,7 @@ export XPING_LOGLEVEL="Information"
 
 Without an API key from any source, and without StrictMode, the SDK writes to `.xping/` and makes
 no network calls. For every option,
-see the [Configuration reference](https://docs.xping.io/configuration/configuration-reference.html).
+see the [Configuration reference](https://docs.xping.io/sdk/configuration/configuration-reference.html).
 
 ---
 
@@ -385,7 +381,7 @@ your local git repository.
 Xping Cloud. It contains whatever your test or your code put in it. Xping does not read your source
 code.
 
-[Data Xping collects](https://docs.xping.io/configuration/collected-data.html) lists every field, the personal data among them, and the switch for
+[Data Xping collects](https://docs.xping.io/sdk/configuration/collected-data.html) lists every field, the personal data among them, and the switch for
 each one. The CI email and the local git author are off by default.
 
 ### Local
@@ -416,8 +412,7 @@ Patterns that show up in the run history:
   daylight-saving change.
 - **Random data**: random inputs that sometimes hit an edge case.
 
-The local report shows the behaviour. Xping Cloud also gives a cause category. For worked
-examples, see [Flaky patterns and fixes](https://docs.xping.io/flaky-tests/patterns-and-fixes.html).
+The local report shows the behaviour. Xping Cloud also gives a cause category.
 
 ---
 
@@ -429,17 +424,16 @@ examples, see [Flaky patterns and fixes](https://docs.xping.io/flaky-tests/patte
 | `src/Xping.Sdk.XUnit` · `.XUnit.V3` · `.NUnit` · `.MSTest` | Framework adapters (xUnit v2, xUnit v3, NUnit, MSTest) |
 | `src/Xping.Cli` | `xping`: local analysis and reports |
 | `samples/` | A runnable example for each framework |
-| `docs/` | Source for [docs.xping.io](https://docs.xping.io) |
+| `docs/internals/` | Design notes and the 1.0.0-rc CLI specs. The site source for [docs.xping.io](https://docs.xping.io) is in [xping-dev/docs](https://github.com/xping-dev/docs) |
 
 ---
 
 ## Documentation
 
-- [Get started](https://docs.xping.io/index.html#quick-start)
-- [Run without an account](https://docs.xping.io/getting-started/local-first.html)
-- [Known limitations](https://docs.xping.io/troubleshooting/known-limitations.html)
-- [Troubleshooting](https://docs.xping.io/troubleshooting/common-issues.html)
-- [API reference](https://docs.xping.io/api/Xping.Sdk.Core.html)
+- [Get started](https://docs.xping.io/sdk/index.html#quick-start)
+- [Run without an account](https://docs.xping.io/sdk/getting-started/local-first.html)
+- [Known limitations](https://docs.xping.io/sdk/troubleshooting/known-limitations.html)
+- [Troubleshooting](https://docs.xping.io/sdk/troubleshooting/common-issues.html)
 
 The full documentation is at [docs.xping.io](https://docs.xping.io).
 

@@ -30,7 +30,7 @@ tests as usual: `[Fact]`, `[Theory]`, traits, fixtures and `Assert.Skip` all wor
 `dotnet test` does not show the SDK's log lines for an xUnit v3 project. To see them, run the test
 project itself with `dotnet run`.
 
-The full guide is [Quick start: xUnit](https://docs.xping.io/getting-started/quickstart-xunit.html).
+The full guide is [Quick start: xUnit](https://docs.xping.io/sdk/getting-started/quickstart-xunit.html).
 
 ## Running
 
@@ -76,7 +76,7 @@ export XPING_APIKEY="your-api-key"
 Do not put the key in `appsettings.json`: that file is committed and copied into the build output.
 Other settings can go in the `"Xping"` section of `appsettings.json`, or in `XPING_*` environment
 variables, which win over the file. See the
-[Configuration reference](https://docs.xping.io/configuration/configuration-reference.html).
+[Configuration reference](https://docs.xping.io/sdk/configuration/configuration-reference.html).
 
 To build the configuration in code, call `Initialize` from a module initializer (.NET 5 or later):
 
@@ -114,7 +114,7 @@ error message on vstest, and through the exit code on Microsoft.Testing.Platform
 - Two theory rows whose arguments display the same way share one identity.
 - The runner is not recorded under xUnit's own console runner.
 
-See [Known Limitations](https://docs.xping.io/troubleshooting/known-limitations.html#xunit-v3).
+See [Known Limitations](https://docs.xping.io/sdk/troubleshooting/known-limitations.html#xunit-v3).
 
 ## Sample project
 

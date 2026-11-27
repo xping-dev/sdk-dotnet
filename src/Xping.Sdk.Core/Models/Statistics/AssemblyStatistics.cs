@@ -124,7 +124,7 @@ public sealed class AssemblyStatistics
     /// and only when discovery ran in the test process — it does under <c>dotnet test</c>, with or
     /// without <c>--filter</c>, and does not when an IDE runs tests it discovered earlier. NUnit and
     /// MSTest expose no count that can be trusted for this; see
-    /// <c>docs/troubleshooting/known-limitations.md</c>.
+    /// <see href="https://docs.xping.io/sdk/troubleshooting/known-limitations.html">Known limitations</see>.
     /// </para>
     /// </remarks>
     public int? DiscoveredTestCases { get; init; }

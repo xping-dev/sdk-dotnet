@@ -102,9 +102,9 @@ Test history lives in a `.xping` folder at your repository root, which hides its
 
 ## Documentation
 
-- [Running Without an Account](https://docs.xping.io/getting-started/local-first.html)
+- [Running Without an Account](https://docs.xping.io/sdk/getting-started/local-first.html)
 - [CLI Command Reference](https://docs.xping.io/cli/command-reference.html)
-- [Local Store](https://docs.xping.io/configuration/local-store.html)
+- [Local Store](https://docs.xping.io/sdk/configuration/local-store.html)
 
 ## License
 

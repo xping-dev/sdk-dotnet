@@ -265,10 +265,6 @@ paket-files/
 __pycache__/
 *.pyc
 
-#docfx build results
-docs/_site
-docs/api
-
 #build results, e.g. *.nupkg
 _build
 # BenchmarkDotNet artifacts

@@ -263,7 +263,7 @@ public abstract class XpingTestBase
     /// dictionary entry and the alternative is a silent misclassification if MSTest changes: a
     /// <c>[TestCleanup]</c> that throws aborts the cleanup chain before this base class runs, and a
     /// failing <c>[ClassInitialize]</c> aborts the class before <c>[TestInitialize]</c> — in both cases
-    /// no execution is recorded at all. See <c>docs/troubleshooting/known-limitations.md</c>.
+    /// no execution is recorded at all. See <see href="https://docs.xping.io/sdk/troubleshooting/known-limitations.html">Known limitations</see>.
     /// </para>
     /// </remarks>
     internal static (FailureSite? Site, string? Member) ResolveFailureSite(

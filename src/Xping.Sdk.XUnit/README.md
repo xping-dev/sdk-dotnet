@@ -38,7 +38,7 @@ an API key one line for each upload that Xping Cloud accepts:
 When the output goes to a file or a pipe, for example in a CI log, `dotnet test` shows these lines
 only with `--logger "console;verbosity=normal"`.
 
-The full guide is [Quick start: xUnit](https://docs.xping.io/getting-started/quickstart-xunit.html).
+The full guide is [Quick start: xUnit](https://docs.xping.io/sdk/getting-started/quickstart-xunit.html).
 
 ## What is recorded
 
@@ -71,7 +71,7 @@ export XPING_APIKEY="your-api-key"
 Do not put the key in `appsettings.json`: that file is committed and copied into the build output.
 Other settings can go in the `"Xping"` section of `appsettings.json`, or in `XPING_*` environment
 variables, which win over the file. See the
-[Configuration reference](https://docs.xping.io/configuration/configuration-reference.html).
+[Configuration reference](https://docs.xping.io/sdk/configuration/configuration-reference.html).
 
 To build the configuration in code, call `Initialize` from a module initializer (.NET 5 or later).
 The Xping test framework runs the test assembly's module initializers before it starts the session:
@@ -101,7 +101,7 @@ the process before any test runs, and a failed upload fails the run.
 
 ## Known limitations
 
-See [Known limitations](https://docs.xping.io/troubleshooting/known-limitations.html#xunit).
+See [Known limitations](https://docs.xping.io/sdk/troubleshooting/known-limitations.html#xunit).
 
 ## Sample project
 
